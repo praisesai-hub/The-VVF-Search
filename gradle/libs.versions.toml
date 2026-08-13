@@ -43,7 +43,7 @@ secretsGradlePlugin = "2.0.1"
 googleServices = "4.5.0"
 credentials = "1.5.0"
 googleid = "1.1.1"
-tensorflowLite = "2.16.1"
+tensorflowLite = "2.17.0"
 textRecognition = "16.0.1"
 securityCrypto = "1.1.0-alpha06"
 
