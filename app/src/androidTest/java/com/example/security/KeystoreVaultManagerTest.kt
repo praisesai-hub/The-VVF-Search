@@ -14,7 +14,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 class KeystoreVaultManagerTest {
 
     @Test
-    fun `test hash pin verification`() {
+    fun testHashPinVerification() {
         val manager = KeystoreVaultManager()
         val pin = "1234"
         val hash = manager.hashPin(pin)
@@ -24,7 +24,7 @@ class KeystoreVaultManagerTest {
     }
 
     @Test
-    fun `test randomized salt generates distinct hashes for same pin`() {
+    fun testRandomizedSaltGeneratesDistinctHashesForSamePin() {
         val manager = KeystoreVaultManager()
         val pin = "1234"
         val hash1 = manager.hashPin(pin)
@@ -36,7 +36,7 @@ class KeystoreVaultManagerTest {
     }
 
     @Test
-    fun `test legacy SHA-256 fallback compatibility`() {
+    fun testLegacySha256FallbackCompatibility() {
         val manager = KeystoreVaultManager()
         val pin = "1234"
         // Generate a legacy SHA-256 hash: digest of combined "VVF_SMART_MANAGER_SALT:1234"
@@ -50,7 +50,7 @@ class KeystoreVaultManagerTest {
     }
 
     @Test
-    fun `test encrypt and decrypt bytes`() {
+    fun testEncryptAndDecryptBytes() {
         val manager = KeystoreVaultManager()
         val originalData = "Hello, secret vault!".toByteArray(Charsets.UTF_8)
         
@@ -62,7 +62,7 @@ class KeystoreVaultManagerTest {
     }
 
     @Test
-    fun `test two different instances give distinct hashes for same pin`() {
+    fun testTwoDifferentInstancesGiveDistinctHashesForSamePin() {
         val manager1 = KeystoreVaultManager()
         val manager2 = KeystoreVaultManager()
         val pin = "1234"
@@ -76,7 +76,7 @@ class KeystoreVaultManagerTest {
     }
 
     @Test
-    fun `test generated salt verification works across instances persistence`() {
+    fun testGeneratedSaltVerificationWorksAcrossInstancesPersistence() {
         val manager1 = KeystoreVaultManager()
         val pin = "1234"
         val hashFromInstance1 = manager1.hashPin(pin)
@@ -87,7 +87,7 @@ class KeystoreVaultManagerTest {
     }
 
     @Test
-    fun `test pbkdf2 iteration count is at least 10000`() {
+    fun testPbkdf2IterationCountIsAtLeast10000() {
         val manager = KeystoreVaultManager()
         val hash = manager.hashPin("1234")
         val parts = hash.split(":")
