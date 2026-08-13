@@ -29,10 +29,12 @@ open class SmartManagerRepository(
     private val dao: FileDao = AppDatabase.getDatabase(context).fileDao(),
     private val ocrEngine: OcrEngine? = null
 ) {
-    val keystoreVaultManager = KeystoreVaultManager()
+    val keystoreVaultManager: KeystoreVaultManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { KeystoreVaultManager() }
     val storageScanner = StorageScanner(context)
     val fileRepository by lazy { FileRepository(context, dao) }
-    private val vaultManagerEngine = VaultManagerEngine(context, keystoreVaultManager)
+    private val vaultManagerEngine: VaultManagerEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        VaultManagerEngine(context, keystoreVaultManager)
+    }
     val vaultRepository by lazy { VaultRepository(context, dao, keystoreVaultManager, vaultManagerEngine) }
     val pluginRepository by lazy { PluginRepository(dao) }
     val activeOcrEngine: OcrEngine by lazy { ocrEngine ?: MLKitOcrEngine(context) }
@@ -286,9 +288,9 @@ open class SmartManagerRepository(
 
     suspend fun encryptToVault(file: FileItemEntity) = vaultRepository.encryptToVault(file)
     suspend fun unlockFromVault(vaultItem: VaultItemEntity, file: FileItemEntity?): Boolean = vaultRepository.unlockFromVault(vaultItem, file)
-    fun hasVaultPin(): Boolean = vaultRepository.hasVaultPin()
-    fun getStoredVaultPinHash(): String = vaultRepository.getStoredVaultPinHash()
-    fun initializeVaultPin(pin: String): Boolean = vaultRepository.initializeVaultPin(pin)
+    open fun hasVaultPin(): Boolean = vaultRepository.hasVaultPin()
+    open fun getStoredVaultPinHash(): String = vaultRepository.getStoredVaultPinHash()
+    open fun initializeVaultPin(pin: String): Boolean = vaultRepository.initializeVaultPin(pin)
     open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean = vaultRepository.verifyVaultPin(inputPin, storedHash)
     open fun changeVaultPin(oldPin: String, newPin: String): Boolean = vaultRepository.changeVaultPin(oldPin, newPin)
 

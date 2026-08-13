@@ -9,6 +9,7 @@ import com.example.data.CategoryStat
 import com.example.data.CloudSyncItemEntity
 import com.example.data.FileDao
 import com.example.data.FileItemEntity
+import com.example.data.GoogleAuthManager
 import com.example.data.PluginEntity
 import com.example.data.VaultItemEntity
 import com.example.data.CloudProviderAdapter
@@ -139,6 +140,14 @@ class CloudSyncWorkerTest {
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
         fakeDao = FakeFileDao()
+        fakeDao.pluginsList += PluginEntity(
+            "gdrive_sync",
+            "Google Drive Cloud Plugin",
+            "CLOUD_PROVIDER",
+            "Test-only enabled provider",
+            isEnabled = true,
+            isCore = false
+        )
         fakeAdapter = FakeCloudProviderAdapter()
     }
 
@@ -157,7 +166,10 @@ class CloudSyncWorkerTest {
                     appContext,
                     workerParameters,
                     daoOverride = fakeDao,
-                    providerAdapterOverride = fakeAdapter
+                    providerAdapterOverride = fakeAdapter,
+                    authManagerOverride = GoogleAuthManager(
+                        appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)
+                    )
                 )
             }
         }

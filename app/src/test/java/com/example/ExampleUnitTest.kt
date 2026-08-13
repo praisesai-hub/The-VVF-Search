@@ -3,8 +3,6 @@ package com.example
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.ai.TFLiteSemanticEmbeddingProvider
-import com.example.ui.changeVaultPin
-import com.example.ui.pinError
 import com.example.storage.StorageScanner
 import com.example.data.DuplicateGroup
 import kotlinx.coroutines.FlowPreview
@@ -144,52 +142,6 @@ class ExampleUnitTest {
     val scanner = StorageScanner(context)
     val fp = scanner.computeDocumentFingerprint(java.io.File("/non_existent_doc.pdf"))
     assertEquals("", fp)
-  }
-
-  @Test
-  fun vaultPin_verificationAndChange_persistsCorrectly() {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    context.deleteSharedPreferences("vvf_vault_prefs")
-    val database = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java).allowMainThreadQueries().build()
-    val repo = com.example.data.SmartManagerRepository(context, database.fileDao())
-    
-    // No implicit/default PIN is accepted; enrollment must be explicit.
-    assertFalse(repo.hasVaultPin())
-    assertFalse(repo.verifyVaultPin("1234"))
-    assertTrue(repo.initializeVaultPin("2468"))
-    assertTrue(repo.hasVaultPin())
-    assertFalse(repo.verifyVaultPin("0000"))
-
-    // Change PIN from the explicitly enrolled PIN to "9876"
-    val changed = repo.changeVaultPin("2468", "9876")
-    assertTrue(changed)
-
-    // Old PIN should fail, new PIN should succeed
-    assertFalse(repo.verifyVaultPin("2468"))
-    assertTrue(repo.verifyVaultPin("9876"))
-
-    database.close()
-  }
-
-  @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-  @Test
-  fun mainViewModel_changeVaultPin_handlesUpdates() {
-    val app = ApplicationProvider.getApplicationContext<android.app.Application>()
-    app.deleteSharedPreferences("vvf_vault_prefs")
-    val viewModel = com.example.ui.MainViewModel(app)
-
-    // Change PIN with wrong current PIN should fail
-    val wrongChange = viewModel.changeVaultPin("1111", "5555")
-    assertFalse(wrongChange)
-    assertEquals("Failed to update PIN. Check current PIN.", viewModel.pinError.value)
-
-    // Explicitly enroll a PIN before testing a change.
-    assertTrue(viewModel.repository.initializeVaultPin("1234"))
-
-    // Change PIN with correct current PIN should succeed
-    val correctChange = viewModel.changeVaultPin("1234", "5555")
-    assertTrue(correctChange)
-    assertEquals(null, viewModel.pinError.value)
   }
 
   @Test

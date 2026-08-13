@@ -238,13 +238,13 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
 
     suspend fun computeFileHash(file: File): String = withContext(Dispatchers.IO) {
         if (!file.exists() || !file.canRead()) return@withContext ""
-        file.inputStream().use(::computeStreamHash)
+        file.inputStream().use { computeStreamHash(it) }
     }
 
     suspend fun computeContentUriHash(uri: Uri): String = withContext(Dispatchers.IO) {
         val input = try { context.contentResolver.openInputStream(uri) } catch (_: Exception) { null }
             ?: return@withContext ""
-        input.use(::computeStreamHash)
+        input.use { computeStreamHash(it) }
     }
 
     private suspend fun computeStreamHash(input: InputStream): String {

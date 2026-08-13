@@ -8,13 +8,11 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
-import org.robolectric.annotation.Config
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@RunWith(AndroidJUnit4::class)
 class VaultRepositoryTest {
 
     private lateinit var context: Context
@@ -81,7 +79,7 @@ class VaultRepositoryTest {
 
     @Before
     fun setUp() {
-        context = RuntimeEnvironment.getApplication()
+        context = InstrumentationRegistry.getInstrumentation().targetContext
         fakeDao = FakeFileDao()
         keystoreVaultManager = KeystoreVaultManager()
         repository = VaultRepository(context, fakeDao, keystoreVaultManager)

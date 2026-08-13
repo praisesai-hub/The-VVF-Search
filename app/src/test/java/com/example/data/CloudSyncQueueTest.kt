@@ -13,8 +13,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class CloudSyncQueueTest {
 
     private lateinit var context: Context
@@ -25,11 +27,13 @@ class CloudSyncQueueTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         fakeDao = FakeFileDao()
-        fakeDao.insertPlugins(
-            listOf(
-                PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Google Drive sync", isEnabled = true, isCore = true)
+        runBlocking {
+            fakeDao.insertPlugins(
+                listOf(
+                    PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Google Drive sync", isEnabled = true, isCore = true)
+                )
             )
-        )
+        }
         repository = SmartManagerRepository(context = context, dao = fakeDao)
     }
 

@@ -4,30 +4,39 @@
   <CurrentIssues>
     <ID>ComplexCondition:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp") || lowerName.endsWith(".bmp")</ID>
     <ID>ComplexCondition:SmartManagerRepository.kt$SmartManagerRepository$isOcrEnabled &amp;&amp; updated.ocrText.isBlank() &amp;&amp; (updated.category == FileCategory.IMAGES.name || updated.category == FileCategory.DOCUMENTS.name)</ID>
-    <ID>ComplexCondition:StorageScanner.kt$StorageScanner$computeHashes &amp;&amp; category == FileCategory.IMAGES &amp;&amp; file.exists() &amp;&amp; file.canRead()</ID>
+    <ID>CyclomaticComplexMethod:CloudPluginsScreen.kt$@Composable fun CloudSyncSection( viewModel: MainViewModel, syncItems: List&lt;CloudSyncItemEntity&gt;, conflictMode: String, onConflictModeChange: (String) -&gt; Unit )</ID>
     <ID>CyclomaticComplexMethod:CloudSyncWorker.kt$CloudSyncWorker$override suspend fun doWork(): Result</ID>
     <ID>CyclomaticComplexMethod:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$fun getSemanticDuplicates( activeFilesFlow: Flow&lt;List&lt;FileItemEntity&gt;&gt;, similarityThresholdFlow: Flow&lt;Float&gt; ): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$fun getVideoDuplicates( activeFilesFlow: Flow&lt;List&lt;FileItemEntity&gt;&gt;, similarityThresholdFlow: Flow&lt;Float&gt; ): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$fun getVisualDuplicates( activeFilesFlow: Flow&lt;List&lt;FileItemEntity&gt;&gt;, similarityThresholdFlow: Flow&lt;Float&gt; ): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:DuplicateManager.kt$DuplicateManager$suspend fun cleanSelectedDuplicates(selectedIds: Set&lt;Long&gt;)</ID>
-    <ID>CyclomaticComplexMethod:FileManagerScreen.kt$@Composable fun FileManagerScreen( viewModel: MainViewModel, files: List&lt;FileItemEntity&gt;, recycleBinFiles: List&lt;FileItemEntity&gt;, selectedCategory: FileCategory?, searchQuery: String )</ID>
-    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore( context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -&gt; ByteArray ): Result&lt;String&gt;</ID>
-    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore( context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager ): Result&lt;String&gt;</ID>
+    <ID>CyclomaticComplexMethod:FileManagerScreen.kt$@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class) @Composable fun FileManagerScreen( viewModel: MainViewModel, files: List&lt;FileItemEntity&gt;, recycleBinFiles: List&lt;FileItemEntity&gt;, selectedCategory: FileCategory?, searchQuery: String )</ID>
+    <ID>CyclomaticComplexMethod:OcrEngine.kt$MLKitOcrEngine$override suspend fun extractOcrBlocks(filePath: String): List&lt;OcrTextBlock&gt;</ID>
+    <ID>CyclomaticComplexMethod:OcrEngine.kt$MLKitOcrEngine$override suspend fun extractRealOcrText(filePath: String): String</ID>
+    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -&gt; ByteArray): Result&lt;String&gt;</ID>
+    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result&lt;String&gt;</ID>
+    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun deleteFile(context: Context, path: String): Boolean</ID>
+    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource(context: Context, srcPath: String, encryptAction: (ByteArray) -&gt; Pair&lt;ByteArray, ByteArray&gt;): Result&lt;VaultStorageResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result&lt;VaultStorageResult&gt;</ID>
+    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun moveToTrash(context: Context, path: String): Result&lt;String&gt;</ID>
     <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun renameFile(context: Context, oldPath: String, newName: String): Result&lt;String&gt;</ID>
+    <ID>CyclomaticComplexMethod:PhysicalStorageManager.kt$PhysicalStorageManager$fun restoreFromTrash(context: Context, trashPath: String, originalPath: String): Result&lt;String&gt;</ID>
     <ID>CyclomaticComplexMethod:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$fun generateImageEmbedding(file: File): FloatArray?</ID>
-    <ID>CyclomaticComplexMethod:SmartManagerRepository.kt$SmartManagerRepository$fun searchSemanticFiles(query: String): Flow&lt;List&lt;FileItemEntity&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:SmartManagerRepository.kt$SmartManagerRepository$fun startIncrementalDuplicateScan()</ID>
     <ID>CyclomaticComplexMethod:StorageScanner.kt$StorageScanner$private suspend fun scanDirectoryRecursively( dir: File, processedPaths: MutableSet&lt;String&gt;, depth: Int, maxDepth: Int, computeHashes: Boolean, onItemDiscovered: suspend (FileItemEntity) -&gt; Unit )</ID>
     <ID>CyclomaticComplexMethod:StorageScanner.kt$StorageScanner$private suspend fun scanMediaStore( processedPaths: MutableSet&lt;String&gt;, computeHashes: Boolean, onItemDiscovered: suspend (FileItemEntity) -&gt; Unit )</ID>
-    <ID>CyclomaticComplexMethod:VaultScreen.kt$@Composable fun VaultScreen( viewModel: MainViewModel, isUnlocked: Boolean, enteredPin: String, pinError: String?, vaultItems: List&lt;VaultItemEntity&gt; )</ID>
+    <ID>CyclomaticComplexMethod:StorageScanner.kt$StorageScanner$suspend fun scanSafTree( treeUri: Uri, computeHashes: Boolean = false, onBatchDiscovered: suspend (List&lt;FileItemEntity&gt;) -&gt; Unit ): Int</ID>
+    <ID>CyclomaticComplexMethod:VaultScreen.kt$@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class) @Composable fun VaultScreen( viewModel: MainViewModel, isUnlocked: Boolean, enteredPin: String, pinError: String?, vaultItems: List&lt;VaultItemEntity&gt; )</ID>
     <ID>EmptyFunctionBlock:AppDatabaseMigrationTest.kt$AppDatabaseMigrationTest.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:CloudSyncWorkerTest.kt$CloudSyncWorkerTest${ }</ID>
     <ID>EmptyFunctionBlock:CloudSyncWorkerTest.kt$FakeFileDao${}</ID>
     <ID>EmptyFunctionBlock:DuplicateManagerTest.kt$DuplicateManagerTest.FakeFileDao${}</ID>
     <ID>EmptyFunctionBlock:FileRepositoryTest.kt$FileRepositoryTest.FakeFileDao${}</ID>
+    <ID>EmptyFunctionBlock:GoogleAuthManagerTest.kt$GoogleAuthManagerTest.FakeSharedPreferences${}</ID>
+    <ID>EmptyFunctionBlock:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences${}</ID>
+    <ID>EmptyFunctionBlock:MainViewModelCompat.kt${ }</ID>
     <ID>EmptyFunctionBlock:OcrEngineTest.kt$OcrEngineTest.FakeFileDao${}</ID>
     <ID>EmptyFunctionBlock:PluginRepositoryTest.kt$PluginRepositoryTest.FakeFileDao${}</ID>
-    <ID>EmptyFunctionBlock:VaultRepositoryTest.kt$VaultRepositoryTest.FakeFileDao${}</ID>
     <ID>ExplicitGarbageCollectionCall:PhysicalStorageManager.kt$PhysicalStorageManager$gc()</ID>
     <ID>ExplicitGarbageCollectionCall:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$gc()</ID>
     <ID>ImplicitDefaultLocale:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$String.format("%04x", groupKey)</ID>
@@ -35,8 +44,7 @@
     <ID>ImplicitDefaultLocale:FilePickerUI.kt$String.format("%.1f MB", mb)</ID>
     <ID>ImplicitDefaultLocale:FilePickerUI.kt$String.format("%.2f GB", gb)</ID>
     <ID>ImplicitDefaultLocale:StorageScanner.kt$StorageScanner$String.format("%016x", hashBits)</ID>
-    <ID>InstanceOfCheckForException:CloudSyncWorker.kt$CloudSyncWorker$e is java.net.ConnectException</ID>
-    <ID>InstanceOfCheckForException:CloudSyncWorker.kt$CloudSyncWorker$e is java.net.UnknownHostException</ID>
+    <ID>LongMethod:AboutScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AboutScreen( onBackClick: (() -&gt; Unit)? = null, modifier: Modifier = Modifier )</ID>
     <ID>LongMethod:AiDuplicatesScreen.kt$@Composable fun DuplicateCleanerSection( viewModel: MainViewModel, level1Duplicates: List&lt;DuplicateGroup&gt;, level3Duplicates: List&lt;DuplicateGroup&gt;, similarityThreshold: Float, selectedDuplicateIds: Set&lt;Long&gt; )</ID>
     <ID>LongMethod:AiDuplicatesScreen.kt$@Composable fun DuplicateGroupCard( group: DuplicateGroup, selectedIds: Set&lt;Long&gt;, onToggleSelect: (Long) -&gt; Unit )</ID>
     <ID>LongMethod:AiDuplicatesScreen.kt$@Composable fun OcrEngineSection(ocrScannedFiles: List&lt;FileItemEntity&gt;)</ID>
@@ -45,32 +53,36 @@
     <ID>LongMethod:CloudPluginsScreen.kt$@Composable fun PluginManagerSection( viewModel: MainViewModel, plugins: List&lt;PluginEntity&gt; )</ID>
     <ID>LongMethod:CloudSyncWorker.kt$CloudSyncWorker$override suspend fun doWork(): Result</ID>
     <ID>LongMethod:DashboardScreen.kt$@Composable fun DashboardFileCard( file: FileItemEntity, onEncrypt: () -&gt; Unit, onDelete: () -&gt; Unit, onAddTag: (String) -&gt; Unit )</ID>
-    <ID>LongMethod:DashboardScreen.kt$@Composable fun DashboardScreen( viewModel: MainViewModel, categoryStats: List&lt;CategoryStat&gt;, recentFiles: List&lt;FileItemEntity&gt;, onNavigateTab: (Int) -&gt; Unit )</ID>
+    <ID>LongMethod:DashboardScreen.kt$@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class) @Composable fun DashboardScreen( viewModel: MainViewModel, categoryStats: List&lt;CategoryStat&gt;, recentFiles: List&lt;FileItemEntity&gt;, onNavigateTab: (Int) -&gt; Unit )</ID>
+    <ID>LongMethod:DuplicateCleanupWorker.kt$DuplicateCleanupWorker$override suspend fun doWork(): Result</ID>
     <ID>LongMethod:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$fun getSemanticDuplicates( activeFilesFlow: Flow&lt;List&lt;FileItemEntity&gt;&gt;, similarityThresholdFlow: Flow&lt;Float&gt; ): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
     <ID>LongMethod:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$fun getVideoDuplicates( activeFilesFlow: Flow&lt;List&lt;FileItemEntity&gt;&gt;, similarityThresholdFlow: Flow&lt;Float&gt; ): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
     <ID>LongMethod:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$fun getVisualDuplicates( activeFilesFlow: Flow&lt;List&lt;FileItemEntity&gt;&gt;, similarityThresholdFlow: Flow&lt;Float&gt; ): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
-    <ID>LongMethod:FileManagerScreen.kt$@Composable fun FileManagerItemRow(modifier: Modifier = Modifier, file: FileItemEntity, onRename: () -&gt; Unit, onEncrypt: () -&gt; Unit, onDelete: () -&gt; Unit, onAddTag: (String) -&gt; Unit )</ID>
-    <ID>LongMethod:FileManagerScreen.kt$@Composable fun FileManagerScreen( viewModel: MainViewModel, files: List&lt;FileItemEntity&gt;, recycleBinFiles: List&lt;FileItemEntity&gt;, selectedCategory: FileCategory?, searchQuery: String )</ID>
+    <ID>LongMethod:FileManagerScreen.kt$@Composable fun FileManagerItemRow(modifier: Modifier = Modifier, file: FileItemEntity, onRename: () -&gt; Unit, onEncrypt: () -&gt; Unit, onDelete: () -&gt; Unit, onAddTag: (String) -&gt; Unit, onOcrOverlay: () -&gt; Unit )</ID>
+    <ID>LongMethod:FileManagerScreen.kt$@Composable fun SafDirectoryPickerCard( onDirectoryPicked: (Uri) -&gt; Unit, persistedFolders: Set&lt;String&gt;, onRemoveFolder: (String) -&gt; Unit, modifier: Modifier = Modifier )</ID>
+    <ID>LongMethod:FileManagerScreen.kt$@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class) @Composable fun FileManagerScreen( viewModel: MainViewModel, files: List&lt;FileItemEntity&gt;, recycleBinFiles: List&lt;FileItemEntity&gt;, selectedCategory: FileCategory?, searchQuery: String )</ID>
     <ID>LongMethod:FilePickerUI.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun FilePickerSheet( isOpen: Boolean, onDismiss: () -&gt; Unit, onFilesSelected: (List&lt;PickableLocalFile&gt;) -&gt; Unit, onUrisSelected: (List&lt;Uri&gt;) -&gt; Unit )</ID>
     <ID>LongMethod:FilePickerUI.kt$private fun getAvailableDeviceLocalFiles(context: android.content.Context): List&lt;PickableLocalFile&gt;</ID>
+    <ID>LongMethod:OcrEngine.kt$MLKitOcrEngine$override suspend fun extractOcrBlocks(filePath: String): List&lt;OcrTextBlock&gt;</ID>
+    <ID>LongMethod:OcrOverlayImage.kt$@Composable fun OcrOverlayImage( filePath: String, ocrBlocks: List&lt;OcrTextBlock&gt;, modifier: Modifier = Modifier )</ID>
     <ID>LongMethod:SmartManagerRepository.kt$SmartManagerRepository$fun startIncrementalDuplicateScan()</ID>
-    <ID>LongMethod:SmartManagerRepository.kt$SmartManagerRepository$private suspend fun seedInitialDataIfNeeded()</ID>
     <ID>LongMethod:VVFSmartManagerApp.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun VVFSmartManagerApp(viewModel: MainViewModel)</ID>
-    <ID>LongMethod:VaultScreen.kt$@Composable fun VaultScreen( viewModel: MainViewModel, isUnlocked: Boolean, enteredPin: String, pinError: String?, vaultItems: List&lt;VaultItemEntity&gt; )</ID>
+    <ID>LongMethod:VaultScreen.kt$@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class) @Composable fun VaultScreen( viewModel: MainViewModel, isUnlocked: Boolean, enteredPin: String, pinError: String?, vaultItems: List&lt;VaultItemEntity&gt; )</ID>
     <ID>LongParameterList:AiDuplicatesScreen.kt$( viewModel: MainViewModel, level1Duplicates: List&lt;DuplicateGroup&gt;, level3Duplicates: List&lt;DuplicateGroup&gt;, similarityThreshold: Float, selectedDuplicateIds: Set&lt;Long&gt;, semanticQuery: String, ocrScannedFiles: List&lt;FileItemEntity&gt;, semanticSearchResults: List&lt;FileItemEntity&gt; )</ID>
     <ID>LongParameterList:DashboardScreen.kt$( title: String, category: FileCategory, categoryStats: List&lt;CategoryStat&gt;, icon: ImageVector, color: Color, onClick: () -&gt; Unit )</ID>
     <ID>LongParameterList:DashboardScreen.kt$( title: String, subtitle: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, onClick: () -&gt; Unit )</ID>
-    <ID>LongParameterList:FileManagerScreen.kt$(modifier: Modifier = Modifier, file: FileItemEntity, onRename: () -&gt; Unit, onEncrypt: () -&gt; Unit, onDelete: () -&gt; Unit, onAddTag: (String) -&gt; Unit )</ID>
+    <ID>LongParameterList:FileManagerScreen.kt$(modifier: Modifier = Modifier, file: FileItemEntity, onRename: () -&gt; Unit, onEncrypt: () -&gt; Unit, onDelete: () -&gt; Unit, onAddTag: (String) -&gt; Unit, onOcrOverlay: () -&gt; Unit )</ID>
     <ID>LongParameterList:StorageScanner.kt$StorageScanner$( dir: File, processedPaths: MutableSet&lt;String&gt;, depth: Int, maxDepth: Int, computeHashes: Boolean, onItemDiscovered: suspend (FileItemEntity) -&gt; Unit )</ID>
     <ID>LoopWithTooManyJumpStatements:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$for</ID>
     <ID>LoopWithTooManyJumpStatements:DuplicateManager.kt$DuplicateManager$for</ID>
     <ID>LoopWithTooManyJumpStatements:StorageScanner.kt$StorageScanner$for</ID>
+    <ID>LoopWithTooManyJumpStatements:StorageScanner.kt$StorageScanner$while</ID>
+    <ID>MagicNumber:AboutScreen.kt$0xFF161F33</ID>
     <ID>MagicNumber:AiDuplicatesScreen.kt$50</ID>
     <ID>MagicNumber:AppDatabase.kt$AppDatabase.Companion.&lt;no name provided&gt;$3</ID>
     <ID>MagicNumber:AppDatabase.kt$AppDatabase.Companion.&lt;no name provided&gt;$4</ID>
     <ID>MagicNumber:BackgroundIndexWorker.kt$BackgroundIndexWorker$3</ID>
     <ID>MagicNumber:CacheCleanupWorker.kt$CacheCleanupWorker$1024</ID>
-    <ID>MagicNumber:CacheCleanupWorker.kt$CacheCleanupWorker$3</ID>
     <ID>MagicNumber:CloudSyncWorker.kt$CloudSyncWorker$3</ID>
     <ID>MagicNumber:Color.kt$0xFF0B1728</ID>
     <ID>MagicNumber:Color.kt$0xFF0F172A</ID>
@@ -104,25 +116,35 @@
     <ID>MagicNumber:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$50</ID>
     <ID>MagicNumber:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$64</ID>
     <ID>MagicNumber:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$8</ID>
+    <ID>MagicNumber:FileDao.kt$FileDao$900</ID>
     <ID>MagicNumber:FileManagerScreen.kt$5</ID>
     <ID>MagicNumber:FilePickerUI.kt$0.88f</ID>
     <ID>MagicNumber:FilePickerUI.kt$1024</ID>
     <ID>MagicNumber:FilePickerUI.kt$1024.0</ID>
     <ID>MagicNumber:FilePickerUI.kt$5</ID>
     <ID>MagicNumber:FileUtils.kt$1024</ID>
-    <ID>MagicNumber:KeystoreVaultManager.kt$KeystoreVaultManager$10000</ID>
+    <ID>MagicNumber:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$408</ID>
+    <ID>MagicNumber:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$429</ID>
+    <ID>MagicNumber:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$500</ID>
+    <ID>MagicNumber:KeystoreVaultManager.kt$KeystoreVaultManager$10_000</ID>
     <ID>MagicNumber:KeystoreVaultManager.kt$KeystoreVaultManager$16</ID>
     <ID>MagicNumber:KeystoreVaultManager.kt$KeystoreVaultManager$256</ID>
+    <ID>MagicNumber:KeystoreVaultManager.kt$KeystoreVaultManager$2_000_000</ID>
     <ID>MagicNumber:KeystoreVaultManager.kt$KeystoreVaultManager$3</ID>
     <ID>MagicNumber:MainViewModel.kt$MainViewModel$1000</ID>
     <ID>MagicNumber:MainViewModel.kt$MainViewModel$12_500_000L</ID>
-    <ID>MagicNumber:MainViewModel.kt$MainViewModel$300</ID>
-    <ID>MagicNumber:MainViewModel.kt$MainViewModel$4</ID>
-    <ID>MagicNumber:MainViewModel.kt$MainViewModel$50</ID>
+    <ID>MagicNumber:MainViewModel.kt$MainViewModel$250</ID>
     <ID>MagicNumber:MainViewModel.kt$MainViewModel$5000</ID>
     <ID>MagicNumber:MainViewModel.kt$MainViewModel$80.0f</ID>
+    <ID>MagicNumber:MainViewModelCompat.kt$200</ID>
+    <ID>MagicNumber:MainViewModelCompat.kt$4</ID>
+    <ID>MagicNumber:MainViewModelCompat.kt$5_000</ID>
+    <ID>MagicNumber:OcrOverlayImage.kt$0x33FFD54F</ID>
+    <ID>MagicNumber:OcrOverlayImage.kt$0xFFFFD54F</ID>
+    <ID>MagicNumber:OcrOverlayImage.kt$4f</ID>
     <ID>MagicNumber:PhysicalStorageManager.kt$PhysicalStorageManager$1024</ID>
     <ID>MagicNumber:PhysicalStorageManager.kt$PhysicalStorageManager$1024L</ID>
+    <ID>MagicNumber:PhysicalStorageManager.kt$PhysicalStorageManager$128</ID>
     <ID>MagicNumber:PhysicalStorageManager.kt$PhysicalStorageManager$50</ID>
     <ID>MagicNumber:PhysicalStorageManager.kt$PhysicalStorageManager$65536</ID>
     <ID>MagicNumber:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$0x7FFFFFFF</ID>
@@ -146,14 +168,13 @@
     <ID>MagicNumber:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$512</ID>
     <ID>MagicNumber:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$8</ID>
     <ID>MagicNumber:SmartManagerRepository.kt$SmartManagerRepository$0.10f</ID>
-    <ID>MagicNumber:SmartManagerRepository.kt$SmartManagerRepository$0.5f</ID>
     <ID>MagicNumber:SmartManagerRepository.kt$SmartManagerRepository$10</ID>
     <ID>MagicNumber:SmartManagerRepository.kt$SmartManagerRepository$50</ID>
-    <ID>MagicNumber:StorageScanner.kt$StorageScanner$100</ID>
     <ID>MagicNumber:StorageScanner.kt$StorageScanner$1000</ID>
     <ID>MagicNumber:StorageScanner.kt$StorageScanner$114</ID>
     <ID>MagicNumber:StorageScanner.kt$StorageScanner$16</ID>
     <ID>MagicNumber:StorageScanner.kt$StorageScanner$299</ID>
+    <ID>MagicNumber:StorageScanner.kt$StorageScanner$4</ID>
     <ID>MagicNumber:StorageScanner.kt$StorageScanner$4096</ID>
     <ID>MagicNumber:StorageScanner.kt$StorageScanner$587</ID>
     <ID>MagicNumber:StorageScanner.kt$StorageScanner$63</ID>
@@ -166,6 +187,7 @@
     <ID>MagicNumber:VVFSmartManagerApp.kt$3</ID>
     <ID>MagicNumber:VVFSmartManagerApp.kt$300</ID>
     <ID>MagicNumber:VVFSmartManagerApp.kt$4</ID>
+    <ID>MagicNumber:VVFSmartManagerApp.kt$5</ID>
     <ID>MagicNumber:VaultManagerEngine.kt$VaultManagerEngine$4</ID>
     <ID>MagicNumber:VaultScreen.kt$3</ID>
     <ID>MagicNumber:VaultScreen.kt$4</ID>
@@ -191,20 +213,34 @@
     <ID>MaxLineLength:CloudPluginsScreen.kt$Text(text = stringResource(R.string.plugin_architecture_system), fontWeight = FontWeight.Bold, fontSize = 16.sp)</ID>
     <ID>MaxLineLength:CloudPluginsScreen.kt$Text(text = stringResource(R.string.strategy_mode), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
     <ID>MaxLineLength:CloudPluginsScreen.kt$Text(text = stringResource(R.string.sync_conflict_resolution), fontWeight = FontWeight.Bold, fontSize = 14.sp)</ID>
+    <ID>MaxLineLength:CloudPluginsScreen.kt$color = if (auth is GoogleAuthState.SignedIn) EmeraldGreen.copy(alpha = 0.2f) else SoftGold.copy(alpha = 0.2f)</ID>
+    <ID>MaxLineLength:CloudPluginsScreen.kt$imageVector = if (auth is GoogleAuthState.SignedIn) Icons.Default.CloudDone else Icons.Default.CloudQueue</ID>
+    <ID>MaxLineLength:CloudPluginsScreen.kt$modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("google_drive_status_chip")</ID>
+    <ID>MaxLineLength:CloudPluginsScreen.kt$text = "Cloud Sync: Link your Google Drive account to activate secure, automated cloud sync."</ID>
+    <ID>MaxLineLength:CloudPluginsScreen.kt$text = "Linked account: ${auth.email}\nSecure, automated background cloud synchronization active."</ID>
     <ID>MaxLineLength:CloudPluginsScreen.kt$text = "Master Spec Section 4 Core/Plugin split. Download or toggle optional extensions on demand."</ID>
-    <ID>MaxLineLength:CloudSyncWorker.kt$CloudSyncWorker$val pendingOrQueued = syncItems.filter { it.status == "PENDING" || it.status == "QUEUED" || it.status == "FAILED" || it.status == "UPLOADING" }</ID>
+    <ID>MaxLineLength:CloudSyncQueueTest.kt$CloudSyncQueueTest$PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Google Drive sync", isEnabled = false, isCore = true)</ID>
+    <ID>MaxLineLength:CloudSyncQueueTest.kt$CloudSyncQueueTest$PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Google Drive sync", isEnabled = true, isCore = true)</ID>
+    <ID>MaxLineLength:CloudSyncWorker.kt$CloudSyncWorker$.</ID>
+    <ID>MaxLineLength:CloudSyncWorker.kt$CloudSyncWorker$Log.i(TAG, "CloudSyncWorker finished. Synced: $syncedCount, Failed: $failedCount (Retryable: $retryableFailedCount)")</ID>
+    <ID>MaxLineLength:CloudSyncWorkerTest.kt$CloudSyncWorkerTest$PluginEntity("dropbox_sync", "Dropbox Cloud Plugin", "CLOUD_PROVIDER", "Dropbox Cloud integration", isEnabled = false, isCore = false)</ID>
     <ID>MaxLineLength:CloudSyncWorkerTest.kt$FakeFileDao$override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List&lt;FileItemEntity&gt;</ID>
     <ID>MaxLineLength:DashboardScreen.kt$CategoryRow</ID>
     <ID>MaxLineLength:DashboardScreen.kt$Text(text = stringResource(R.string.file_count, count), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
     <ID>MaxLineLength:DashboardScreen.kt$leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) }</ID>
     <ID>MaxLineLength:DuplicateCleanupWorker.kt$DuplicateCleanupWorker$"DuplicateCleanupWorker moved $duplicatesFound duplicate files (${bytesCleaned / 1024} KB) to Recycle Bin."</ID>
+    <ID>MaxLineLength:DuplicateCleanupWorker.kt$DuplicateCleanupWorker$Log.w(TAG, "Physical move to trash failed for duplicate file ${file.path}: ${trashResult.exceptionOrNull()?.message}")</ID>
     <ID>MaxLineLength:DuplicateCleanupWorker.kt$DuplicateCleanupWorker$val formattedSize = if (bytesSaved &gt; 1024 * 1024) "${bytesSaved / (1024 * 1024)} MB" else "${bytesSaved / 1024} KB"</ID>
     <ID>MaxLineLength:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$title = "Perceptual Video Keyframe Match (${avgScore}% Visual Similarity): ${file1.name}"</ID>
     <ID>MaxLineLength:DuplicateDetectionEngine.kt$DuplicateDetectionEngine$val distance = storageScanner.calculateHammingDistance(file1.visualSimilarityHash, file2.visualSimilarityHash)</ID>
     <ID>MaxLineLength:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$// (b) Performance/scale test — On 5,000 synthetic hash entries, the optimized bucketing algorithm completed within 2 seconds</ID>
+    <ID>MaxLineLength:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$assertEquals("At 70% threshold, 0.80 similarity documents must be flagged as duplicates", 1, lowThresholdSemantics.size)</ID>
+    <ID>MaxLineLength:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$assertEquals("At 70% threshold, 10-bit distance images must be flagged as duplicates", 1, lowThresholdVisuals.size)</ID>
+    <ID>MaxLineLength:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$assertTrue("At 95% threshold, 0.80 similarity documents must not be flagged as duplicates", highThresholdSemantics.isEmpty())</ID>
+    <ID>MaxLineLength:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$assertTrue("At 95% threshold, 10-bit distance images must not be flagged as duplicates", highThresholdVisuals.isEmpty())</ID>
     <ID>MaxLineLength:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$val distance = fakeHammingCalculator.calculateHammingDistance(file1.visualSimilarityHash, file2.visualSimilarityHash)</ID>
+    <ID>MaxLineLength:DuplicateManagerTest.kt$DuplicateManagerTest.FakeFileDao$override suspend fun getAllOrdinaryFilesDirect(): List&lt;FileItemEntity&gt;</ID>
     <ID>MaxLineLength:DuplicateManagerTest.kt$DuplicateManagerTest.FakeFileDao$override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List&lt;FileItemEntity&gt;</ID>
-    <ID>MaxLineLength:ExampleUnitTest.kt$ExampleUnitTest$val database = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java).allowMainThreadQueries().build()</ID>
     <ID>MaxLineLength:FileDao.kt$FileDao$@Query("SELECT * FROM files WHERE category = :category AND isVault = 0 AND isRecycleBin = 0 ORDER BY dateModifiedMs DESC")</ID>
     <ID>MaxLineLength:FileDao.kt$FileDao$@Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (md5Hash IS NULL OR md5Hash = '' OR ((category = 'IMAGES' OR category = 'VIDEO') AND (visualSimilarityHash IS NULL OR visualSimilarityHash = '')) OR semanticIndexed = 0)")</ID>
     <ID>MaxLineLength:FileDao.kt$FileDao$@Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (name LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%') ORDER BY dateModifiedMs DESC LIMIT 100")</ID>
@@ -212,6 +248,9 @@
     <ID>MaxLineLength:FileDao.kt$FileDao$@Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND md5Hash IS NOT NULL AND md5Hash != '' AND md5Hash IN (SELECT md5Hash FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND md5Hash IS NOT NULL AND md5Hash != '' GROUP BY md5Hash HAVING COUNT(*) &gt; 1) ORDER BY md5Hash ASC, dateModifiedMs DESC")</ID>
     <ID>MaxLineLength:FileDao.kt$FileDao$@Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND ocrText != '' ORDER BY dateModifiedMs DESC LIMIT 100")</ID>
     <ID>MaxLineLength:FileDao.kt$FileDao$@Query("SELECT category, COUNT(*) as count, SUM(sizeBytes) as totalSize FROM files WHERE isVault = 0 AND isRecycleBin = 0 GROUP BY category")</ID>
+    <ID>MaxLineLength:FileDao.kt$FileDao$semanticEmbeddingString = if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString</ID>
+    <ID>MaxLineLength:FileDao.kt$FileDao$semanticEmbeddingVersion = if (file.semanticEmbeddingVersion &gt; 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion</ID>
+    <ID>MaxLineLength:FileDao.kt$FileDao$visualSimilarityHash = if (file.visualSimilarityHash.isNotBlank()) file.visualSimilarityHash else existing.visualSimilarityHash</ID>
     <ID>MaxLineLength:FileManagerScreen.kt$"The original source file will be overwritten with random and zero data (3-pass Best-Effort Wipe) and then deleted."</ID>
     <ID>MaxLineLength:FileManagerScreen.kt$Icon(Icons.Default.DeleteForever, contentDescription = stringResource(R.string.delete_forever), tint = MaterialTheme.colorScheme.error)</ID>
     <ID>MaxLineLength:FileManagerScreen.kt$Icon(Icons.Default.Restore, contentDescription = stringResource(R.string.restore), tint = EmeraldGreen)</ID>
@@ -220,101 +259,266 @@
     <ID>MaxLineLength:FileManagerScreen.kt$leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) }</ID>
     <ID>MaxLineLength:FileManagerScreen.kt$text</ID>
     <ID>MaxLineLength:FileManagerScreen.kt$text = "Disclaimer: Modern flash/SSD storage utilizes Wear-Leveling. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure."</ID>
-    <ID>MaxLineLength:FilePickerUI.kt$FileCategory.DOWNLOADS, FileCategory.OTHER, FileCategory.ARCHIVES, FileCategory.APKS -&gt; Icons.Default.InsertDriveFile</ID>
+    <ID>MaxLineLength:FilePickerUI.kt$FileCategory.DOWNLOADS, FileCategory.OTHER, FileCategory.ARCHIVES, FileCategory.APKS -&gt; Icons.AutoMirrored.Filled.InsertDriveFile</ID>
     <ID>MaxLineLength:FilePickerUI.kt$containerColor = if (isSelected) BhagwaOrange.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)</ID>
     <ID>MaxLineLength:FileRepositoryTest.kt$FileRepositoryTest$FileItemEntity(id = 5L, name = "report.pdf", path = "/report.pdf", category = "DOCUMENTS", sizeBytes = 1024L)</ID>
-    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$// Current Navigation Tab Index (0: Dashboard, 1: File Manager, 2: Secure Vault, 3: AI &amp; Duplicates, 4: Cloud &amp; Plugins)</ID>
+    <ID>MaxLineLength:FirebaseAuthManager.kt$FirebaseAuthManager$throw (task.exception ?: FirebaseAuthException("ERROR_MICROSOFT_SIGN_IN", "Microsoft sign-in failed"))</ID>
+    <ID>MaxLineLength:GoogleAuthManagerTest.kt$GoogleAuthManagerTest.FakeSharedPreferences$override</ID>
+    <ID>MaxLineLength:GoogleAuthManagerTest.kt$GoogleAuthManagerTest.FakeSharedPreferences$override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener)</ID>
+    <ID>MaxLineLength:GoogleAuthManagerTest.kt$GoogleAuthManagerTest.FakeSharedPreferences$override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener)</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$return classifyHttpError("Media download failed", downloadResponse.code, downloadResponse.body?.string())</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$return classifyHttpError("Resumable upload preparation failed", initResponse.code, initResponse.body?.string())</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest$assertEquals("File does not exist or is invalid: ${nonExistentFile.absolutePath}", (result as CloudSyncResult.Error).message)</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences$override</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences$override fun registerOnSharedPreferenceChangeListener(listener: android.content.SharedPreferences.OnSharedPreferenceChangeListener)</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences$override fun unregisterOnSharedPreferenceChangeListener(listener: android.content.SharedPreferences.OnSharedPreferenceChangeListener)</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun clear(): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun putBoolean(key: String, value: Boolean): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun putFloat(key: String, value: Float): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun putInt(key: String, value: Int): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun putLong(key: String, value: Long): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun putString(key: String, value: String?): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun putStringSet(key: String, values: Set&lt;String&gt;?): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:GoogleDriveProviderAdapterTest.kt$GoogleDriveProviderAdapterTest.FakeSharedPreferences.FakeEditor$override fun remove(key: String): android.content.SharedPreferences.Editor</ID>
+    <ID>MaxLineLength:MainActivity.kt$MainActivity$WorkManager.getInstance(this).enqueueUniquePeriodicWork(CacheCleanupWorker.WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, cacheCleanupRequest)</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$FileItemEntity</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$FileItemEntity(name = fileName, path = uri.toString(), category = inferCategoryFromFilename(fileName), sizeBytes = sizeBytes, tags = "SAF_Import")</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$_globalError.value = "Google sign-in requires the real OAuth authorization flow; local/mock sign-in is disabled."</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$context.contentResolver.releasePersistableUriPermission(android.net.Uri.parse(uri), android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$context.contentResolver.takePersistableUriPermission(uri, takeFlags)</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$else</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$fun cancelCloudSyncItem(id: Long)</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$fun retryCloudSyncItem(id: Long)</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$if (entities.isNotEmpty()) { repository.insertFiles(entities); resetPagination(); repository.enqueueBackgroundIndexWork() }</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { fileName = PhysicalStorageManager.safeTrashFileName(it) }</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$if (treeFile != null &amp;&amp; treeFile.isDirectory) scanDocumentFileRecursively(context, treeFile, entities)</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$private</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$private val _persistedFolderUris = MutableStateFlow&lt;Set&lt;String&gt;&gt;(appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet())</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$private val appPrefs by lazy { getApplication&lt;Application&gt;().getSharedPreferences("vvf_app_settings", android.content.Context.MODE_PRIVATE) }</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$suspend fun extractOcrBlocks(filePath: String): List&lt;com.example.data.OcrTextBlock&gt;</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }?.let { fileName = PhysicalStorageManager.safeTrashFileName(it) }</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$val entities = mutableListOf&lt;FileItemEntity&gt;()</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$val newSet = (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()).toMutableSet().apply { add(uri) }</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$val newSet = (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()).toMutableSet().apply { remove(uri) }</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$val treeFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, android.net.Uri.parse(uriStr))</ID>
+    <ID>MaxLineLength:MainViewModel.kt$MainViewModel$}</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$fun MainViewModel.deletePermanently(file: FileItemEntity)</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$fun MainViewModel.restoreFromRecycleBin(file: FileItemEntity)</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.documentDuplicates: StateFlow&lt;List&lt;DuplicateGroup&gt;&gt; get() = repository.getDocumentDuplicates().stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.documentStats: StateFlow&lt;Triple&lt;Int, Int, Float&gt;&gt; get() = repository.documentStats.stateInCompat(this, Triple(0, 0, 1f))</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.level1ExactDuplicates: StateFlow&lt;List&lt;DuplicateGroup&gt;&gt; get() = repository.exactDuplicates.stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.level3VisualDuplicates: StateFlow&lt;List&lt;DuplicateGroup&gt;&gt; get() = repository.getVisualDuplicates(similarityThreshold).stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.ocrScannedFiles: StateFlow&lt;List&lt;FileItemEntity&gt;&gt; get() = repository.ocrScannedFiles.stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.recentFiles: StateFlow&lt;List&lt;FileItemEntity&gt;&gt; get() = repository.recentFiles.stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.recycleBinFiles: StateFlow&lt;List&lt;FileItemEntity&gt;&gt; get() = repository.recycleBinFiles.stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.semanticDuplicates: StateFlow&lt;List&lt;DuplicateGroup&gt;&gt; get() = repository.getSemanticDuplicates(similarityThreshold).stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val MainViewModel.videoDuplicates: StateFlow&lt;List&lt;DuplicateGroup&gt;&gt; get() = repository.getVideoDuplicates(similarityThreshold).stateInCompat(this, emptyList())</ID>
+    <ID>MaxLineLength:MainViewModelCompat.kt$val groups = level1ExactDuplicates.value + level3VisualDuplicates.value + videoDuplicates.value + semanticDuplicates.value + documentDuplicates.value</ID>
+    <ID>MaxLineLength:MainViewModelTest.kt$MainViewModelTest$// This takes persistable permissions and attempts recursive scan. It should log errors safely if resolver fails, but not crash.</ID>
+    <ID>MaxLineLength:MainViewModelTest.kt$MainViewModelTest$// This triggers releasePersistableUriPermission internally, which should be safely caught if system resolver is not fully mocked</ID>
+    <ID>MaxLineLength:MetadataPreservationTest.kt$MetadataPreservationTest$originalPath = if (freshScanned.originalPath.isNotBlank()) freshScanned.originalPath else existing.originalPath</ID>
+    <ID>MaxLineLength:MetadataPreservationTest.kt$MetadataPreservationTest$semanticEmbeddingString = if (freshScanned.semanticEmbeddingString.isNotBlank()) freshScanned.semanticEmbeddingString else existing.semanticEmbeddingString</ID>
+    <ID>MaxLineLength:MetadataPreservationTest.kt$MetadataPreservationTest$semanticEmbeddingVersion = if (freshScanned.semanticEmbeddingVersion &gt; 0) freshScanned.semanticEmbeddingVersion else existing.semanticEmbeddingVersion</ID>
+    <ID>MaxLineLength:MetadataPreservationTest.kt$MetadataPreservationTest$visualSimilarityHash = if (freshScanned.visualSimilarityHash.isNotBlank()) freshScanned.visualSimilarityHash else existing.visualSimilarityHash</ID>
     <ID>MaxLineLength:OcrEngineTest.kt$OcrEngineTest.FakeFileDao$override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List&lt;FileItemEntity&gt;</ID>
-    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$return Result.failure(IllegalArgumentException("File size (${srcFile.length() / (1024 * 1024)}MB) exceeds the maximum secure vault limit of 50MB to prevent OutOfMemoryError."))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); Result.failure(e) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source Stream: ${e.message}", e); Result.failure(e) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$context.contentResolver.openOutputStream(uri)?.use { decryptTo(it) } ?: throw java.io.IOException("Unable to write original content URI")</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$context.contentResolver.openOutputStream(uri)?.use { it.write(decryptedBytes) } ?: throw java.io.IOException("Unable to write original content URI")</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$context.contentResolver.update(collection, values, "${MediaStore.Files.FileColumns.DATA} = ?", arrayOf(oldPath)) &gt; 0</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$else</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$fun</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!copied) { try { trashFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to copy content URI to trash: $path")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!restoredFile.exists() || restoredFile.length() == 0L) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to write restored file at ${restoredFile.absolutePath}")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!restoredFile.exists() || restoredFile.length() == 0L) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to write restored file")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to securely remove source file after vault encryption: $srcPath")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!srcFile.exists() || !srcFile.canRead()) return Result.failure(java.io.FileNotFoundException("Source file not found or unreadable at $srcPath"))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!trashFile.delete() &amp;&amp; trashFile.exists()) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete trash file after restoration.")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!trashFile.exists()) return Result.failure(java.io.FileNotFoundException("Trash file not found at $trashPath"))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!vaultFile.delete() &amp;&amp; vaultFile.exists()) return Result.failure(IllegalStateException("Failed to delete encrypted vault source file."))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!vaultFile.delete() &amp;&amp; vaultFile.exists()) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete encrypted vault source file.")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!vaultFile.delete() &amp;&amp; vaultFile.exists()) { try { targetFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete encrypted vault source file.")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!vaultFile.exists() || vaultFile.length() == 0L) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Vault file creation failed or empty.")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!vaultFile.exists() || vaultFile.length() == 0L) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Vault file creation failed.")) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (!vaultFile.exists()) return Result.failure(java.io.FileNotFoundException("Vault file not found at $vaultFilePath"))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (doc != null) doc.exists() else context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (file.exists()) android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null) { path, uri -&gt; Log.d(TAG, "Scanned $path -&gt; $uri") }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (file.exists()) try { deleted = file.delete() } catch (e: Exception) { Log.w(TAG, "Direct File.delete failed: ${e.message}") }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (fileBytes.size &gt; 50 * 1024 * 1024) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { return safeTrashFileName(it) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (oldFile.delete()) success = true else try { if (newFile.exists()) newFile.delete() } catch (_: Exception) {}</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (srcFile.delete() || deleteFromMediaStore(context, path)) moved = true else try { trashFile.delete() } catch (_: Exception) {}</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (srcFile.length() &gt; 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (trashFile.delete()) { notifyMediaStoreFileChanged(context, "", originalPath); return Result.success(originalPath) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$if (vaultFile.length() &gt; 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("Vault file exceeds the maximum secure vault limit of 50MB."))</ID>
     <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$return Result.failure(IllegalArgumentException("Invalid file name. Path traversal or directory changes are not allowed."))</ID>
-    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$return Result.failure(IllegalArgumentException("Vault file size (${vaultFile.length() / (1024 * 1024)}MB) exceeds the maximum secure vault limit of 50MB to prevent OutOfMemoryError."))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$return Result.failure(IllegalStateException("Restored original URI but failed to remove trash copy."))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$return if (moved &amp;&amp; trashFile.exists()) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) } else Result.failure(java.io.IOException("Failed to move file to trash: $path"))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$return if (restored &amp;&amp; targetFile.exists()) { notifyMediaStoreFileChanged(context, "", targetFile.absolutePath); Result.success(targetFile.absolutePath) } else Result.failure(java.io.IOException("Failed to restore file from trash: $trashPath"))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$try { FileOutputStream(vaultFile).use { it.write(encryptedBytes) } } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$try { context.contentResolver.openOutputStream(uri)?.use { output -&gt; trashFile.inputStream().use { input -&gt; input.copyTo(output) }; writtenToOriginal = true } } catch (e: Exception) { Log.w(TAG, "Could not write to original content URI $originalPath: ${e.message}") }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$try { deleteFile(context, file.absolutePath) } catch (e: Exception) { Log.e(TAG, "Failed to delete source after overwrite: ${e.message}", e) }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$try { moved = srcFile.renameTo(trashFile) } catch (e: Exception) { Log.w(TAG, "Direct rename to trash failed: ${e.message}") }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$try { restored = trashFile.renameTo(targetFile) } catch (e: Exception) { Log.w(TAG, "Direct rename from trash failed: ${e.message}") }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$try { success = oldFile.renameTo(newFile) } catch (e: Exception) { Log.w(TAG, "Direct File.renameTo failed: ${e.message}") }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$try { trashFile.copyTo(targetFile, overwrite = true); if (trashFile.delete()) restored = true else try { targetFile.delete() } catch (_: Exception) {} } catch (e: Exception) { Log.e(TAG, "Restore copy from trash failed: ${e.message}"); try { targetFile.delete() } catch (_: Exception) {} }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val collection = if (Build.VERSION.SDK_INT &gt;= Build.VERSION_CODES.Q) MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL) else MediaStore.Files.getContentUri("external")</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val copied = context.contentResolver.openInputStream(uri)?.use { input -&gt; trashFile.outputStream().use { output -&gt; input.copyTo(output) }; true } ?: false</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val docName = try { DocumentFile.fromSingleUri(context, uri)?.name ?: "content_${System.currentTimeMillis()}.bin" } catch (_: Exception) { "content_${System.currentTimeMillis()}.bin" }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val fileBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return Result.failure(java.io.FileNotFoundException("Unable to open stream for content URI: $srcPath"))</ID>
     <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val finalPath = if (newFile.exists()) newFile.absolutePath else if (success) newFile.absolutePath else oldPath</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val inputStream = context.contentResolver.openInputStream(uri) ?: return Result.failure(java.io.FileNotFoundException("Unable to open stream for content URI: $srcPath"))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val restoredFile = File(getRestoredDir(context), getFileNameFromTrashPathOrUri(context, trashFile.name, uri))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val restoredFile = File(getRestoredDir(context), getFileNameFromVaultPathOrUri(context, vaultFilePath, uri))</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$val rows = try { context.contentResolver.delete(uri, null, null) } catch (_: SecurityException) { throw java.security.GeneralSecurityException("Permission denied deleting $path") } catch (_: Exception) { 0 }</ID>
+    <ID>MaxLineLength:PhysicalStorageManager.kt$PhysicalStorageManager$}</ID>
     <ID>MaxLineLength:PhysicalStorageTest.kt$PhysicalStorageTest$assertTrue(result.exceptionOrNull()?.message?.contains("exceeds the maximum secure vault limit of 50MB") == true)</ID>
     <ID>MaxLineLength:PhysicalStorageTest.kt$PhysicalStorageTest$val</ID>
     <ID>MaxLineLength:PluginRepositoryTest.kt$PluginRepositoryTest$val plugin = PluginEntity("cloud", "S3 Sync", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false)</ID>
     <ID>MaxLineLength:PluginRepositoryTest.kt$PluginRepositoryTest.FakeFileDao$override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List&lt;FileItemEntity&gt;</ID>
     <ID>MaxLineLength:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$if</ID>
     <ID>MaxLineLength:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$Log.i("TFLiteSemantic", "Required model asset '$assetName' or vocab asset '$vocabAsset' not found in assets.")</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$(updated.category == FileCategory.IMAGES.name || updated.category == FileCategory.DOCUMENTS.name)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$CloudSyncItemEntity(provider = "GOOGLE_DRIVE", fileName = "Electricity_Bill_July.jpg", fileSize = 3_120_000L, status = "SYNCED", isCore = true)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$CloudSyncItemEntity(provider = "GOOGLE_DRIVE", fileName = "Tax_Invoice_2026.pdf", fileSize = 2_450_000L, status = "SYNCED", isCore = true)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$CloudSyncItemEntity(provider = "NAS_SMB", fileName = "Backup_Vault_Archive.zip", fileSize = 45_000_000L, status = "FAILED", isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$CloudSyncItemEntity(provider = "ONEDRIVE", fileName = "Project_Blueprint_v2.png", fileSize = 5_800_000L, status = "PENDING", isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("dropbox_sync", "Dropbox Cloud Plugin", "CLOUD_PROVIDER", "Dropbox Cloud storage integration", isEnabled = false, isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("gdrive_sync", "Google Drive Core Sync", "CLOUD_PROVIDER", "REST API &amp; Credential Manager Google Drive sync", isEnabled = true, isCore = true)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("nas_smb", "Local NAS &amp; SMB Plugin", "CLOUD_PROVIDER", "Local network storage &amp; WebDAV connector", isEnabled = true, isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("nextcloud_sync", "NextCloud Private Sync", "CLOUD_PROVIDER", "Private self-hosted NextCloud instance sync", isEnabled = false, isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("ocr_engine", "ML Kit OCR Engine", "OCR", "Text extraction from images &amp; scanned documents", isEnabled = true, isCore = true)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("onedrive_sync", "Microsoft OneDrive Plugin", "CLOUD_PROVIDER", "OneDrive Cloud storage synchronization", isEnabled = true, isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("s3_storage", "Amazon S3 Compatible Plugin", "CLOUD_PROVIDER", "S3 Bucket storage integration", isEnabled = false, isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$PluginEntity("tflite_semantic", "TFLite Semantic Search", "AI_SEMANTIC", "On-device natural language vector search", isEnabled = true, isCore = false)</ID>
-    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$ocrText = "Electricity Department State Power Bill Consumer No 8840291 Due Date 22 July 2026 Total 3,420 INR"</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("BackgroundIndexWork", androidx.work.ExistingWorkPolicy.KEEP, request)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("CacheCleanupWork", androidx.work.ExistingWorkPolicy.KEEP, request)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("CloudSyncWork", androidx.work.ExistingWorkPolicy.KEEP, request)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("DuplicateCleanupWork", androidx.work.ExistingWorkPolicy.KEEP, request)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$dao.updateFile(currentFile.copy(path = newPath, originalPath = originalPathToKeep, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$dao.updateFile(currentFile.copy(path = restoreResult.getOrThrow(), originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$fun getDocumentDuplicates(): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$fun getSemanticDuplicates(similarityThresholdFlow: Flow&lt;Float&gt;): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$fun getVideoDuplicates(similarityThresholdFlow: Flow&lt;Float&gt;): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$fun getVisualDuplicates(similarityThresholdFlow: Flow&lt;Float&gt;): Flow&lt;List&lt;DuplicateGroup&gt;&gt;</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$if</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$if (!PhysicalStorageManager.deleteFile(context, currentFile.path)) throw java.io.IOException("Failed to physically delete file at ${currentFile.path}")</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$if (restoreResult.isFailure) throw restoreResult.exceptionOrNull() ?: java.io.IOException("Failed to restore file from trash")</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$if (trashResult.isFailure) throw trashResult.exceptionOrNull() ?: java.io.IOException("Failed to move file to trash")</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$open suspend fun insertFiles(files: List&lt;FileItemEntity&gt;)</ID>
     <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$private</ID>
     <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$suspend</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$suspend fun addSyncItem(provider: String, fileName: String, size: Long, filePath: String = "")</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$suspend fun addTagToFile(file: FileItemEntity, tag: String)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List&lt;FileItemEntity&gt;</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$suspend fun renameFile(file: FileItemEntity, newName: String)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$suspend fun togglePlugin(pluginId: String, currentEnabled: Boolean)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$suspend fun unlockFromVault(vaultItem: VaultItemEntity, file: FileItemEntity?): Boolean</ID>
     <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$tfliteProvider.generateImageEmbedding(javaFile) ?: tfliteProvider.generateTextEmbedding(textContent)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val constraints = androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build()</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val constraints = androidx.work.Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build()</ID>
     <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val docFp = withContext(Dispatchers.IO) { storageScanner.computeDocumentFingerprint(javaFile) }</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val duplicate = currentItems.find { it.provider.equals(provider, true) &amp;&amp; (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath &amp;&amp; it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val isTextMatch = file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)</ID>
     <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val originalPathToKeep = if (currentFile.originalPath.isNotBlank()) currentFile.originalPath else currentFile.path</ID>
-    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$// Supplementary Source: Raw Directory Traversal (Only if All Files Access / External storage manager or read permissions are granted)</ID>
-    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$scanDirectoryRecursively(externalDir, processedPaths, depth = 0, maxDepth = 6, computeHashes = computeHashes, onItemDiscovered = emitItem)</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val request = androidx.work.OneTimeWorkRequestBuilder&lt;com.example.worker.BackgroundIndexWorker&gt;().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val request = androidx.work.OneTimeWorkRequestBuilder&lt;com.example.worker.CacheCleanupWorker&gt;().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val request = androidx.work.OneTimeWorkRequestBuilder&lt;com.example.worker.CloudSyncWorker&gt;().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$val request = androidx.work.OneTimeWorkRequestBuilder&lt;com.example.worker.DuplicateCleanupWorker&gt;().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()</ID>
+    <ID>MaxLineLength:SmartManagerRepository.kt$SmartManagerRepository$withRetry { dao.insertCloudSyncItem(CloudSyncItemEntity(provider = provider, fileName = fileName, filePath = filePath, fileSize = size, status = "QUEUED", lastSyncedMs = System.currentTimeMillis(), isCore = isCore)) }</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$fun isDocumentFile(fileName: String): Boolean</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$fun isImageFile(fileName: String): Boolean</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$fun isVideoFile(fileName: String): Boolean</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$private suspend fun computeFileHashQuietly(file: File): String</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$try { if (Build.VERSION.SDK_INT &gt;= Build.VERSION_CODES.Q) retriever.close() else retriever.release() } catch (_: Exception) {}</ID>
     <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val grayLeft = (Color.red(pixelLeft) * 299 + Color.green(pixelLeft) * 587 + Color.blue(pixelLeft) * 114) / 1000</ID>
     <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val grayRight = (Color.red(pixelRight) * 299 + Color.green(pixelRight) * 587 + Color.blue(pixelRight) * 114) / 1000</ID>
-    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val hash = if (computeHashes &amp;&amp; file.exists() &amp;&amp; file.canRead()) computeFileHashQuietly(file) else ""</ID>
-    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val visualHash = if (computeHashes &amp;&amp; category == FileCategory.IMAGES &amp;&amp; file.exists() &amp;&amp; file.canRead()) computeDHashQuietly(file) else ""</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val keyframeBitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: retriever.frameAtTime</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val visualHash = if (computeHashes &amp;&amp; category == FileCategory.IMAGES) computeContentUriDHash(child.uri) else ""</ID>
+    <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val visualHash = if (computeHashes &amp;&amp; category == FileCategory.IMAGES) computeContentUriDHash(itemUri) else ""</ID>
     <ID>MaxLineLength:StorageScanner.kt$StorageScanner$val visualHash = if (computeHashes &amp;&amp; category == FileCategory.IMAGES) computeDHashQuietly(file) else ""</ID>
     <ID>MaxLineLength:VVFApplication.kt$VVFApplication$Log.w("VVFApplication", "Firebase Crashlytics initialization pending (app/google-services.json required from Firebase Console): ${e.message}")</ID>
     <ID>MaxLineLength:VVFSmartManagerApp.kt$(slideInHorizontally(animationSpec = tween(300)) { width -&gt; -width } + fadeIn(animationSpec = tween(300))).togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -&gt; width } + fadeOut(animationSpec = tween(300)))</ID>
     <ID>MaxLineLength:VVFSmartManagerApp.kt$(slideInHorizontally(animationSpec = tween(300)) { width -&gt; width } + fadeIn(animationSpec = tween(300))).togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -&gt; -width } + fadeOut(animationSpec = tween(300)))</ID>
     <ID>MaxLineLength:VVFSmartManagerApp.kt$colors = NavigationBarItemDefaults.colors(selectedIconColor = BhagwaOrange, selectedTextColor = BhagwaOrange)</ID>
     <ID>MaxLineLength:VVFSmartManagerApp.kt$icon = { Icon(Icons.Default.CleaningServices, contentDescription = stringResource(R.string.ai_dupes)) }</ID>
-    <ID>MaxLineLength:VaultManagerEngine.kt$VaultManagerEngine$Log.e("VaultManagerEngine", "EncryptedSharedPreferences init failed, falling back to standard SharedPreferences: ${e.message}")</ID>
     <ID>MaxLineLength:VaultRepository.kt$VaultRepository$fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean</ID>
     <ID>MaxLineLength:VaultRepository.kt$VaultRepository$suspend</ID>
     <ID>MaxLineLength:VaultRepository.kt$VaultRepository$throw decryptResult.exceptionOrNull() ?: java.io.IOException("Failed to physically decrypt vault file")</ID>
-    <ID>MaxLineLength:VaultRepositoryTest.kt$VaultRepositoryTest$val file = FileItemEntity(id = 5, name = "secret.png", path = tempFile.absolutePath, category = "IMAGES", sizeBytes = tempFile.length())</ID>
-    <ID>MaxLineLength:VaultRepositoryTest.kt$VaultRepositoryTest$val originalFile = FileItemEntity(id = 5, name = "secret.png", path = tempFile.absolutePath, category = "IMAGES", sizeBytes = 1200)</ID>
-    <ID>MaxLineLength:VaultRepositoryTest.kt$VaultRepositoryTest.FakeFileDao$override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List&lt;FileItemEntity&gt;</ID>
-    <ID>MaxLineLength:VaultRepositoryTest.kt$VaultRepositoryTest.FakeFileDao$return FileItemEntity(id = 5, name = "secret.png", path = "/secret.png", category = "IMAGES", sizeBytes = 1200, isVault = true)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurface)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Icon(Icons.Default.Fingerprint, contentDescription = stringResource(R.string.biometric), tint = EmeraldGreen)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Icon(Icons.Default.LockOpen, contentDescription = stringResource(R.string.unlocked), tint = EmeraldGreen)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Icon(Icons.Default.Security, contentDescription = stringResource(R.string.encrypted), tint = EmeraldGreen)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Text(text = stringResource(R.string.auto_lock_timer), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Text(text = stringResource(R.string.biometric_unlock), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Text(text = stringResource(R.string.change_master_pin), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Text(text = stringResource(R.string.locks_automatically_when_inact), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Text(text = stringResource(R.string.update_your_4_digit_security_p), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$Text(text = stringResource(R.string.use_fingerprint_or_face_id_to_), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
-    <ID>MaxLineLength:VaultScreen.kt$colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f))</ID>
-    <ID>MaxLineLength:VaultScreen.kt$text = "No encrypted files in vault.\nUse File Manager menu to encrypt sensitive files."</ID>
-    <ID>MaxLineLength:VaultScreen.kt$text = "When encrypting a file to the Vault, the original source is overwritten matching its exact file size (3-pass random/zeros data) before deletion.\n\nDisclaimer: Modern flash/SSD storage utilizes physical Wear-Leveling controllers. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure."</ID>
+    <ID>MaxLineLength:VaultScreen.kt$"BIO" -&gt; if (isBiometricAvailable &amp;&amp; biometricEnabled) IconButton(onClick = { showBiometricPrompt() }, modifier = Modifier.size(64.dp).clip(CircleShape).background(EmeraldGreen.copy(alpha = 0.15f))) { Icon(Icons.Default.Fingerprint, contentDescription = stringResource(R.string.biometric), tint = EmeraldGreen) } else Box(modifier = Modifier.size(64.dp))</ID>
+    <ID>MaxLineLength:VaultScreen.kt$"DEL" -&gt; IconButton(onClick = { viewModel.clearPinDigit() }, modifier = Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) { Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurface) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Box</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(EmeraldGreen.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(Icons.Default.Security, contentDescription = stringResource(R.string.encrypted), tint = EmeraldGreen) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Button(onClick = { viewModel.lockVault() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.lock_vault)) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Card</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Column</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Column { Text(text = item.originalName, fontWeight = FontWeight.Bold, fontSize = 14.sp); Text(text = "${item.encryptedName} • ${formatFileSize(item.sizeBytes)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Column { Text(text = stringResource(R.string.auto_lock_timer), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.locks_automatically_when_inact), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Column { Text(text = stringResource(R.string.biometric_unlock), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.use_fingerprint_or_face_id_to_), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Column { Text(text = stringResource(R.string.change_master_pin), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.update_your_4_digit_security_p), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Icon(imageVector = Icons.Default.Lock, contentDescription = stringResource(R.string.vault_locked), tint = BhagwaOrange, modifier = Modifier.size(40.dp))</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Icon(imageVector = Icons.Default.Shield, contentDescription = "Best-Effort Overwrite Disclaimer", tint = BhagwaOrange, modifier = Modifier.size(24.dp))</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Icon(imageVector = Icons.Default.Shield, contentDescription = stringResource(R.string.vault_empty), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp))</ID>
+    <ID>MaxLineLength:VaultScreen.kt$LazyColumn</ID>
+    <ID>MaxLineLength:VaultScreen.kt$LazyVerticalGrid</ID>
+    <ID>MaxLineLength:VaultScreen.kt$OutlinedButton(onClick = { showChangePinDialog = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = BhagwaOrange), modifier = Modifier.testTag("change_pin_button")) { Text(stringResource(R.string.change), fontSize = 12.sp) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$OutlinedButton(onClick = { viewModel.unlockFromVault(item) }) { Text(stringResource(R.string.decrypt), fontSize = 12.sp, color = EmeraldGreen) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$OutlinedTextField(value = changePinConfirm, onValueChange = { changePinConfirm = it }, label = { Text(stringResource(R.string.confirm_new_pin)) }, singleLine = true)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$OutlinedTextField(value = changePinNew, onValueChange = { changePinNew = it }, label = { Text(stringResource(R.string.new_4_digit_pin)) }, singleLine = true)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$OutlinedTextField(value = changePinOld, onValueChange = { changePinOld = it }, label = { Text(stringResource(R.string.current_pin)) }, singleLine = true)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Row</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LockOpen, contentDescription = stringResource(R.string.unlocked), tint = EmeraldGreen); Spacer(modifier = Modifier.width(8.dp)); Text(text = "Encrypted Vault Unlocked", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Switch(checked = biometricEnabled, onCheckedChange = { biometricEnabled = it }, colors = SwitchDefaults.colors(checkedThumbColor = BhagwaOrange))</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Text(text = "AES-256 Android Keystore Cipher Active", fontSize = 12.sp, color = SoftGold)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Text(text = "Best-Effort Source Overwrite", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Text(text = "No encrypted files in vault.\nUse File Manager menu to encrypt sensitive files.", textAlign = TextAlign.Center, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Text(text = "Secure Encrypted Vault", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Text(text = "Vault Security Options", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = BhagwaOrange)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Text(text = "When encrypting a file to the Vault, the original source is overwritten matching its exact file size (3-pass random/zeros data) before deletion.\n\nDisclaimer: Modern flash/SSD storage utilizes physical Wear-Leveling controllers. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$Text(text = autoLockTimer, color = BhagwaOrange, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.clickable { autoLockTimer = if (autoLockTimer == "1 minute") "5 minutes" else "1 minute" })</ID>
+    <ID>MaxLineLength:VaultScreen.kt$TextButton(onClick = { showChangePinDialog = false; changePinOld = ""; changePinNew = ""; changePinConfirm = ""; changePinError = null }) { Text(stringResource(R.string.cancel)) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$else</ID>
+    <ID>MaxLineLength:VaultScreen.kt$else -&gt; Surface(onClick = { viewModel.appendPinDigit(digit) }, modifier = Modifier.size(64.dp).testTag("pin_key_$digit"), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) { Box(contentAlignment = Alignment.Center) { Text(text = digit, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) } }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$if (changePinError != null) Text(text = changePinError!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.Bold)</ID>
+    <ID>MaxLineLength:VaultScreen.kt$if (pinError != null) { Spacer(modifier = Modifier.height(12.dp)); Text(text = pinError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$item { Text(text = "Encrypted Files (${vaultItems.size})", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$repeat(4) { index -&gt; Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index &lt; enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }</ID>
+    <ID>MaxLineLength:VaultScreen.kt$text = if (viewModel.isVaultPinSetupRequired) "Create a 4-Digit Master PIN" else "Enter 4-Digit Master PIN"</ID>
+    <ID>MaxLineLength:VaultScreen.kt$}</ID>
     <ID>NestedBlockDepth:AppDatabase.kt$AppDatabase.Companion$private fun addColumnIfNotExists( db: SupportSQLiteDatabase, tableName: String, columnName: String, columnDefinition: String )</ID>
     <ID>NestedBlockDepth:CacheCleanupWorker.kt$CacheCleanupWorker$override suspend fun doWork(): Result</ID>
     <ID>NestedBlockDepth:CloudSyncWorker.kt$CloudSyncWorker$override suspend fun doWork(): Result</ID>
+    <ID>NestedBlockDepth:DuplicateCleanupWorker.kt$DuplicateCleanupWorker$override suspend fun doWork(): Result</ID>
     <ID>NestedBlockDepth:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest$private fun bruteForceVisualDuplicates( validImages: List&lt;FileItemEntity&gt;, threshold: Float ): List&lt;DuplicateGroup&gt;</ID>
     <ID>NestedBlockDepth:DuplicateManager.kt$DuplicateManager$suspend fun cleanSelectedDuplicates(selectedIds: Set&lt;Long&gt;)</ID>
     <ID>NestedBlockDepth:FilePickerUI.kt$private fun getAvailableDeviceLocalFiles(context: android.content.Context): List&lt;PickableLocalFile&gt;</ID>
     <ID>NestedBlockDepth:KeystoreVaultManager.kt$KeystoreVaultManager$private fun getSecretKey(): SecretKey</ID>
-    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore( context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -&gt; ByteArray ): Result&lt;String&gt;</ID>
-    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore( context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager ): Result&lt;String&gt;</ID>
-    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource( context: Context, srcPath: String, encryptAction: (ByteArray) -&gt; Pair&lt;ByteArray, ByteArray&gt; ): Result&lt;VaultStorageResult&gt;</ID>
-    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource( context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager ): Result&lt;VaultStorageResult&gt;</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -&gt; ByteArray): Result&lt;String&gt;</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result&lt;String&gt;</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun deleteFile(context: Context, path: String): Boolean</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource(context: Context, srcPath: String, encryptAction: (ByteArray) -&gt; Pair&lt;ByteArray, ByteArray&gt;): Result&lt;VaultStorageResult&gt;</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result&lt;VaultStorageResult&gt;</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun getFileNameFromContentUri(context: Context, uri: Uri): String</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun getFileSizeFromContentUri(context: Context, uri: Uri): Long</ID>
     <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun moveToTrash(context: Context, path: String): Result&lt;String&gt;</ID>
     <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun renameFile(context: Context, oldPath: String, newName: String): Result&lt;String&gt;</ID>
     <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$fun restoreFromTrash(context: Context, trashPath: String, originalPath: String): Result&lt;String&gt;</ID>
-    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$private fun secureWipeFile(context: Context, file: File)</ID>
+    <ID>NestedBlockDepth:PhysicalStorageManager.kt$PhysicalStorageManager$private fun secureWipeFile(context: Context, file: File): Boolean</ID>
     <ID>NestedBlockDepth:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$fun generateImageEmbedding(file: File): FloatArray?</ID>
     <ID>NestedBlockDepth:StorageScanner.kt$StorageScanner$fun computeDHashFromBitmap(bitmap: Bitmap): String</ID>
     <ID>NestedBlockDepth:StorageScanner.kt$StorageScanner$private suspend fun scanDirectoryRecursively( dir: File, processedPaths: MutableSet&lt;String&gt;, depth: Int, maxDepth: Int, computeHashes: Boolean, onItemDiscovered: suspend (FileItemEntity) -&gt; Unit )</ID>
-    <ID>NestedBlockDepth:StorageScanner.kt$StorageScanner$private suspend fun scanMediaStore( processedPaths: MutableSet&lt;String&gt;, computeHashes: Boolean, onItemDiscovered: suspend (FileItemEntity) -&gt; Unit )</ID>
+    <ID>ReturnCount:CloudSyncEngine.kt$CloudSyncEngine$suspend fun syncItem(item: CloudSyncItemEntity): CloudSyncResult</ID>
     <ID>ReturnCount:DashboardScreen.kt$fun formatFileSize(bytes: Long): String</ID>
     <ID>ReturnCount:FilePickerUI.kt$private fun formatFileSize(bytes: Long): String</ID>
+    <ID>ReturnCount:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult</ID>
+    <ID>ReturnCount:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult</ID>
     <ID>ReturnCount:KeystoreVaultManager.kt$KeystoreVaultManager$fun verifyPin(inputPin: String, storedHash: String): Boolean</ID>
     <ID>ReturnCount:KeystoreVaultManager.kt$KeystoreVaultManager$private fun hexToByteArray(hex: String): ByteArray?</ID>
-    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore( context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -&gt; ByteArray ): Result&lt;String&gt;</ID>
-    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore( context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager ): Result&lt;String&gt;</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -&gt; ByteArray): Result&lt;String&gt;</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result&lt;String&gt;</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun deleteFile(context: Context, path: String): Boolean</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource(context: Context, srcPath: String, encryptAction: (ByteArray) -&gt; Pair&lt;ByteArray, ByteArray&gt;): Result&lt;VaultStorageResult&gt;</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result&lt;VaultStorageResult&gt;</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun getFileNameFromContentUri(context: Context, uri: Uri): String</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun getFileSizeFromContentUri(context: Context, uri: Uri): Long</ID>
     <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun moveToTrash(context: Context, path: String): Result&lt;String&gt;</ID>
     <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun renameFile(context: Context, oldPath: String, newName: String): Result&lt;String&gt;</ID>
     <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$fun restoreFromTrash(context: Context, trashPath: String, originalPath: String): Result&lt;String&gt;</ID>
+    <ID>ReturnCount:PhysicalStorageManager.kt$PhysicalStorageManager$private fun secureWipeFile(context: Context, file: File): Boolean</ID>
+    <ID>ReturnCount:SecureOAuthSessionValidator.kt$SecureOAuthSessionValidator$fun isValid(accessToken: String, refreshToken: String?): Boolean</ID>
     <ID>ReturnCount:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$fun generateImageEmbedding(file: File): FloatArray?</ID>
     <ID>ReturnCount:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$fun generateTextEmbedding(text: String): FloatArray?</ID>
     <ID>ReturnCount:SemanticEmbeddingProvider.kt$SemanticEmbeddingProvider$fun calculateCosineSimilarity(emb1: FloatArray, emb2: FloatArray): Float</ID>
@@ -322,32 +526,35 @@
     <ID>ReturnCount:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$override suspend fun generateImageEmbedding(file: File): FloatArray?</ID>
     <ID>ReturnCount:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$override suspend fun generateTextEmbedding(text: String): FloatArray?</ID>
     <ID>ReturnCount:SmartManagerRepository.kt$SmartManagerRepository$fun searchSemanticFiles(query: String): Flow&lt;List&lt;FileItemEntity&gt;&gt;</ID>
-    <ID>SwallowedException:CloudSyncWorker.kt$CloudSyncWorker$e: Throwable</ID>
     <ID>SwallowedException:DuplicateDetectionEngineTest.kt$DuplicateDetectionEngineTest.FakeHammingDistanceCalculator$e: Exception</ID>
+    <ID>SwallowedException:FileManagerScreen.kt$e: Exception</ID>
     <ID>SwallowedException:KeystoreVaultManager.kt$KeystoreVaultManager$e: Throwable</ID>
-    <ID>SwallowedException:MainViewModel.kt$MainViewModel$e: Exception</ID>
     <ID>SwallowedException:OcrEngine.kt$MLKitOcrEngine$e: Exception</ID>
+    <ID>SwallowedException:OcrOverlayImage.kt$e: Exception</ID>
     <ID>SwallowedException:SemanticEmbeddingProvider.kt$SemanticEmbeddingProvider$e: Exception</ID>
     <ID>SwallowedException:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$e: Exception</ID>
-    <ID>SwallowedException:SmartManagerRepository.kt$SmartManagerRepository$e: Exception</ID>
-    <ID>SwallowedException:SmartManagerRepository.kt$SmartManagerRepository$e: Throwable</ID>
-    <ID>SwallowedException:StorageScanner.kt$StorageScanner$e: Exception</ID>
+    <ID>SwallowedException:StaleRecordReconciliationTest.kt$StaleRecordReconciliationTest$e: Exception</ID>
     <ID>TooGenericExceptionCaught:BackgroundIndexWorker.kt$BackgroundIndexWorker$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CacheCleanupWorker.kt$CacheCleanupWorker$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CloudSyncEngine.kt$CloudSyncEngine$e: Exception</ID>
     <ID>TooGenericExceptionCaught:CloudSyncWorker.kt$CloudSyncWorker$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:CloudSyncWorker.kt$CloudSyncWorker$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:DuplicateCleanupWorker.kt$DuplicateCleanupWorker$e: Exception</ID>
     <ID>TooGenericExceptionCaught:DuplicateManager.kt$DuplicateManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:FileManagerScreen.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:FilePickerUI.kt$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:GoogleAuthManager.kt$GoogleAuthManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:GoogleAuthManagerFactory.kt$GoogleAuthManagerFactory$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:GoogleDriveProviderAdapter.kt$GoogleDriveProviderAdapter$e: Exception</ID>
     <ID>TooGenericExceptionCaught:KeystoreVaultManager.kt$KeystoreVaultManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:KeystoreVaultManager.kt$KeystoreVaultManager$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:MainViewModel.kt$MainViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:OcrEngine.kt$MLKitOcrEngine$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:OcrOverlayImage.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PhysicalStorageManager.kt$PhysicalStorageManager$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:PhysicalStorageManager.kt$PhysicalStorageManager$writeEx: Exception</ID>
     <ID>TooGenericExceptionCaught:SemanticEmbeddingProvider.kt$LightweightEmbeddingEngine$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SemanticEmbeddingProvider.kt$SemanticEmbeddingProvider$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:SmartManagerRepository.kt$SmartManagerRepository$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SmartManagerRepository.kt$SmartManagerRepository$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:StorageScanner.kt$StorageScanner$e: Exception</ID>
@@ -355,24 +562,37 @@
     <ID>TooGenericExceptionCaught:VaultManagerEngine.kt$VaultManagerEngine$e: Exception</ID>
     <ID>TooGenericExceptionCaught:VaultRepository.kt$VaultRepository$e: Exception</ID>
     <ID>TooGenericExceptionThrown:OcrEngineTest.kt$OcrEngineTest.FakeOcrEngine$throw RuntimeException("ML Kit not initialized / GMS Core error")</ID>
+    <ID>TooGenericExceptionThrown:StaleRecordReconciliationTest.kt$StaleRecordReconciliationTest$throw RuntimeException("Storage access error")</ID>
     <ID>TooManyFunctions:FileDao.kt$FileDao</ID>
     <ID>TooManyFunctions:KeystoreVaultManager.kt$KeystoreVaultManager</ID>
     <ID>TooManyFunctions:MainViewModel.kt$MainViewModel : AndroidViewModel</ID>
+    <ID>TooManyFunctions:MainViewModelCompat.kt$com.example.ui.MainViewModelCompat.kt</ID>
     <ID>TooManyFunctions:PhysicalStorageManager.kt$PhysicalStorageManager</ID>
     <ID>TooManyFunctions:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider : SemanticEmbeddingProvider</ID>
     <ID>TooManyFunctions:SmartManagerRepository.kt$SmartManagerRepository</ID>
     <ID>TooManyFunctions:StorageScanner.kt$StorageScanner : HammingDistanceCalculator</ID>
+    <ID>UnusedParameter:MainViewModel.kt$MainViewModel$displayName: String?</ID>
+    <ID>UnusedParameter:MainViewModel.kt$MainViewModel$email: String</ID>
     <ID>UnusedParameter:PhysicalStorageManager.kt$PhysicalStorageManager$oldPath: String</ID>
-    <ID>UnusedPrivateProperty:KeystoreVaultManager.kt$KeystoreVaultManager.Companion$private const val IV_SIZE_BYTES = 12</ID>
+    <ID>UnusedPrivateProperty:CloudSyncEngine.kt$CloudSyncEngine$private val context: Context</ID>
+    <ID>UnusedPrivateProperty:CloudSyncEngine.kt$CloudSyncEngine$private val dao: FileDao</ID>
     <ID>UnusedPrivateProperty:SemanticEmbeddingProvider.kt$TFLiteSemanticEmbeddingProvider$j</ID>
-    <ID>UseCheckOrError:KeystoreVaultManager.kt$KeystoreVaultManager$throw IllegalStateException("No valid SecretKey available")</ID>
+    <ID>UseCheckOrError:KeystoreVaultManager.kt$KeystoreVaultManager$throw IllegalStateException("Android Keystore is unavailable; refusing to create a non-persistent vault key")</ID>
+    <ID>UseCheckOrError:KeystoreVaultManager.kt$KeystoreVaultManager$throw IllegalStateException("No valid persistent Android Keystore key available")</ID>
     <ID>UseCheckOrError:KeystoreVaultManager.kt$KeystoreVaultManager$throw IllegalStateException("PBKDF2 derivation failed")</ID>
-    <ID>VariableNaming:MainViewModel.kt$MainViewModel$private val PAGE_SIZE = 50</ID>
+    <ID>WildcardImport:AiDuplicatesScreen.kt$import com.example.ui.*</ID>
     <ID>WildcardImport:AppDatabaseMigrationTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:DashboardScreen.kt$import com.example.ui.*</ID>
     <ID>WildcardImport:DuplicateDetectionEngineTest.kt$import org.junit.Assert.*</ID>
     <ID>WildcardImport:DuplicateManagerTest.kt$import org.junit.Assert.*</ID>
     <ID>WildcardImport:ExampleUnitTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:FileManagerScreen.kt$import com.example.ui.*</ID>
+    <ID>WildcardImport:GoogleAuthManagerTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:GoogleDriveProviderAdapterTest.kt$import okhttp3.*</ID>
+    <ID>WildcardImport:GoogleDriveProviderAdapterTest.kt$import org.junit.Assert.*</ID>
+    <ID>WildcardImport:MainViewModel.kt$import com.example.data.*</ID>
+    <ID>WildcardImport:MainViewModelCompat.kt$import com.example.data.*</ID>
+    <ID>WildcardImport:MainViewModelCompat.kt$import kotlinx.coroutines.flow.*</ID>
     <ID>WildcardImport:OcrEngineTest.kt$import org.junit.Assert.*</ID>
-    <ID>WildcardImport:VaultRepositoryTest.kt$import org.junit.Assert.*</ID>
   </CurrentIssues>
 </SmellBaseline>

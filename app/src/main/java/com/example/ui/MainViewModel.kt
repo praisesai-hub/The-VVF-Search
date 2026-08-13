@@ -94,8 +94,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Google Auth Foundation: real OAuth integration must call saveSession only after
     // Google's authorization flow returns verified credentials. No local token generation.
-    val googleAuthManager = com.example.data.GoogleAuthManagerFactory.getInstance(getApplication())
-    val googleAuthState: StateFlow<com.example.data.GoogleAuthState> = googleAuthManager.authState
+    private val googleAuthManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        com.example.data.GoogleAuthManagerFactory.getInstance(getApplication())
+    }
+    val googleAuthState: StateFlow<com.example.data.GoogleAuthState> by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        googleAuthManager.authState
+    }
 
     fun signInToGoogle(email: String, displayName: String?) {
         _globalError.value = "Google sign-in requires the real OAuth authorization flow; local/mock sign-in is disabled."

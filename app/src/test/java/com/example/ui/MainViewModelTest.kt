@@ -28,6 +28,8 @@ import org.robolectric.annotation.Config
 class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(context) {
     var verifyPinResult = true
     var changePinResult = true
+    override fun hasVaultPin(): Boolean = true
+    override fun getStoredVaultPinHash(): String = "test-stored-hash"
     var lastVerifiedPin: String? = null
     var lastChangedOldPin: String? = null
     var lastChangedNewPin: String? = null

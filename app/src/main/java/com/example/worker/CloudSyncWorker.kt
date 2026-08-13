@@ -9,6 +9,7 @@ import com.example.data.CloudSyncItemEntity
 import com.example.data.FileDao
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncResult
+import com.example.data.GoogleAuthManager
 import kotlinx.coroutines.flow.first
 import java.io.File
 
@@ -16,7 +17,8 @@ class CloudSyncWorker @JvmOverloads constructor(
     appContext: Context,
     workerParams: WorkerParameters,
     private val daoOverride: FileDao? = null,
-    private val providerAdapterOverride: CloudProviderAdapter? = null
+    private val providerAdapterOverride: CloudProviderAdapter? = null,
+    private val authManagerOverride: GoogleAuthManager? = null
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -46,7 +48,8 @@ class CloudSyncWorker @JvmOverloads constructor(
                 return Result.success()
             }
 
-            val authManager = com.example.data.GoogleAuthManagerFactory.getInstance(applicationContext)
+            val authManager = authManagerOverride
+                ?: com.example.data.GoogleAuthManagerFactory.getInstance(applicationContext)
             val syncEngine = com.example.data.CloudSyncEngine(
                 context = applicationContext,
                 dao = dao,

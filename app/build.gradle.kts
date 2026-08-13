@@ -154,3 +154,12 @@ detekt {
   config.setFrom(file("config/detekt/detekt.yml"))
   baseline = file("detekt-baseline.xml")
 }
+
+// Crashlytics mapping upload requires the Google Services-generated app ID file.
+// Keep upload enabled when Firebase configuration is present, but do not make
+// local or secret-free validation builds fail solely because telemetry is absent.
+tasks.configureEach {
+  if (name.startsWith("uploadCrashlyticsMappingFile")) {
+    enabled = file("google-services.json").isFile
+  }
+}
