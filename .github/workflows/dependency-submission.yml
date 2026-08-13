@@ -34,4 +34,4 @@ jobs:
           java-version: '17'
 
       - name: Generate and Submit Dependency Graph
-        uses: gradle/actions/dependency-submission@v4
+        uses: gradle/actions/dependency-submission@v6
