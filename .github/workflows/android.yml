@@ -1,0 +1,161 @@
+# Android CI/CD Pipeline - Automated Build & Test
+name: Android CI/CD
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_VERSION: '9.3.1'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-and-test:
+    name: Build & Test Android App
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v6
+    - name: Set up JDK 17
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+      with:
+        validate-wrappers: true
+    - name: Verify Gradle Wrapper
+      run: |
+        test -f gradle/wrapper/gradle-wrapper.jar
+        test -f gradle/wrapper/gradle-wrapper.properties
+        ./gradlew --version
+        ./gradlew -q properties >/dev/null
+        echo "Gradle wrapper resolved successfully."
+    - name: Write google-services.json from secret (if set)
+      run: |
+        if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+          printf '%s' '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+        fi
+    - name: Verify google-services.json (optional for CI validation)
+      run: |
+        if [ -f app/google-services.json ] && [ -s app/google-services.json ]; then
+          echo "google-services.json present."
+        else
+          echo "Notice: google-services.json is not available. Continuing because the Android project uses MissingGoogleServicesStrategy.WARN; Firebase configuration is not required for compile/test validation."
+        fi
+    - name: Create .env File
+      run: |
+        if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
+          printf '%s' "${{ secrets.ENV_FILE_CONTENT }}" > .env
+        else
+          : > .env
+          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+            printf '%s\n' "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          fi
+        fi
+    - name: Run Unit Tests
+      run: ./gradlew :app:testDebugUnitTest
+    - name: Run Lint
+      run: ./gradlew :app:lintDebug
+    - name: Run Detekt
+      run: ./gradlew :app:detekt
+    - name: Build Debug APK
+      run: ./gradlew :app:assembleDebug
+    - name: Decode Keystore (if configured)
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      run: |
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+          chmod 600 release.keystore
+          echo "HAS_KEYSTORE=true" >> "$GITHUB_ENV"
+        else
+          echo "HAS_KEYSTORE=false" >> "$GITHUB_ENV"
+        fi
+    - name: Build Release AAB
+      env:
+        KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: ./gradlew :app:bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
+    - name: Upload Debug APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+    - name: Upload Release AAB Artifact
+      if: env.HAS_KEYSTORE == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-aab
+        path: app/build/outputs/bundle/release/app-release.aab
+
+  instrumented-tests:
+    name: Run Instrumented Android Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: true
+      - name: Verify Gradle Wrapper
+        run: |
+          test -f gradle/wrapper/gradle-wrapper.jar
+          test -f gradle/wrapper/gradle-wrapper.properties
+          ./gradlew --version
+      - name: Write google-services.json from secret (if set)
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            printf '%s' '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+          fi
+      - name: Verify google-services.json (optional for CI validation)
+        run: |
+          if [ -f app/google-services.json ] && [ -s app/google-services.json ]; then
+            echo "google-services.json present."
+          else
+            echo "Notice: google-services.json is not available. Continuing because the Android project uses MissingGoogleServicesStrategy.WARN; Firebase configuration is not required for compile/test validation."
+          fi
+      - name: Create .env File
+        run: |
+          if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
+            printf '%s' "${{ secrets.ENV_FILE_CONTENT }}" > .env
+          else
+            : > .env
+            if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+              printf '%s\n' "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            fi
+          fi
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+      - name: Run Instrumented Tests via Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
+          script: ./gradlew :app:connectedDebugAndroidTest

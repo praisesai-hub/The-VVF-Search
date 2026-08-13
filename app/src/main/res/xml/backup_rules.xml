@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Legacy backup policy: no application data is exported.
+    Keep aligned with data_extraction_rules.xml.
+-->
+<full-backup-content>
+    <exclude domain="root" path="." />
+</full-backup-content>

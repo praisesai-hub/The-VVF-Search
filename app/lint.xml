@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Code Style and Formatting -->
+    <issue id="HardcodedText" severity="warning" />
+    <issue id="TypographyDashes" severity="warning" />
+    <issue id="TypographyQuotes" severity="warning" />
+
+    <!-- Performance Pitfalls -->
+    <issue id="DrawAllocation" severity="error" />
+    <issue id="UseCompoundDrawables" severity="warning" />
+    <issue id="HandlerLeak" severity="error" />
+    <issue id="Recycle" severity="error" />
+    <issue id="Wakelock" severity="warning" />
+    <issue id="UnusedResources" severity="warning" />
+
+    <!-- Security & Best Practices -->
+    <issue id="SetJavaScriptEnabled" severity="warning" />
+    <issue id="TrustAllX509TrustManager" severity="error" />
+    <issue id="ExportedPreferenceActivity" severity="error" />
+
+    <!-- Project Specific Overrides -->
+    <issue id="IconMissingDensityFolder" severity="ignore" />
+    <issue id="ObsoleteLintCustomCheck" severity="ignore" />
+</lint>
