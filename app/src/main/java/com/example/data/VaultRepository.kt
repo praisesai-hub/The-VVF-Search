@@ -13,7 +13,9 @@ class VaultRepository(
     private val keystoreVaultManager: KeystoreVaultManager,
     private val vaultManagerEngine: VaultManagerEngine = VaultManagerEngine(context, keystoreVaultManager)
 ) {
+    fun hasVaultPin(): Boolean = vaultManagerEngine.hasVaultPin()
     fun getStoredVaultPinHash(): String = vaultManagerEngine.getStoredVaultPinHash()
+    fun initializeVaultPin(pin: String): Boolean = vaultManagerEngine.initializeVaultPin(pin)
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean = vaultManagerEngine.verifyVaultPin(inputPin, storedHash)
     fun changeVaultPin(oldPin: String, newPin: String): Boolean = vaultManagerEngine.changeVaultPin(oldPin, newPin)
 

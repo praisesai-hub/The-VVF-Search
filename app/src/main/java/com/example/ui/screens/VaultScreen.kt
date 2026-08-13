@@ -73,6 +73,7 @@ import com.example.ui.appendPinDigit
 import com.example.ui.changeVaultPin
 import com.example.ui.clearPinDigit
 import com.example.ui.lockVault
+import com.example.ui.isVaultPinSetupRequired
 import com.example.ui.onBiometricError
 import com.example.ui.onBiometricSuccess
 import com.example.ui.theme.BhagwaOrange
@@ -198,7 +199,12 @@ fun VaultScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = "Secure Encrypted Vault", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text(text = "Enter 4-Digit Master PIN", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = if (viewModel.isVaultPinSetupRequired) "Create a 4-Digit Master PIN" else "Enter 4-Digit Master PIN",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
             Spacer(modifier = Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 repeat(4) { index -> Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index < enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }

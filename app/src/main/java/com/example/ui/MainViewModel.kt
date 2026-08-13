@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import com.example.ui.components.PickableLocalFile
+import com.example.storage.PhysicalStorageManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -148,12 +149,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                         val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
                         if (cursor.moveToFirst()) {
-                            if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { fileName = it }
+                            if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { fileName = PhysicalStorageManager.safeTrashFileName(it) }
                             if (sizeIndex != -1) sizeBytes = cursor.getLong(sizeIndex)
                         }
                     }
                 } catch (_: Exception) {
-                    uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }?.let { fileName = it }
+                    uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }?.let { fileName = PhysicalStorageManager.safeTrashFileName(it) }
                 }
                 if (sizeBytes < 0L) sizeBytes = 0L
                 FileItemEntity(name = fileName, path = uri.toString(), category = inferCategoryFromFilename(fileName), sizeBytes = sizeBytes, tags = "SAF_Import")

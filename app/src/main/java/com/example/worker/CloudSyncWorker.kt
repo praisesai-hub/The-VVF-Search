@@ -26,8 +26,8 @@ class CloudSyncWorker @JvmOverloads constructor(
 
             val syncItems = dao.getCloudSyncItems().first()
             val plugins = dao.getAllPlugins().first()
-            val disabledProviders = plugins
-                .filter { !it.isEnabled }
+            val enabledProviders = plugins
+                .filter { it.isEnabled }
                 .mapNotNull { plugin ->
                     when (plugin.pluginId) {
                         "gdrive_sync" -> "GOOGLE_DRIVE"
@@ -39,7 +39,7 @@ class CloudSyncWorker @JvmOverloads constructor(
 
             val pendingOrQueued = syncItems
                 .filter { it.status == "PENDING" || it.status == "QUEUED" || it.status == "FAILED" || it.status == "UPLOADING" }
-                .filter { it.provider !in disabledProviders }
+                .filter { it.provider in enabledProviders }
 
             if (pendingOrQueued.isEmpty()) {
                 Log.i(TAG, "No pending cloud sync items for enabled plugins.")

@@ -10,6 +10,7 @@ private class VmCompatState {
     val vaultUnlocked = MutableStateFlow(false)
     val enteredPin = MutableStateFlow("")
     val pinError = MutableStateFlow<String?>(null)
+    val setupPinFirstEntry = MutableStateFlow<String?>(null)
     val selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val pageLoading = MutableStateFlow(false)
 }
@@ -40,6 +41,7 @@ val MainViewModel.isPageLoading: StateFlow<Boolean> get() = compatState().pageLo
 val MainViewModel.isVaultUnlocked: StateFlow<Boolean> get() = compatState().vaultUnlocked
 val MainViewModel.enteredPin: StateFlow<String> get() = compatState().enteredPin
 val MainViewModel.pinError: StateFlow<String?> get() = compatState().pinError
+val MainViewModel.isVaultPinSetupRequired: Boolean get() = !repository.hasVaultPin()
 
 val MainViewModel.semanticSearchResults: StateFlow<List<FileItemEntity>> get() =
     semanticQuery.debounce(200).flatMapLatest { repository.searchSemanticFiles(it) }
@@ -83,7 +85,23 @@ fun MainViewModel.appendPinDigit(digit: String) {
     state.enteredPin.value = pin
     state.pinError.value = null
     if (pin.length == 4) {
-        if (repository.verifyVaultPin(pin, repository.getStoredVaultPinHash())) {
+        if (isVaultPinSetupRequired) {
+            val firstEntry = state.setupPinFirstEntry.value
+            if (firstEntry == null) {
+                state.setupPinFirstEntry.value = pin
+                state.enteredPin.value = ""
+                state.pinError.value = "Re-enter the new PIN to confirm."
+            } else if (firstEntry == pin && repository.initializeVaultPin(pin)) {
+                state.setupPinFirstEntry.value = null
+                state.vaultUnlocked.value = true
+                state.enteredPin.value = ""
+                state.pinError.value = null
+            } else {
+                state.setupPinFirstEntry.value = null
+                state.enteredPin.value = ""
+                state.pinError.value = "PINs did not match. Try again."
+            }
+        } else if (repository.verifyVaultPin(pin, repository.getStoredVaultPinHash())) {
             state.vaultUnlocked.value = true
             state.enteredPin.value = ""
         } else {
@@ -103,6 +121,7 @@ fun MainViewModel.lockVault() {
     val state = compatState()
     state.vaultUnlocked.value = false
     state.enteredPin.value = ""
+    state.setupPinFirstEntry.value = null
     state.pinError.value = null
 }
 

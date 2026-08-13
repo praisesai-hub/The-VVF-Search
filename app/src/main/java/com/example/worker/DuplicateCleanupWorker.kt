@@ -9,7 +9,6 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
-import com.example.data.FileItemEntity
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
 import kotlinx.coroutines.flow.first
@@ -42,35 +41,39 @@ class DuplicateCleanupWorker(
                 .groupBy { it.md5Hash }
                 .filter { it.value.size > 1 }
 
-            val filesToMoveToRecycleBin = mutableListOf<FileItemEntity>()
-
             for ((_, duplicateList) in exactDuplicateGroups) {
                 // Keep the oldest/first file, mark redundant ones for cleanup/recycle bin
                 val sorted = duplicateList.sortedBy { it.dateModifiedMs }
                 val redundant = sorted.drop(1)
                 for (file in redundant) {
+                    // Idempotency guard: a previous attempt may already have persisted this content in the recycle bin.
+                    if (file.md5Hash.isNotBlank() && dao.findInRecycleBinByHash(file.md5Hash) != null) {
+                        continue
+                    }
+
                     val trashResult = PhysicalStorageManager.moveToTrash(applicationContext, file.path)
                     if (trashResult.isSuccess) {
                         val newPath = trashResult.getOrThrow()
                         val originalPathToKeep = if (file.originalPath.isNotBlank()) file.originalPath else file.path
+                        val recycledFile = file.copy(
+                            path = newPath,
+                            originalPath = originalPathToKeep,
+                            isRecycleBin = true,
+                            deletedTimestampMs = System.currentTimeMillis()
+                        )
+
+                        // Persist immediately after each physical move instead of waiting for the entire batch.
+                        // This narrows the crash window and makes retries idempotent.
+                        dao.moveFilesToRecycleBinAtomic(listOf(recycledFile))
                         duplicatesFound++
                         bytesCleaned += file.sizeBytes
-                        filesToMoveToRecycleBin.add(
-                            file.copy(
-                                path = newPath,
-                                originalPath = originalPathToKeep,
-                                isRecycleBin = true,
-                                deletedTimestampMs = System.currentTimeMillis()
-                            )
-                        )
                     } else {
                         Log.w(TAG, "Physical move to trash failed for duplicate file ${file.path}: ${trashResult.exceptionOrNull()?.message}")
                     }
                 }
             }
 
-            if (filesToMoveToRecycleBin.isNotEmpty()) {
-                dao.updateFiles(filesToMoveToRecycleBin)
+            if (duplicatesFound > 0) {
                 Log.i(
                     TAG,
                     "DuplicateCleanupWorker moved $duplicatesFound duplicate files (${bytesCleaned / 1024} KB) to Recycle Bin."

@@ -19,6 +19,12 @@ data class VaultStorageResult(
 object PhysicalStorageManager {
     private const val TAG = "PhysicalStorageManager"
 
+    fun safeTrashFileName(name: String): String {
+        val basename = File(name).name
+        val sanitized = basename.replace(Regex("[^A-Za-z0-9._-]"), "_").take(128)
+        return sanitized.ifBlank { "content.bin" }
+    }
+
     fun getRecycleBinDir(context: Context): File {
         val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, ".recycle_bin")
         if (!dir.exists()) dir.mkdirs()
@@ -40,17 +46,17 @@ object PhysicalStorageManager {
     fun getFileNameFromContentUri(context: Context, uri: Uri): String {
         try {
             val docName = DocumentFile.fromSingleUri(context, uri)?.name
-            if (!docName.isNullOrBlank()) return docName
+            if (!docName.isNullOrBlank()) return safeTrashFileName(docName)
         } catch (_: Exception) {}
         try {
             context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { return it }
+                    if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { return safeTrashFileName(it) }
                 }
             }
         } catch (_: Exception) {}
-        uri.lastPathSegment?.takeIf { it.isNotBlank() }?.let { return it }
+        uri.lastPathSegment?.takeIf { it.isNotBlank() }?.let { return safeTrashFileName(it) }
         return "file_${System.currentTimeMillis()}"
     }
 
@@ -76,7 +82,7 @@ object PhysicalStorageManager {
         if (name.startsWith("ENC_") && name.endsWith(".vvf")) {
             val withoutPrefix = name.removePrefix("ENC_").removeSuffix(".vvf")
             val extractedName = withoutPrefix.substringAfter("_")
-            if (extractedName.isNotBlank() && extractedName != withoutPrefix) return extractedName
+            if (extractedName.isNotBlank() && extractedName != withoutPrefix) return safeTrashFileName(extractedName)
         }
         return getFileNameFromContentUri(context, uri)
     }
@@ -84,7 +90,7 @@ object PhysicalStorageManager {
     fun getFileNameFromTrashPathOrUri(context: Context, trashFileName: String, uri: Uri): String {
         if (trashFileName.contains("_")) {
             val extractedName = trashFileName.substringAfter("_")
-            if (extractedName.isNotBlank() && extractedName != trashFileName) return extractedName
+            if (extractedName.isNotBlank() && extractedName != trashFileName) return safeTrashFileName(extractedName)
         }
         return getFileNameFromContentUri(context, uri)
     }
@@ -167,7 +173,7 @@ object PhysicalStorageManager {
             val trashDir = getRecycleBinDir(context)
             val uri = Uri.parse(path)
             val docName = try { DocumentFile.fromSingleUri(context, uri)?.name ?: "content_${System.currentTimeMillis()}.bin" } catch (_: Exception) { "content_${System.currentTimeMillis()}.bin" }
-            val trashFile = File(trashDir, "${System.currentTimeMillis()}_$docName")
+            val trashFile = File(trashDir, "${System.currentTimeMillis()}_${safeTrashFileName(docName)}")
             return try {
                 val copied = context.contentResolver.openInputStream(uri)?.use { input -> trashFile.outputStream().use { output -> input.copyTo(output) }; true } ?: false
                 if (!copied) { try { trashFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to copy content URI to trash: $path")) }

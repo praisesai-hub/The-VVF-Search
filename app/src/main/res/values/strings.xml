@@ -113,7 +113,7 @@
     <string name="ocr_scanned">OCR Scanned</string>
 
     <string name="secure_encrypted_vault">Secure Encrypted Vault</string>
-    <string name="enter_4_digit_master_pin">Enter 4-Digit Master PIN (Default: 1234)</string>
+    <string name="enter_4_digit_master_pin">Enter 4-Digit Master PIN</string>
     <string name="encrypted_vault_unlocked">Encrypted Vault Unlocked</string>
     <string name="aes_256_active">AES-256 Android Keystore Cipher Active</string>
     <string name="vault_security_options">Vault Security Options</string>

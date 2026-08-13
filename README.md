@@ -5,7 +5,7 @@
 # VVF Smart Manager 📱
 
 > [!IMPORTANT]
-> **🛡️ 100% सुरक्षित और निजी**: यह ऐप आपकी गोपनीयता को प्राथमिकता देता है। आपका सारा डेटा (फाइल मेटाडेटा, AI एनालिसिस, और वॉल्ट कंटेंट) **पूरी तरह से आपके डिवाइस में रहता है**। कोई भी डेटा आपकी अनुमति के बिना किसी बाहरी सर्वर पर नहीं भेजा जाता है।
+> **🛡️ Privacy-first और local-by-default**: ऐप का स्थानीय file metadata, on-device analysis और vault data डिवाइस पर ही रखा जाता है। ऐप में वैकल्पिक cloud-sync integrations मौजूद हैं; वे केवल उपयोगकर्ता द्वारा authentication और sync action/configuration के बाद उपयोग किए जाने चाहिए। इसलिए इस README में "100% secure" या "पूरी तरह local-only" का blanket claim नहीं किया गया है—वास्तविक सुरक्षा release build, device configuration और runtime verification पर निर्भर करती है।
 
 ---
 

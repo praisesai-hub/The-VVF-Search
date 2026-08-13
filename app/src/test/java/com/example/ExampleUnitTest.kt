@@ -149,19 +149,23 @@ class ExampleUnitTest {
   @Test
   fun vaultPin_verificationAndChange_persistsCorrectly() {
     val context = ApplicationProvider.getApplicationContext<Context>()
+    context.deleteSharedPreferences("vvf_vault_prefs")
     val database = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java).allowMainThreadQueries().build()
     val repo = com.example.data.SmartManagerRepository(context, database.fileDao())
     
-    // Default PIN "1234" check
-    assertTrue(repo.verifyVaultPin("1234"))
+    // No implicit/default PIN is accepted; enrollment must be explicit.
+    assertFalse(repo.hasVaultPin())
+    assertFalse(repo.verifyVaultPin("1234"))
+    assertTrue(repo.initializeVaultPin("2468"))
+    assertTrue(repo.hasVaultPin())
     assertFalse(repo.verifyVaultPin("0000"))
 
-    // Change PIN from "1234" to "9876"
-    val changed = repo.changeVaultPin("1234", "9876")
+    // Change PIN from the explicitly enrolled PIN to "9876"
+    val changed = repo.changeVaultPin("2468", "9876")
     assertTrue(changed)
 
     // Old PIN should fail, new PIN should succeed
-    assertFalse(repo.verifyVaultPin("1234"))
+    assertFalse(repo.verifyVaultPin("2468"))
     assertTrue(repo.verifyVaultPin("9876"))
 
     database.close()
@@ -171,12 +175,16 @@ class ExampleUnitTest {
   @Test
   fun mainViewModel_changeVaultPin_handlesUpdates() {
     val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+    app.deleteSharedPreferences("vvf_vault_prefs")
     val viewModel = com.example.ui.MainViewModel(app)
 
     // Change PIN with wrong current PIN should fail
     val wrongChange = viewModel.changeVaultPin("1111", "5555")
     assertFalse(wrongChange)
     assertEquals("Failed to update PIN. Check current PIN.", viewModel.pinError.value)
+
+    // Explicitly enroll a PIN before testing a change.
+    assertTrue(viewModel.repository.initializeVaultPin("1234"))
 
     // Change PIN with correct current PIN should succeed
     val correctChange = viewModel.changeVaultPin("1234", "5555")

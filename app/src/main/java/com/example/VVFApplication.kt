@@ -14,10 +14,6 @@ import com.example.worker.BackgroundIndexWorker
 import com.example.worker.CacheCleanupWorker
 import com.example.worker.CloudSyncWorker
 import com.example.worker.DuplicateCleanupWorker
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 import androidx.work.Configuration
@@ -59,9 +55,7 @@ class VVFApplication : Application(), Configuration.Provider {
 
         initCrashlytics()
 
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            setupBackgroundFileManagementTasks()
-        }
+        setupBackgroundFileManagementTasks()
     }
 
     private fun setupBackgroundFileManagementTasks() {

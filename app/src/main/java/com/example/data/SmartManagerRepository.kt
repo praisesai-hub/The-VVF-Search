@@ -286,7 +286,9 @@ open class SmartManagerRepository(
 
     suspend fun encryptToVault(file: FileItemEntity) = vaultRepository.encryptToVault(file)
     suspend fun unlockFromVault(vaultItem: VaultItemEntity, file: FileItemEntity?): Boolean = vaultRepository.unlockFromVault(vaultItem, file)
+    fun hasVaultPin(): Boolean = vaultRepository.hasVaultPin()
     fun getStoredVaultPinHash(): String = vaultRepository.getStoredVaultPinHash()
+    fun initializeVaultPin(pin: String): Boolean = vaultRepository.initializeVaultPin(pin)
     open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean = vaultRepository.verifyVaultPin(inputPin, storedHash)
     open fun changeVaultPin(oldPin: String, newPin: String): Boolean = vaultRepository.changeVaultPin(oldPin, newPin)
 
@@ -302,8 +304,8 @@ open class SmartManagerRepository(
             "ONEDRIVE" -> "onedrive_sync"
             "DROPBOX" -> "dropbox_sync"
             else -> null
-        } ?: return true
-        return dao.getAllPlugins().first().find { it.pluginId == pluginId }?.isEnabled ?: true
+        } ?: return false
+        return dao.getAllPlugins().first().find { it.pluginId == pluginId }?.isEnabled == true
     }
 
     suspend fun enqueueCloudSyncItem(provider: String, fileName: String, size: Long, filePath: String = "", isCore: Boolean = false): Boolean = withContext(Dispatchers.IO) {

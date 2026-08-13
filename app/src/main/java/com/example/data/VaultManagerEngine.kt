@@ -2,7 +2,6 @@ package com.example.data
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.example.security.KeystoreVaultManager
@@ -25,26 +24,27 @@ class VaultManagerEngine(
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (e: Exception) {
-            Log.e("VaultManagerEngine", "EncryptedSharedPreferences init failed, falling back to standard SharedPreferences: ${e.message}")
-            context.getSharedPreferences("vvf_vault_prefs", Context.MODE_PRIVATE)
+            throw IllegalStateException("Failed to initialize secure vault storage", e)
         }
     }
 
-    fun getStoredVaultPinHash(): String {
-        val stored = vaultPrefs.getString("vault_pin_hash", null)
-        if (stored != null) return stored
-        val defaultHash = keystoreVaultManager.hashPin("1234")
-        vaultPrefs.edit().putString("vault_pin_hash", defaultHash).commit()
-        return defaultHash
+    fun hasVaultPin(): Boolean = vaultPrefs.getString("vault_pin_hash", null).orEmpty().isNotBlank()
+
+    fun getStoredVaultPinHash(): String = vaultPrefs.getString("vault_pin_hash", "").orEmpty()
+
+    fun initializeVaultPin(pin: String): Boolean {
+        if (hasVaultPin() || pin.length != 4 || !pin.all(Char::isDigit)) return false
+        val hash = keystoreVaultManager.hashPin(pin)
+        return vaultPrefs.edit().putString("vault_pin_hash", hash).commit()
     }
 
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean {
         val expectedHash = if (storedHash.isNotBlank()) storedHash else getStoredVaultPinHash()
-        return keystoreVaultManager.verifyPin(inputPin, expectedHash)
+        return expectedHash.isNotBlank() && keystoreVaultManager.verifyPin(inputPin, expectedHash)
     }
 
     fun changeVaultPin(oldPin: String, newPin: String): Boolean {
-        if (verifyVaultPin(oldPin) && newPin.length == 4) {
+        if (verifyVaultPin(oldPin) && newPin.length == 4 && newPin.all(Char::isDigit)) {
             val newHash = keystoreVaultManager.hashPin(newPin)
             vaultPrefs.edit().putString("vault_pin_hash", newHash).commit()
             return true

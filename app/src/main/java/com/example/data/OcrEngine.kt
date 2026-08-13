@@ -60,9 +60,9 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
             }
         }
 
-        val imageToProcess = if (renderedBitmap != null) {
-            InputImage.fromBitmap(renderedBitmap!!, 0)
-        } else {
+        val imageToProcess = renderedBitmap?.let { bitmap ->
+            InputImage.fromBitmap(bitmap, 0)
+        } ?: run {
             try {
                 InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
             } catch (e: Exception) {
@@ -135,9 +135,9 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
             }
         }
 
-        val imageToProcess = if (renderedBitmap != null) {
-            InputImage.fromBitmap(renderedBitmap!!, 0)
-        } else {
+        val imageToProcess = renderedBitmap?.let { bitmap ->
+            InputImage.fromBitmap(bitmap, 0)
+        } ?: run {
             try {
                 InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
             } catch (e: Exception) {

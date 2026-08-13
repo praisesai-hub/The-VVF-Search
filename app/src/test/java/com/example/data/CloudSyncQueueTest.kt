@@ -25,6 +25,11 @@ class CloudSyncQueueTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         fakeDao = FakeFileDao()
+        fakeDao.insertPlugins(
+            listOf(
+                PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Google Drive sync", isEnabled = true, isCore = true)
+            )
+        )
         repository = SmartManagerRepository(context = context, dao = fakeDao)
     }
 
@@ -67,6 +72,19 @@ class CloudSyncQueueTest {
         val items = repository.observeCloudSyncItems().first()
         val duplicateCount = items.count { it.fileName == "duplicate_doc.pdf" }
         assertEquals(1, duplicateCount)
+    }
+
+    @Test
+    fun testEnqueueCloudSyncItem_missingProviderRejected() = runBlocking {
+        val result = repository.enqueueCloudSyncItem(
+            provider = "ONEDRIVE",
+            fileName = "missing_provider.pdf",
+            size = 512L,
+            filePath = "/sdcard/missing_provider.pdf"
+        )
+
+        assertFalse(result)
+        assertNull(repository.observeCloudSyncItems().first().find { it.fileName == "missing_provider.pdf" })
     }
 
     @Test
