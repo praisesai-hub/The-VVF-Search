@@ -84,11 +84,18 @@ jobs:
         fi
     - name: Build Release AAB
       env:
-        KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
         STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      run: ./gradlew :app:bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
+      run: |
+        if [ "$HAS_KEYSTORE" = "true" ]; then
+          export KEYSTORE_PATH="$GITHUB_WORKSPACE/release.keystore"
+          ./gradlew :app:bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
+        else
+          unset KEYSTORE_PATH
+          echo "::notice::KEYSTORE_BASE64 is not configured; building an unsigned release AAB for build validation only. No release artifact will be uploaded."
+          ./gradlew :app:bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
+        fi
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
       with:

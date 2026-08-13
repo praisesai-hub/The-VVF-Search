@@ -6,6 +6,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.data.AppDatabase
 import com.example.data.SmartManagerRepository
 import com.example.ui.MainViewModel
+import com.example.ui.changeVaultPin
+import com.example.ui.pinError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
