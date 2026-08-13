@@ -63,6 +63,18 @@ jobs:
             printf '%s\n' "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
           fi
         fi
+    - name: Resolve and validate runtime dependency graphs
+      run: |
+        reports_dir="app/build/reports/dependency-compatibility"
+        mkdir -p "$reports_dir"
+        printf 'revision=%s\n' "$GITHUB_SHA" > "$reports_dir/metadata.txt"
+        ./gradlew :app:dependencies --configuration releaseRuntimeClasspath > "$reports_dir/releaseRuntimeClasspath.txt"
+        ./gradlew :app:dependencies --configuration debugRuntimeClasspath > "$reports_dir/debugRuntimeClasspath.txt"
+        python3 scripts/verify_dependency_compatibility.py \
+          --reports-dir "$reports_dir" \
+          --expected-revision "$GITHUB_SHA" \
+          --manifest gradle/libs.versions.toml \
+          --manifest app/build.gradle.kts
     - name: Run Unit Tests
       run: ./gradlew :app:testDebugUnitTest
     - name: Run Lint
@@ -96,6 +108,13 @@ jobs:
           echo "::notice::KEYSTORE_BASE64 is not configured; building an unsigned release AAB for build validation only. No release artifact will be uploaded."
           ./gradlew :app:bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
         fi
+    - name: Upload Dependency Compatibility Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-compatibility-reports
+        path: app/build/reports/dependency-compatibility
+        if-no-files-found: error
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
       with:
