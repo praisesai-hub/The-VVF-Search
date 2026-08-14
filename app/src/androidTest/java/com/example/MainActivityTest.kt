@@ -2,6 +2,9 @@ package com.example
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -89,6 +92,34 @@ class MainActivityTest {
         } else {
             composeTestRule.onNodeWithTag("pin_key_1").assertIsDisplayed()
         }
+    }
+
+    @Test
+    fun testAiDuplicateCleanerControlsAndEmptyStates() {
+        composeTestRule.onNodeWithTag("nav_tab_3").performClick()
+        composeTestRule.onNodeWithText("Dupe Cleaner").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").assertIsOff()
+        composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").performClick()
+        composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").assertIsOn()
+        composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").performClick()
+        composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").assertIsOff()
+
+        composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No exact hash duplicate files detected.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No visual duplicates matching", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("No video keyframe near-duplicates detected.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No document fingerprint duplicates detected.").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("section_tab_1").performClick()
+        composeTestRule.onNodeWithText("ML Kit OCR Text Recognition Engine").assertIsDisplayed()
+        composeTestRule.onNodeWithText("OCR Indexed Documents (0)").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("section_tab_2").performClick()
+        composeTestRule.onNodeWithTag("semantic_search_input").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("semantic_search_input").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertIsDisplayed()
     }
 
     @Test
