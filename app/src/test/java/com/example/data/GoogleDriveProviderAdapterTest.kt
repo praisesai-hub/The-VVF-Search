@@ -173,6 +173,221 @@ class GoogleDriveProviderAdapterTest {
         assertEquals("downloaded content", tempFile.readText())
     }
 
+    @Test
+    fun testUploadFile_MissingLocationHeaderFailsClosed() {
+        val file = File.createTempFile("upload_missing_location", ".pdf").apply {
+            writeText("pdf-like content")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { request ->
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("{}".toResponseBody("application/json".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.uploadFile(file, "remote.pdf") }
+
+        assertTrue(result is CloudSyncResult.Error)
+        val error = result as CloudSyncResult.Error
+        assertTrue(error.message.contains("Missing 'Location'"))
+        assertFalse(error.isRetryable)
+    }
+
+    @Test
+    fun testUploadFile_RateLimitIsRetryable() {
+        val file = File.createTempFile("upload_rate_limit", ".txt").apply {
+            writeText("content")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { request ->
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(429)
+                .message("Too Many Requests")
+                .body("rate limited".toResponseBody("text/plain".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.uploadFile(file, "remote.txt") }
+
+        assertTrue(result is CloudSyncResult.Error)
+        val error = result as CloudSyncResult.Error
+        assertTrue(error.message.contains("HTTP 429"))
+        assertTrue(error.isRetryable)
+    }
+
+    @Test
+    fun testUploadFile_MalformedRemoteResponseIsNonRetryable() {
+        val file = File.createTempFile("upload_malformed", ".json").apply {
+            writeText("{}")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var callCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            callCount++
+            if (callCount == 1) {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .header("Location", "https://upload.googleapis.com/resumable/malformed")
+                    .body("{}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+            } else {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"name\":\"without-id\"}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.uploadFile(file, "remote.json") }
+
+        assertTrue(result is CloudSyncResult.Error)
+        val error = result as CloudSyncResult.Error
+        assertTrue(error.message.contains("Failed to parse remote file ID"))
+        assertFalse(error.isRetryable)
+    }
+
+    @Test
+    fun testUploadFile_ConnectionExceptionIsRetryable() {
+        val file = File.createTempFile("upload_network", ".txt").apply {
+            writeText("content")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { throw java.net.ConnectException("offline") }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.uploadFile(file, "remote.txt") }
+
+        assertTrue(result is CloudSyncResult.Error)
+        val error = result as CloudSyncResult.Error
+        assertTrue(error.isRetryable)
+        assertEquals("offline", error.message)
+    }
+
+    @Test
+    fun testDownloadFile_WhenNotAuthenticated() {
+        val destination = File.createTempFile("download_unauthenticated", ".txt")
+        destination.deleteOnExit()
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.downloadFile("remote.txt", destination)
+        }
+
+        assertTrue(result is CloudSyncResult.Error)
+        assertFalse((result as CloudSyncResult.Error).isRetryable)
+        assertTrue(result.message.contains("user is not authenticated"))
+    }
+
+    @Test
+    fun testDownloadFile_SearchHttpErrorIsNotRetryableForNotFound() {
+        val destination = File.createTempFile("download_search_error", ".txt")
+        destination.deleteOnExit()
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { request ->
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(404)
+                .message("Not Found")
+                .body("missing".toResponseBody("text/plain".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+
+        assertTrue(result is CloudSyncResult.Error)
+        val error = result as CloudSyncResult.Error
+        assertTrue(error.message.contains("File search failed: HTTP 404"))
+        assertFalse(error.isRetryable)
+    }
+
+    @Test
+    fun testDownloadFile_WhenSearchReturnsNoMatchingFile() {
+        val destination = File.createTempFile("download_not_found", ".txt")
+        destination.deleteOnExit()
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { request ->
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("{\"files\":[]}".toResponseBody("application/json".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+
+        assertTrue(result is CloudSyncResult.Error)
+        assertTrue((result as CloudSyncResult.Error).message.contains("File not found"))
+    }
+
+    @Test
+    fun testDownloadFile_MediaServerErrorIsRetryable() {
+        val destination = File.createTempFile("download_media_error", ".txt")
+        destination.deleteOnExit()
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var callCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            callCount++
+            if (callCount == 1) {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(
+                        "{\"files\":[{\"fileId\":\"id-789\"}]}"
+                            .toResponseBody("application/json".toMediaTypeOrNull()),
+                    )
+                    .build()
+            } else {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(503)
+                    .message("Unavailable")
+                    .body("try later".toResponseBody("text/plain".toMediaTypeOrNull()))
+                    .build()
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+
+        assertTrue(result is CloudSyncResult.Error)
+        assertTrue((result as CloudSyncResult.Error).message.contains("HTTP 503"))
+        assertTrue(result.isRetryable)
+    }
+
+    @Test
+    fun testDownloadFile_ConnectionExceptionIsRetryable() {
+        val destination = File.createTempFile("download_network", ".txt")
+        destination.deleteOnExit()
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { throw java.net.UnknownHostException("no network") }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+
+        assertTrue(result is CloudSyncResult.Error)
+        val error = result as CloudSyncResult.Error
+        assertTrue(error.isRetryable)
+        assertEquals("no network", error.message)
+    }
+
     private class FakeInterceptor : Interceptor {
         lateinit var responseProvider: (Request) -> Response
 

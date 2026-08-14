@@ -97,4 +97,48 @@ class KeystoreVaultManagerTest {
         assertNotNull(iterations)
         assertTrue("PBKDF2 iteration count must be at least 10000", iterations!! >= 10000)
     }
+
+    @Test
+    fun testMalformedPbkdf2RecordsFailClosed() {
+        val manager = KeystoreVaultManager()
+
+        assertFalse(manager.verifyPin("1234", ""))
+        assertFalse(manager.verifyPin("1234", "not-a-pbkdf2-record"))
+        assertFalse(manager.verifyPin("1234", "not-a-number:00:00"))
+        assertFalse(manager.verifyPin("1234", "9999:00:00"))
+        assertFalse(manager.verifyPin("1234", "2000001:00:00"))
+        assertFalse(manager.verifyPin("1234", "210000:0:00"))
+        assertFalse(manager.verifyPin("1234", "210000:gg:00"))
+    }
+
+    @Test
+    fun testCipherFactoriesRoundTripAndTamperingFails() {
+        val manager = KeystoreVaultManager()
+        val original = "cipher factory payload".toByteArray(Charsets.UTF_8)
+
+        val encryptionCipher = manager.getEncryptionCipher()
+        val ciphertext = encryptionCipher.doFinal(original)
+        val decryptionCipher = manager.getDecryptionCipher(encryptionCipher.iv)
+
+        assertArrayEquals(original, decryptionCipher.doFinal(ciphertext))
+
+        val tampered = ciphertext.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() }
+        try {
+            manager.decryptBytes(tampered, encryptionCipher.iv)
+            throw AssertionError("Tampered ciphertext must not decrypt successfully")
+        } catch (_: javax.crypto.AEADBadTagException) {
+            // Expected authenticated-encryption failure.
+        }
+    }
+
+    @Test
+    fun testEncryptedResultUsesContentEqualityAndHashing() {
+        val first = KeystoreVaultManager.EncryptedResult(byteArrayOf(1, 2), byteArrayOf(3, 4))
+        val equivalent = KeystoreVaultManager.EncryptedResult(byteArrayOf(1, 2), byteArrayOf(3, 4))
+        val different = KeystoreVaultManager.EncryptedResult(byteArrayOf(9), byteArrayOf(4))
+
+        assertEquals(first, equivalent)
+        assertEquals(first.hashCode(), equivalent.hashCode())
+        assertNotEquals(first, different)
+    }
 }
