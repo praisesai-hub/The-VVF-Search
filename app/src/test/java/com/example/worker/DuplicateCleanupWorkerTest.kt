@@ -33,4 +33,17 @@ class DuplicateCleanupWorkerTest {
 
         assertEquals(ListenableWorker.Result.Success::class.java, result::class.java)
     }
+
+    @Test
+    fun doWork_enabledWithNoDuplicates_returnsSuccess() = runBlocking {
+        context.getSharedPreferences("vvf_app_settings", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("auto_clean_duplicates_bg", true)
+            .commit()
+        val worker = TestListenableWorkerBuilder<DuplicateCleanupWorker>(context).build()
+
+        val result = worker.doWork()
+
+        assertEquals(ListenableWorker.Result.Success::class.java, result::class.java)
+    }
 }

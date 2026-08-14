@@ -145,6 +145,8 @@ dependencies {
   testImplementation(libs.androidx.arch.core.testing)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
+  // Robolectric 4.16.1 resolves bcprov 1.81; keep the patched provider test-only.
+  testImplementation(libs.bouncycastle.bcprov)
   testImplementation(libs.roborazzi)
   testImplementation(libs.roborazzi.compose)
   testImplementation(libs.roborazzi.junit.rule)

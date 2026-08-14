@@ -1,14 +1,12 @@
 package com.example.data
 
 import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.example.security.LegacyEncryptedPreferencesMigration
+import com.example.security.SecureKeyValueStore
 
 /**
- * Creates the singleton Google OAuth session manager using encrypted storage.
- *
- * Authentication state must fail closed: falling back to ordinary SharedPreferences
- * would persist OAuth credentials in plaintext and is not acceptable for production.
+ * Creates the singleton Google OAuth session manager using the project-owned encrypted store.
+ * Authentication state must fail closed: no ordinary SharedPreferences fallback is permitted.
  */
 object GoogleAuthManagerFactory {
 
@@ -19,23 +17,23 @@ object GoogleAuthManagerFactory {
         return INSTANCE ?: synchronized(this) {
             INSTANCE ?: run {
                 val appContext = context.applicationContext
-                val securePrefs = try {
-                    val masterKey = MasterKey.Builder(appContext)
-                        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                        .build()
-
-                    EncryptedSharedPreferences.create(
-                        appContext,
-                        "secure_google_oauth_prefs",
-                        masterKey,
-                        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                val secureStore = SecureKeyValueStore(
+                    context = appContext,
+                    fileName = "secure_google_oauth_prefs.secure",
+                    keyAlias = "VVF_SECURE_PREFS_GOOGLE_OAUTH_KEY"
+                )
+                LegacyEncryptedPreferencesMigration.migrateIfNeeded(
+                    context = appContext,
+                    legacyName = "secure_google_oauth_prefs",
+                    target = secureStore,
+                    keys = setOf(
+                        GoogleAuthManager.KEY_ACCESS_TOKEN,
+                        GoogleAuthManager.KEY_REFRESH_TOKEN,
+                        GoogleAuthManager.KEY_EMAIL,
+                        GoogleAuthManager.KEY_DISPLAY_NAME
                     )
-                } catch (e: Throwable) {
-                    throw IllegalStateException("Failed to initialize secure storage for Google OAuth", e)
-                }
-
-                GoogleAuthManager(securePrefs).also { INSTANCE = it }
+                )
+                GoogleAuthManager(secureStore).also { INSTANCE = it }
             }
         }
     }

@@ -1,7 +1,8 @@
 package com.example.data
 
 import android.content.SharedPreferences
-import androidx.core.content.edit
+import com.example.security.SharedPreferencesKeyValueStore
+import com.example.security.StringKeyValueStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,20 +14,23 @@ sealed class GoogleAuthState {
     data class Error(val message: String, val cause: Throwable? = null) : GoogleAuthState()
 }
 
-class GoogleAuthManager(private val sharedPrefs: SharedPreferences) {
+class GoogleAuthManager(private val secureStore: StringKeyValueStore) {
+    constructor(sharedPrefs: SharedPreferences) : this(SharedPreferencesKeyValueStore(sharedPrefs))
+
     private val _authState = MutableStateFlow<GoogleAuthState>(GoogleAuthState.SignedOut)
     val authState: StateFlow<GoogleAuthState> = _authState.asStateFlow()
 
     init { restoreSession() }
 
     private fun restoreSession() {
-        val accessToken = sharedPrefs.getString(KEY_ACCESS_TOKEN, null)
-        val refreshToken = sharedPrefs.getString(KEY_REFRESH_TOKEN, null)
-        val email = sharedPrefs.getString(KEY_EMAIL, null)
-        val displayName = sharedPrefs.getString(KEY_DISPLAY_NAME, null)
+        val accessToken = secureStore.getString(KEY_ACCESS_TOKEN)
+        val refreshToken = secureStore.getString(KEY_REFRESH_TOKEN)
+        val email = secureStore.getString(KEY_EMAIL)
+        val displayName = secureStore.getString(KEY_DISPLAY_NAME)
 
         if (accessToken != null && email != null &&
-            SecureOAuthSessionValidator.isValid(accessToken, refreshToken)) {
+            SecureOAuthSessionValidator.isValid(accessToken, refreshToken)
+        ) {
             _authState.value = GoogleAuthState.SignedIn(email, displayName, accessToken)
         } else {
             if (accessToken != null || refreshToken != null || email != null) clearStoredCredentials()
@@ -41,12 +45,14 @@ class GoogleAuthManager(private val sharedPrefs: SharedPreferences) {
             return
         }
         try {
-            sharedPrefs.edit {
-                putString(KEY_ACCESS_TOKEN, accessToken)
-                if (refreshToken != null) putString(KEY_REFRESH_TOKEN, refreshToken) else remove(KEY_REFRESH_TOKEN)
-                putString(KEY_EMAIL, email)
-                putString(KEY_DISPLAY_NAME, displayName)
-            }
+            check(secureStore.commit(
+                mapOf(
+                    KEY_ACCESS_TOKEN to accessToken,
+                    KEY_REFRESH_TOKEN to refreshToken,
+                    KEY_EMAIL to email,
+                    KEY_DISPLAY_NAME to displayName
+                )
+            )) { "Secure authentication storage did not acknowledge the commit" }
             _authState.value = GoogleAuthState.SignedIn(email, displayName, accessToken)
         } catch (e: Exception) {
             _authState.value = GoogleAuthState.Error("Failed to persist authentication securely", e)
@@ -64,16 +70,18 @@ class GoogleAuthManager(private val sharedPrefs: SharedPreferences) {
     }
 
     private fun clearStoredCredentials() {
-        sharedPrefs.edit {
-            remove(KEY_ACCESS_TOKEN)
-            remove(KEY_REFRESH_TOKEN)
-            remove(KEY_EMAIL)
-            remove(KEY_DISPLAY_NAME)
-        }
+        check(secureStore.commit(
+            mapOf(
+                KEY_ACCESS_TOKEN to null,
+                KEY_REFRESH_TOKEN to null,
+                KEY_EMAIL to null,
+                KEY_DISPLAY_NAME to null
+            )
+        )) { "Secure authentication storage did not acknowledge credential removal" }
     }
 
-    fun getAccessToken(): String? = sharedPrefs.getString(KEY_ACCESS_TOKEN, null)
-    fun getRefreshToken(): String? = sharedPrefs.getString(KEY_REFRESH_TOKEN, null)
+    fun getAccessToken(): String? = secureStore.getString(KEY_ACCESS_TOKEN)
+    fun getRefreshToken(): String? = secureStore.getString(KEY_REFRESH_TOKEN)
     fun isAuthorized(): Boolean = _authState.value is GoogleAuthState.SignedIn
 
     companion object {

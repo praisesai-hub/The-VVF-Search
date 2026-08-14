@@ -44,6 +44,7 @@ googleid = "1.2.0"
 litert = "1.4.1"
 textRecognition = "16.0.1"
 securityCrypto = "1.1.0"
+bouncyCastle = "1.85.2"
 
 documentfile = "1.1.0"
 detekt = "1.23.8"
@@ -119,6 +120,7 @@ googleid = { group = "com.google.android.libraries.identity.googleid", name = "g
 litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "textRecognition" }
 leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
+bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncyCastle" }
 
 [plugins]
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }

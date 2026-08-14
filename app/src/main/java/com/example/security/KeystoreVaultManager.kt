@@ -10,10 +10,10 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class KeystoreVaultManager {
+class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
     companion object {
         private const val TAG = "KeystoreVaultManager"
-        private const val KEY_ALIAS = "VVF_SMART_MANAGER_VAULT_KEY"
+        private const val DEFAULT_KEY_ALIAS = "VVF_SMART_MANAGER_VAULT_KEY"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_TAG_LENGTH = 128
@@ -29,10 +29,10 @@ class KeystoreVaultManager {
     private fun ensureSecretKeyExists() {
         if (keyStore != null) {
             try {
-                if (!keyStore.containsAlias(KEY_ALIAS)) {
+                if (!keyStore.containsAlias(keyAlias)) {
                     val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
                     val spec = KeyGenParameterSpec.Builder(
-                        KEY_ALIAS,
+                        keyAlias,
                         KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
                     )
                         .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -54,8 +54,8 @@ class KeystoreVaultManager {
         ensureSecretKeyExists()
         if (keyStore != null) {
             try {
-                if (keyStore.containsAlias(KEY_ALIAS)) {
-                    (keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey?.let { return it }
+                if (keyStore.containsAlias(keyAlias)) {
+                    (keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry)?.secretKey?.let { return it }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Error accessing Android Keystore entry: ${e.message}")

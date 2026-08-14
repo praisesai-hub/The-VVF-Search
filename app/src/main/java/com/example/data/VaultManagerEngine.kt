@@ -1,42 +1,43 @@
 package com.example.data
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.example.security.KeystoreVaultManager
+import com.example.security.LegacyEncryptedPreferencesMigration
+import com.example.security.SecureKeyValueStore
+import com.example.security.SharedPreferencesKeyValueStore
+import com.example.security.StringKeyValueStore
 
 class VaultManagerEngine(
     private val context: Context,
     private val keystoreVaultManager: KeystoreVaultManager,
-    private val injectedVaultPrefs: SharedPreferences? = null
+    private val injectedVaultPrefs: SharedPreferences? = null,
+    private val injectedVaultStore: StringKeyValueStore? = null
 ) {
-    private val vaultPrefs: SharedPreferences by lazy {
-        injectedVaultPrefs ?: createEncryptedVaultPreferences()
+    private val vaultStore: StringKeyValueStore by lazy {
+        injectedVaultStore
+            ?: injectedVaultPrefs?.let(::SharedPreferencesKeyValueStore)
+            ?: createSecureVaultStore()
     }
 
-    private fun createEncryptedVaultPreferences(): SharedPreferences {
-        try {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-
-            return EncryptedSharedPreferences.create(
-                context,
-                "vvf_vault_prefs",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to initialize secure vault storage", e)
-        }
+    private fun createSecureVaultStore(): StringKeyValueStore {
+        val store = SecureKeyValueStore(
+            context = context,
+            fileName = "vvf_vault_prefs.secure",
+            keyAlias = "VVF_SECURE_PREFS_VAULT_KEY"
+        )
+        LegacyEncryptedPreferencesMigration.migrateIfNeeded(
+            context = context,
+            legacyName = "vvf_vault_prefs",
+            target = store,
+            keys = setOf(VAULT_PIN_HASH_KEY)
+        )
+        return store
     }
 
-    fun hasVaultPin(): Boolean = vaultPrefs.getString("vault_pin_hash", null).orEmpty().isNotBlank()
+    fun hasVaultPin(): Boolean = vaultStore.getString(VAULT_PIN_HASH_KEY, null).orEmpty().isNotBlank()
 
-    fun getStoredVaultPinHash(): String = vaultPrefs.getString("vault_pin_hash", "").orEmpty()
+    fun getStoredVaultPinHash(): String = vaultStore.getString(VAULT_PIN_HASH_KEY, "").orEmpty()
 
     fun initializeVaultPin(pin: String): Boolean {
         if (hasVaultPin() || pin.length != 4 || !pin.all(Char::isDigit)) return false
@@ -53,12 +54,11 @@ class VaultManagerEngine(
         return persistVaultPinHash(keystoreVaultManager.hashPin(newPin))
     }
 
-    /**
-     * PIN updates must report durable storage failure to the caller. `apply()` cannot provide
-     * that acknowledgement, so the synchronous commit is intentional and fail-closed. The KTX
-     * `edit` block discards the `commit()` result, therefore it cannot preserve this contract.
-     */
-    @SuppressLint("ApplySharedPref", "UseKtx")
+    /** PIN updates must report durable storage failure and never silently fall back to plaintext. */
     private fun persistVaultPinHash(hash: String): Boolean =
-        vaultPrefs.edit().putString("vault_pin_hash", hash).commit()
+        vaultStore.commit(mapOf(VAULT_PIN_HASH_KEY to hash))
+
+    private companion object {
+        const val VAULT_PIN_HASH_KEY = "vault_pin_hash"
+    }
 }

@@ -5,6 +5,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.data.AppDatabase
 import com.example.data.SmartManagerRepository
+import com.example.data.VaultManagerEngine
+import com.example.security.KeystoreVaultManager
+import java.io.File
 import com.example.ui.MainViewModel
 import com.example.ui.changeVaultPin
 import com.example.ui.pinError
@@ -24,6 +27,8 @@ class VaultPinInstrumentedTest {
     fun setUp() {
         app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as VVFApplication
         app.deleteSharedPreferences("vvf_vault_prefs")
+        File(app.noBackupFilesDir, "vvf_vault_prefs.secure").delete()
+        File(app.noBackupFilesDir, "vvf_vault_prefs.secure.tmp").delete()
     }
 
     @Test
@@ -46,6 +51,17 @@ class VaultPinInstrumentedTest {
         } finally {
             database.close()
         }
+    }
+
+    @Test
+    fun vaultPin_productionStore_survives_manager_reopen() {
+        val first = VaultManagerEngine(app, KeystoreVaultManager())
+        assertTrue(first.initializeVaultPin("1357"))
+
+        val reopened = VaultManagerEngine(app, KeystoreVaultManager())
+
+        assertTrue(reopened.hasVaultPin())
+        assertTrue(reopened.verifyVaultPin("1357"))
     }
 
     @Test
