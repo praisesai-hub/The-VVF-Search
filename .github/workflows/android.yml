@@ -77,6 +77,14 @@ jobs:
           --manifest app/build.gradle.kts
     - name: Run Unit Tests
       run: ./gradlew :app:testDebugUnitTest
+    - name: Generate JVM Unit Test Coverage Report
+      run: ./gradlew :app:createDebugUnitTestCoverageReport
+    - name: Upload JVM Unit Test Coverage Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: jvm-unit-test-coverage
+        path: app/build/reports/coverage/test/debug
+        if-no-files-found: error
     - name: Run Lint
       run: ./gradlew :app:lintDebug
     - name: Run Detekt
@@ -184,4 +192,12 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
-          script: ./gradlew :app:connectedDebugAndroidTest
+          script: |
+            ./gradlew :app:connectedDebugAndroidTest
+            ./gradlew :app:createDebugAndroidTestCoverageReport
+      - name: Upload Android Test Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-coverage
+          path: app/build/reports/coverage/androidTest/debug/connected
+          if-no-files-found: error

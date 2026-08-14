@@ -54,6 +54,9 @@ android {
       signingConfigs.findByName("release")?.let { signingConfig = it }
     }
     debug {
+      // Generate measurable unit and instrumentation coverage reports for CI.
+      enableUnitTestCoverage = true
+      enableAndroidTestCoverage = true
       signingConfigs.findByName("debugConfig")?.let { signingConfig = it }
     }
   }
