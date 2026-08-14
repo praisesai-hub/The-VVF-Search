@@ -106,7 +106,7 @@ class MainActivityTest {
         composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").assertIsOff()
 
         composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No exact hash duplicate files detected.").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("start_scan_button").assertIsDisplayed()
         composeTestRule.onNodeWithText("No visual duplicates matching", substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("No video keyframe near-duplicates detected.").assertIsDisplayed()
         composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertIsDisplayed()
