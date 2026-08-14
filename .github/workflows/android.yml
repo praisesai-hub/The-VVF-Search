@@ -80,7 +80,7 @@ jobs:
     - name: Generate JVM Unit Test Coverage Report
       run: ./gradlew :app:createDebugUnitTestCoverageReport
     - name: Upload JVM Unit Test Coverage Report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: jvm-unit-test-coverage
         path: app/build/reports/coverage/test/debug
@@ -118,19 +118,19 @@ jobs:
         fi
     - name: Upload Dependency Compatibility Reports
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: dependency-compatibility-reports
         path: app/build/reports/dependency-compatibility
         if-no-files-found: error
     - name: Upload Debug APK Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
     - name: Upload Release AAB Artifact
       if: env.HAS_KEYSTORE == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: app-release-aab
         path: app/build/outputs/bundle/release/app-release.aab
@@ -196,7 +196,7 @@ jobs:
             ./gradlew :app:connectedDebugAndroidTest
             ./gradlew :app:createDebugAndroidTestCoverageReport
       - name: Upload Android Test Coverage Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-test-coverage
           path: app/build/reports/coverage/androidTest/debug/connected
