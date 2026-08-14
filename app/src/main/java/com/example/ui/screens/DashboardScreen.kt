@@ -2,6 +2,7 @@
 
 package com.example.ui.screens
 import com.example.R
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -475,7 +476,11 @@ fun CategoryRow(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    Text(text = stringResource(R.string.file_count, count), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = pluralStringResource(R.plurals.file_count, count, count),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
             Text(
