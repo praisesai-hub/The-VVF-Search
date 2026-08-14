@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -31,7 +32,7 @@ class SmartManagerRepositoryInstrumentedTest {
         var onUpdate: (() -> Unit)? = null
 
         override suspend fun getUnhashedFiles(): List<FileItemEntity> = unhashedFiles.toList()
-        override fun getAllPlugins(): Flow<List<PluginEntity>> = flowOf(plugins.toList())
+        override fun getAllPlugins(): Flow<List<PluginEntity>> = flow { emit(plugins.toList()) }
         override suspend fun updateFiles(files: List<FileItemEntity>) {
             updatedFiles += files
             onUpdate?.invoke()
@@ -45,7 +46,7 @@ class SmartManagerRepositoryInstrumentedTest {
             (activeFiles + unhashedFiles).firstOrNull { it.name == name }
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flowOf(activeFiles.toList())
+        override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flow { emit(activeFiles.toList()) }
         override fun getRecentFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getCategoryStats(): Flow<List<CategoryStat>> = flowOf(emptyList())
         override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = emptyList()
@@ -53,7 +54,7 @@ class SmartManagerRepositoryInstrumentedTest {
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(duplicateFiles.toList())
+        override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flow { emit(duplicateFiles.toList()) }
         override suspend fun insertFile(file: FileItemEntity): Long = file.id
         override suspend fun insertFiles(files: List<FileItemEntity>) = Unit
         override suspend fun updateFile(file: FileItemEntity) = Unit
@@ -163,7 +164,7 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun incrementalScan_persistsRealHashesOcrAndSemanticIndex(): Unit {
+    fun incrementalScan_persistsRealHashesOcrAndFailsClosedWithoutModel(): Unit {
         val file = File.createTempFile("vvf_scan_", ".txt")
         try {
             file.writeText("on-device production scan fixture")
@@ -195,8 +196,9 @@ class SmartManagerRepositoryInstrumentedTest {
             assertEquals("AUTHENTIC OCR CONTENT", result.ocrText)
             assertTrue(result.md5Hash.isNotBlank())
             assertTrue(result.visualSimilarityHash.isNotBlank())
-            assertTrue(result.semanticIndexed)
-            assertTrue(result.semanticEmbeddingString.isNotBlank())
+            assertFalse(result.semanticIndexed)
+            assertTrue(result.semanticEmbeddingString.isBlank())
+            assertFalse(repository.isSemanticSearchAvailable)
             assertEquals(1.0f, repository.scanProgress.value)
             assertFalse(repository.isScanning.value)
         } finally {
