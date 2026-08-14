@@ -83,26 +83,28 @@ class StorageScannerInstrumentedTest {
     }
 
     @Test
-    fun sampledBitmapAndUnsupportedImagePaths_failSafely() = runBlocking {
-        val invalid = File(testRoot, "invalid.png").apply { writeText("not an image") }
+    fun sampledBitmapAndUnsupportedImagePaths_failSafely(): Unit {
+        runBlocking {
+            val invalid = File(testRoot, "invalid.png").apply { writeText("not an image") }
 
-        assertTrue(scanner.computeDHash(invalid).isEmpty())
-        assertEquals("", scanner.computeDHash(File(testRoot, "missing.jpg")))
-        assertTrue(scanner.decodeSampledBitmapFromFile(invalid, 64, 64) == null)
+            assertTrue(scanner.computeDHash(invalid).isEmpty())
+            assertEquals("", scanner.computeDHash(File(testRoot, "missing.jpg")))
+            assertTrue(scanner.decodeSampledBitmapFromFile(invalid, 64, 64) == null)
 
-        val valid = File(testRoot, "valid.png")
-        val bitmap = createDescendingBitmap()
-        try {
-            valid.outputStream().use { output ->
-                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+            val valid = File(testRoot, "valid.png")
+            val bitmap = createDescendingBitmap()
+            try {
+                valid.outputStream().use { output ->
+                    assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+                }
+            } finally {
+                bitmap.recycle()
             }
-        } finally {
-            bitmap.recycle()
+            val sampled = scanner.decodeSampledBitmapFromFile(valid, 64, 64)
+            assertNotNull(sampled)
+            assertNotEquals("", scanner.computeDHash(valid))
+            if (sampled != null) sampled.recycle()
         }
-        val sampled = scanner.decodeSampledBitmapFromFile(valid, 64, 64)
-        assertNotNull(sampled)
-        assertNotEquals("", scanner.computeDHash(valid))
-        sampled?.recycle()
     }
 
     private fun createDescendingBitmap(): Bitmap {
