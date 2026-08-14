@@ -11,6 +11,12 @@ plugins {
   alias(libs.plugins.firebase.crashlytics)
 }
 
+val googleServicesConfigPresent = listOf(
+  "google-services.json",
+  "src/debug/google-services.json",
+  "src/release/google-services.json"
+).any { file(it).isFile }
+
 android {
   namespace = "com.example"
   compileSdk = 35
@@ -22,6 +28,11 @@ android {
     versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
     versionName = project.findProperty("versionName") as String? ?: "1.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    // Validation builds may intentionally omit google-services.json. The runtime auth
+    // boundary rejects this empty fallback; configured builds use only plugin output.
+    if (!googleServicesConfigPresent) {
+      resValue("string", "default_web_client_id", "\"\"")
+    }
   }
 
   signingConfigs {
@@ -72,6 +83,7 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
+    resValues = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
   dependenciesInfo {

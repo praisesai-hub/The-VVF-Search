@@ -16,6 +16,7 @@ import com.example.data.FileItemEntity
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
@@ -300,7 +301,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                 bitIndex++
             }
             if (scaledBitmap != bitmap) scaledBitmap.recycle()
-            String.format("%016x", hashBits)
+            String.format(Locale.ROOT, "%016x", hashBits)
         } catch (e: Exception) {
             Log.e(TAG, "dHash computation from bitmap failed: ${e.message}")
             ""

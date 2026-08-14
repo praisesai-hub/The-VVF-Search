@@ -70,6 +70,7 @@ import com.example.data.FileCategory
 import com.example.ui.theme.BhagwaOrange
 import com.example.ui.theme.EmeraldGreen
 import com.example.ui.theme.SkyCyan
+import java.util.Locale
 
 data class PickableLocalFile(
     val name: String,
@@ -479,11 +480,11 @@ private fun formatFileSize(bytes: Long): String {
     if (bytes <= 0L) return "अज्ञात साइज़"
     if (bytes < 1024) return "$bytes B"
     val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
+    if (kb < 1024) return String.format(Locale.getDefault(), "%.1f KB", kb)
     val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
+    if (mb < 1024) return String.format(Locale.getDefault(), "%.1f MB", mb)
     val gb = mb / 1024.0
-    return String.format("%.2f GB", gb)
+    return String.format(Locale.getDefault(), "%.2f GB", gb)
 }
 
 private fun getAvailableDeviceLocalFiles(context: android.content.Context): List<PickableLocalFile> {

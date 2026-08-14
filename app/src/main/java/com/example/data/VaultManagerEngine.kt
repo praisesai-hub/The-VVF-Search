@@ -1,5 +1,6 @@
 package com.example.data
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -8,15 +9,20 @@ import com.example.security.KeystoreVaultManager
 
 class VaultManagerEngine(
     private val context: Context,
-    private val keystoreVaultManager: KeystoreVaultManager
+    private val keystoreVaultManager: KeystoreVaultManager,
+    private val injectedVaultPrefs: SharedPreferences? = null
 ) {
     private val vaultPrefs: SharedPreferences by lazy {
+        injectedVaultPrefs ?: createEncryptedVaultPreferences()
+    }
+
+    private fun createEncryptedVaultPreferences(): SharedPreferences {
         try {
             val masterKey = MasterKey.Builder(context)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
 
-            EncryptedSharedPreferences.create(
+            return EncryptedSharedPreferences.create(
                 context,
                 "vvf_vault_prefs",
                 masterKey,
@@ -34,8 +40,7 @@ class VaultManagerEngine(
 
     fun initializeVaultPin(pin: String): Boolean {
         if (hasVaultPin() || pin.length != 4 || !pin.all(Char::isDigit)) return false
-        val hash = keystoreVaultManager.hashPin(pin)
-        return vaultPrefs.edit().putString("vault_pin_hash", hash).commit()
+        return persistVaultPinHash(keystoreVaultManager.hashPin(pin))
     }
 
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean {
@@ -44,11 +49,15 @@ class VaultManagerEngine(
     }
 
     fun changeVaultPin(oldPin: String, newPin: String): Boolean {
-        if (verifyVaultPin(oldPin) && newPin.length == 4 && newPin.all(Char::isDigit)) {
-            val newHash = keystoreVaultManager.hashPin(newPin)
-            vaultPrefs.edit().putString("vault_pin_hash", newHash).commit()
-            return true
-        }
-        return false
+        if (!verifyVaultPin(oldPin) || newPin.length != 4 || !newPin.all(Char::isDigit)) return false
+        return persistVaultPinHash(keystoreVaultManager.hashPin(newPin))
     }
+
+    /**
+     * PIN updates must report durable storage failure to the caller. `apply()` cannot provide
+     * that acknowledgement, so the synchronous commit is intentional and fail-closed.
+     */
+    @SuppressLint("ApplySharedPref")
+    private fun persistVaultPinHash(hash: String): Boolean =
+        vaultPrefs.edit().putString("vault_pin_hash", hash).commit()
 }
