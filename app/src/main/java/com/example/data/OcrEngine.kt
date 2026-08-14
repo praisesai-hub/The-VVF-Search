@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.graphics.Bitmap
+import androidx.core.graphics.createBitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.util.Log
@@ -48,7 +49,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
                             renderer.openPage(0).use { page ->
                                 val width = page.width
                                 val height = page.height
-                                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
                                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                                 renderedBitmap = bitmap
                             }
@@ -123,7 +124,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
                             renderer.openPage(0).use { page ->
                                 val width = page.width
                                 val height = page.height
-                                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
                                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                                 renderedBitmap = bitmap
                             }

@@ -3,6 +3,7 @@ package com.example.storage
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
@@ -102,7 +103,7 @@ object PhysicalStorageManager {
         }
         if (oldPath.startsWith("content://")) {
             return try {
-                val uri = Uri.parse(oldPath)
+                val uri = oldPath.toUri()
                 val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
                 if (doc != null && doc.exists()) {
                     if (doc.renameTo(newName)) Result.success(doc.uri.toString())
@@ -145,7 +146,7 @@ object PhysicalStorageManager {
     fun deleteFile(context: Context, path: String): Boolean {
         if (path.startsWith("content://")) {
             return try {
-                val uri = Uri.parse(path)
+                val uri = path.toUri()
                 val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
                 if (doc != null && !doc.exists()) return true
                 if (doc?.delete() == true) return true
@@ -171,7 +172,7 @@ object PhysicalStorageManager {
     fun moveToTrash(context: Context, path: String): Result<String> {
         if (path.startsWith("content://")) {
             val trashDir = getRecycleBinDir(context)
-            val uri = Uri.parse(path)
+            val uri = path.toUri()
             val docName = try { DocumentFile.fromSingleUri(context, uri)?.name ?: "content_${System.currentTimeMillis()}.bin" } catch (_: Exception) { "content_${System.currentTimeMillis()}.bin" }
             val trashFile = File(trashDir, "${System.currentTimeMillis()}_${safeTrashFileName(docName)}")
             return try {
@@ -202,7 +203,7 @@ object PhysicalStorageManager {
             val trashFile = File(trashPath)
             if (!trashFile.exists()) return Result.failure(java.io.FileNotFoundException("Trash file not found at $trashPath"))
             return try {
-                val uri = Uri.parse(originalPath)
+                val uri = originalPath.toUri()
                 var writtenToOriginal = false
                 try { context.contentResolver.openOutputStream(uri)?.use { output -> trashFile.inputStream().use { input -> input.copyTo(output) }; writtenToOriginal = true } } catch (e: Exception) { Log.w(TAG, "Could not write to original content URI $originalPath: ${e.message}") }
                 if (writtenToOriginal) {
@@ -236,7 +237,7 @@ object PhysicalStorageManager {
                 if (!vaultFile.exists()) return Result.failure(java.io.FileNotFoundException("Vault file not found at $vaultFilePath"))
                 if (vaultFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("Vault file exceeds the maximum secure vault limit of 50MB."))
                 val decryptedBytes = decryptAction(vaultFile.readBytes())
-                val uri = Uri.parse(originalPath)
+                val uri = originalPath.toUri()
                 try {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(decryptedBytes) } ?: throw java.io.IOException("Unable to write original content URI")
                     if (!vaultFile.delete() && vaultFile.exists()) return Result.failure(IllegalStateException("Failed to delete encrypted vault source file."))
@@ -275,7 +276,7 @@ object PhysicalStorageManager {
             return try {
                 val vaultFile = File(vaultFilePath)
                 if (!vaultFile.exists()) return Result.failure(java.io.FileNotFoundException("Vault file not found at $vaultFilePath"))
-                val uri = Uri.parse(originalPath)
+                val uri = originalPath.toUri()
                 fun decryptTo(output: java.io.OutputStream) {
                     val cipher = keystoreVaultManager.getDecryptionCipher(iv)
                     java.io.FileInputStream(vaultFile).use { fis ->
@@ -329,7 +330,7 @@ object PhysicalStorageManager {
     fun encryptAndWipeSource(context: Context, srcPath: String, encryptAction: (ByteArray) -> Pair<ByteArray, ByteArray>): Result<VaultStorageResult> {
         if (srcPath.startsWith("content://")) {
             return try {
-                val uri = Uri.parse(srcPath)
+                val uri = srcPath.toUri()
                 val fileBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return Result.failure(java.io.FileNotFoundException("Unable to open stream for content URI: $srcPath"))
                 if (fileBytes.size > 50 * 1024 * 1024) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))
                 val docName = getFileNameFromContentUri(context, uri)
@@ -360,7 +361,7 @@ object PhysicalStorageManager {
     fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result<VaultStorageResult> {
         if (srcPath.startsWith("content://")) {
             return try {
-                val uri = Uri.parse(srcPath)
+                val uri = srcPath.toUri()
                 val docName = getFileNameFromContentUri(context, uri)
                 val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${docName}.vvf")
                 val cipher = keystoreVaultManager.getEncryptionCipher()

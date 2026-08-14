@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import androidx.core.graphics.get
+import androidx.core.graphics.scale
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -289,12 +291,12 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
 
     fun computeDHashFromBitmap(bitmap: Bitmap): String {
         return try {
-            val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 9, 8, true)
+            val scaledBitmap = bitmap.scale(9, 8, true)
             var hashBits = 0L
             var bitIndex = 0
             for (y in 0 until 8) for (x in 0 until 8) {
-                val pixelLeft = scaledBitmap.getPixel(x, y)
-                val pixelRight = scaledBitmap.getPixel(x + 1, y)
+                val pixelLeft = scaledBitmap[x, y]
+                val pixelRight = scaledBitmap[x + 1, y]
                 val grayLeft = (Color.red(pixelLeft) * 299 + Color.green(pixelLeft) * 587 + Color.blue(pixelLeft) * 114) / 1000
                 val grayRight = (Color.red(pixelRight) * 299 + Color.green(pixelRight) * 587 + Color.blue(pixelRight) * 114) / 1000
                 if (grayLeft > grayRight) hashBits = hashBits or (1L shl (63 - bitIndex))

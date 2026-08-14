@@ -2,6 +2,8 @@ package com.example.ui
 
 import com.example.R
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -56,7 +58,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val autoCleanDuplicatesBg: StateFlow<Boolean> = _autoCleanDuplicatesBg.asStateFlow()
     fun setAutoCleanDuplicatesBg(enabled: Boolean) {
         _autoCleanDuplicatesBg.value = enabled
-        appPrefs.edit().putBoolean("auto_clean_duplicates_bg", enabled).apply()
+        appPrefs.edit { putBoolean("auto_clean_duplicates_bg", enabled) }
     }
 
     val files: StateFlow<List<FileItemEntity>> = combine(
@@ -184,16 +186,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init { rescanPersistedFolders() }
     fun savePersistedFolderUri(uri: String) {
         val newSet = (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()).toMutableSet().apply { add(uri) }
-        appPrefs.edit().putStringSet("persisted_saf_folders", newSet).apply(); _persistedFolderUris.value = newSet
+        appPrefs.edit { putStringSet("persisted_saf_folders", newSet) }
+        _persistedFolderUris.value = newSet
     }
     fun getPersistedFolderUris(): Set<String> = _persistedFolderUris.value
     fun removePersistedFolderUri(uri: String) {
         val context = getApplication<Application>().applicationContext
         try {
-            context.contentResolver.releasePersistableUriPermission(android.net.Uri.parse(uri), android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            context.contentResolver.releasePersistableUriPermission(
+                uri.toUri(),
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
         } catch (e: Exception) { android.util.Log.e("MainViewModel", "Error releasing persistable permission for $uri: ${e.message}", e) }
         val newSet = (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()).toMutableSet().apply { remove(uri) }
-        appPrefs.edit().putStringSet("persisted_saf_folders", newSet).apply(); _persistedFolderUris.value = newSet
+        appPrefs.edit { putStringSet("persisted_saf_folders", newSet) }
+        _persistedFolderUris.value = newSet
     }
     fun rescanPersistedFolders() {
         viewModelScope.launch(coroutineExceptionHandler) {
@@ -201,7 +209,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val entities = mutableListOf<FileItemEntity>()
             for (uriStr in getPersistedFolderUris()) {
                 try {
-                    val treeFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, android.net.Uri.parse(uriStr))
+                    val treeFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uriStr.toUri())
                     if (treeFile != null && treeFile.isDirectory) scanDocumentFileRecursively(context, treeFile, entities)
                 } catch (e: Exception) { android.util.Log.e("MainViewModel", "Error scanning persisted SAF folder $uriStr: ${e.message}", e) }
             }

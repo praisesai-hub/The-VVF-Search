@@ -83,6 +83,7 @@ import com.example.ui.theme.BhagwaOrange
 import com.example.ui.theme.EmeraldGreen
 import com.example.ui.theme.SkyCyan
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.FolderOpen
@@ -884,7 +885,7 @@ fun SafDirectoryPickerCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             val folderName = try {
-                                Uri.parse(uriStr).lastPathSegment ?: uriStr
+                                uriStr.toUri().lastPathSegment ?: uriStr
                             } catch (e: Exception) {
                                 uriStr
                             }

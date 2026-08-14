@@ -3,6 +3,8 @@ package com.example.ai
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.get
+import androidx.core.graphics.scale
 import android.util.Log
 import org.tensorflow.lite.Interpreter
 import java.io.File
@@ -104,11 +106,11 @@ object LightweightEmbeddingEngine {
                 }
                 val bitmap = BitmapFactory.decodeFile(file.absolutePath, options)
                 if (bitmap != null) {
-                    val scaled = Bitmap.createScaledBitmap(bitmap, 8, 8, true)
+                    val scaled = bitmap.scale(8, 8, true)
                     var idx = 0
                     for (x in 0 until 8) {
                         for (y in 0 until 8) {
-                            val pixel = scaled.getPixel(x, y)
+                            val pixel = scaled[x, y]
                             val r = (pixel shr 16 and 0xFF) / 255.0f
                             val g = (pixel shr 8 and 0xFF) / 255.0f
                             val b = (pixel and 0xFF) / 255.0f
@@ -330,7 +332,7 @@ class TFLiteSemanticEmbeddingProvider(
 
         return try {
             val bitmap = decodeSampledBitmapFromFile(file, 224, 224) ?: return null
-            val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
+            val resizedBitmap = bitmap.scale(224, 224, true)
             val inputBuffer = convertBitmapToByteBuffer(resizedBitmap)
 
             val outputArray = Array(1) { FloatArray(vectorDimension) }

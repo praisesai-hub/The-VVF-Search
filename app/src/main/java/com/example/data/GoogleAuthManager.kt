@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,12 +41,11 @@ class GoogleAuthManager(private val sharedPrefs: SharedPreferences) {
             return
         }
         try {
-            sharedPrefs.edit().apply {
+            sharedPrefs.edit {
                 putString(KEY_ACCESS_TOKEN, accessToken)
                 if (refreshToken != null) putString(KEY_REFRESH_TOKEN, refreshToken) else remove(KEY_REFRESH_TOKEN)
                 putString(KEY_EMAIL, email)
                 putString(KEY_DISPLAY_NAME, displayName)
-                apply()
             }
             _authState.value = GoogleAuthState.SignedIn(email, displayName, accessToken)
         } catch (e: Exception) {
@@ -64,8 +64,12 @@ class GoogleAuthManager(private val sharedPrefs: SharedPreferences) {
     }
 
     private fun clearStoredCredentials() {
-        sharedPrefs.edit().remove(KEY_ACCESS_TOKEN).remove(KEY_REFRESH_TOKEN)
-            .remove(KEY_EMAIL).remove(KEY_DISPLAY_NAME).apply()
+        sharedPrefs.edit {
+            remove(KEY_ACCESS_TOKEN)
+            remove(KEY_REFRESH_TOKEN)
+            remove(KEY_EMAIL)
+            remove(KEY_DISPLAY_NAME)
+        }
     }
 
     fun getAccessToken(): String? = sharedPrefs.getString(KEY_ACCESS_TOKEN, null)

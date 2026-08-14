@@ -55,9 +55,10 @@ class VaultManagerEngine(
 
     /**
      * PIN updates must report durable storage failure to the caller. `apply()` cannot provide
-     * that acknowledgement, so the synchronous commit is intentional and fail-closed.
+     * that acknowledgement, so the synchronous commit is intentional and fail-closed. The KTX
+     * `edit` block discards the `commit()` result, therefore it cannot preserve this contract.
      */
-    @SuppressLint("ApplySharedPref")
+    @SuppressLint("ApplySharedPref", "UseKtx")
     private fun persistVaultPinHash(hash: String): Boolean =
         vaultPrefs.edit().putString("vault_pin_hash", hash).commit()
 }
