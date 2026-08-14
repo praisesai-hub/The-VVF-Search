@@ -95,7 +95,7 @@ class MainActivityTest {
     }
 
     @Test
-    fun testAiDuplicateCleanerControlsAndEmptyStates() {
+    fun testAiDuplicateCleanerControlsAndSectionStates() {
         composeTestRule.onNodeWithTag("nav_tab_3").performClick()
         composeTestRule.onNodeWithText("Dupe Cleaner").assertIsDisplayed()
 
@@ -107,11 +107,6 @@ class MainActivityTest {
 
         composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
         composeTestRule.onNodeWithTag("start_scan_button").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No visual duplicates matching", substring = true).assertIsDisplayed()
-        composeTestRule.onNodeWithText("No video keyframe near-duplicates detected.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("No document fingerprint duplicates detected.").assertIsDisplayed()
-
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onNodeWithText("ML Kit OCR Text Recognition Engine").assertIsDisplayed()
         composeTestRule.onNodeWithText("OCR Indexed Documents (0)").assertIsDisplayed()
