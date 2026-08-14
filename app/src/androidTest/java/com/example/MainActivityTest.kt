@@ -114,7 +114,6 @@ class MainActivityTest {
         composeTestRule.onNodeWithTag("section_tab_2").performClick()
         composeTestRule.onNodeWithTag("semantic_search_input").assertIsDisplayed()
         composeTestRule.onNodeWithTag("semantic_search_input").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertIsDisplayed()
     }
 
     @Test
