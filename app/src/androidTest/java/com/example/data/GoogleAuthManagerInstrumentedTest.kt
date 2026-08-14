@@ -57,7 +57,6 @@ class GoogleAuthManagerInstrumentedTest {
         val store = FakeStringKeyValueStore(
             mutableMapOf(
                 GoogleAuthManager.KEY_ACCESS_TOKEN to "access-token",
-                GoogleAuthManager.KEY_EMAIL to "user@example.com",
                 GoogleAuthManager.KEY_DISPLAY_NAME to "User",
             ),
         )
@@ -111,7 +110,7 @@ class GoogleAuthManagerInstrumentedTest {
         manager.clearSession()
 
         assertTrue(manager.authState.value is GoogleAuthState.Error)
-        assertTrue(manager.isAuthorized())
+        assertFalse(manager.isAuthorized())
     }
 
     private class FakeStringKeyValueStore(
