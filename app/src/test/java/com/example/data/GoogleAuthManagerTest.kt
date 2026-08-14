@@ -79,6 +79,55 @@ class GoogleAuthManagerTest {
         assertFalse(authManager.isAuthorized())
     }
 
+    @Test
+    fun testSaveSession_RejectsDemoCredentialsWithoutPersistingThem() {
+        authManager = GoogleAuthManager(sharedPrefs)
+
+        authManager.saveSession(
+            accessToken = "ya29.a0AcEw0eB-demo-token",
+            refreshToken = "1//0-demo-refresh-token",
+            email = "user@example.com",
+            displayName = "User Name"
+        )
+
+        assertTrue(authManager.authState.value is GoogleAuthState.Error)
+        assertFalse(authManager.isAuthorized())
+        assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_ACCESS_TOKEN, null))
+        assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_REFRESH_TOKEN, null))
+        assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_EMAIL, null))
+    }
+
+    @Test
+    fun testSaveSession_RemovesStaleRefreshTokenWhenNewSessionDoesNotHaveOne() {
+        authManager = GoogleAuthManager(sharedPrefs)
+        authManager.saveSession("access-token-one", "refresh-token", "user@example.com", null)
+
+        authManager.saveSession("access-token-two", null, "user@example.com", null)
+
+        assertEquals("access-token-two", authManager.getAccessToken())
+        assertNull(authManager.getRefreshToken())
+        assertTrue(authManager.isAuthorized())
+    }
+
+    @Test
+    fun testRestoreSession_ClearsStoredDemoCredentialsAndFailsClosed() {
+        sharedPrefs.edit()
+            .putString(GoogleAuthManager.KEY_ACCESS_TOKEN, "ya29.a0AcEw0eB-demo-token")
+            .putString(GoogleAuthManager.KEY_REFRESH_TOKEN, "1//0-demo-refresh-token")
+            .putString(GoogleAuthManager.KEY_EMAIL, "user@example.com")
+            .putString(GoogleAuthManager.KEY_DISPLAY_NAME, "User Name")
+            .apply()
+
+        authManager = GoogleAuthManager(sharedPrefs)
+
+        assertEquals(GoogleAuthState.SignedOut, authManager.authState.value)
+        assertFalse(authManager.isAuthorized())
+        assertNull(authManager.getAccessToken())
+        assertNull(authManager.getRefreshToken())
+        assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_EMAIL, null))
+        assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_DISPLAY_NAME, null))
+    }
+
     // High performance Fake implementation of Android SharedPreferences
     private class FakeSharedPreferences : SharedPreferences {
         private val map = mutableMapOf<String, Any?>()

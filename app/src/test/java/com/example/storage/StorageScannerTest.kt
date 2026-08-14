@@ -81,6 +81,51 @@ class StorageScannerTest {
     }
 
     @Test
+    fun computeDocumentFingerprint_usesHeaderAndTailForLargeDocuments() = runBlocking {
+        val largeDocument = File.createTempFile("fingerprint-large", ".pdf")
+        try {
+            largeDocument.writeBytes(ByteArray(10_000) { index -> (index % 251).toByte() })
+
+            val fingerprint = scanner.computeDocumentFingerprint(largeDocument)
+
+            assertEquals(16, fingerprint.length)
+            assertTrue(fingerprint.matches(Regex("[0-9a-f]{16}")))
+            assertNotEquals("", fingerprint)
+        } finally {
+            largeDocument.delete()
+        }
+    }
+
+    @Test
+    fun computeDocumentFingerprint_returnsEmptyForEmptyDocument() = runBlocking {
+        val emptyDocument = File.createTempFile("fingerprint-empty", ".pdf")
+        try {
+            assertEquals("", scanner.computeDocumentFingerprint(emptyDocument))
+        } finally {
+            emptyDocument.delete()
+        }
+    }
+
+    @Test
+    fun computeDHashFromBitmap_returnsNonZeroHashForDescendingBrightness() {
+        val bitmap = Bitmap.createBitmap(9, 8, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 8) {
+            for (x in 0 until 9) {
+                bitmap.setPixel(x, y, if (x < 4) Color.WHITE else Color.BLACK)
+            }
+        }
+        try {
+            val hash = scanner.computeDHashFromBitmap(bitmap)
+
+            assertEquals(16, hash.length)
+            assertTrue(hash.matches(Regex("[0-9a-f]{16}")))
+            assertNotEquals("0000000000000000", hash)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test
     fun computeDHashFromBitmap_returnsZeroHashForUniformImage() {
         val bitmap = Bitmap.createBitmap(9, 8, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.WHITE)
@@ -88,6 +133,17 @@ class StorageScannerTest {
             assertEquals("0000000000000000", scanner.computeDHashFromBitmap(bitmap))
         } finally {
             bitmap.recycle()
+        }
+    }
+
+    @Test
+    fun computeDHash_returnsEmptyForUnsupportedOrMissingFiles() = runBlocking {
+        val unsupported = File.createTempFile("not-an-image", ".txt")
+        try {
+            assertEquals("", scanner.computeDHash(unsupported))
+            assertEquals("", scanner.computeDHash(File(unsupported.parentFile, "missing.jpg")))
+        } finally {
+            unsupported.delete()
         }
     }
 

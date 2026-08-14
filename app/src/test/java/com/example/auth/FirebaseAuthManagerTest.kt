@@ -4,8 +4,14 @@ import android.content.Context
 import androidx.credentials.CredentialManager
 import com.example.R
 import com.google.firebase.auth.FirebaseAuth
+import androidx.credentials.GetCredentialRequest
+import com.google.firebase.auth.FirebaseUser
+import io.mockk.coEvery
+import io.mockk.Runs
+import io.mockk.just
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -62,6 +68,35 @@ class FirebaseAuthManagerTest {
         assertTrue(result.isFailure)
         assertFalse(result.isSuccess)
         assertTrue(result.exceptionOrNull()!!.message!!.contains("not configured"))
+        verify(exactly = 0) { auth.signInWithCredential(any()) }
+    }
+
+    @Test
+    fun authStateListener_publishesTheCurrentFirebaseUser() {
+        val listener = slot<FirebaseAuth.AuthStateListener>()
+        every { auth.addAuthStateListener(capture(listener)) } just Runs
+        val authenticatedUser = mockk<FirebaseUser>()
+        every { auth.currentUser } returns null
+        val manager = FirebaseAuthManager(context, auth, credentialManager)
+
+        every { auth.currentUser } returns authenticatedUser
+        listener.captured.onAuthStateChanged(auth)
+
+        assertEquals(authenticatedUser, manager.user.value)
+    }
+
+    @Test
+    fun signInWithGoogle_returnsFailureWhenCredentialManagerThrows() = runBlocking {
+        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        coEvery {
+            credentialManager.getCredential(any(), any<GetCredentialRequest>())
+        } throws IllegalStateException("credential lookup failed")
+        val manager = FirebaseAuthManager(context, auth, credentialManager)
+
+        val result = manager.signInWithGoogle()
+
+        assertTrue(result.isFailure)
+        assertEquals("credential lookup failed", result.exceptionOrNull()?.message)
         verify(exactly = 0) { auth.signInWithCredential(any()) }
     }
 }

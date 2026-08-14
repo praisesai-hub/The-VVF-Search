@@ -273,4 +273,78 @@ class DuplicateDetectionEngineTest {
         val lowThresholdSemantics = duplicateDetectionEngine.getSemanticDuplicates(docFiles, flowOf(70.0f)).first()
         assertEquals("At 70% threshold, 0.80 similarity documents must be flagged as duplicates", 1, lowThresholdSemantics.size)
     }
+
+    @Test
+    fun videoDuplicates_groupMatchingKeyframesAndExcludeVaultOrRecycledItems() = runBlocking {
+        val first = FileItemEntity(
+            id = 2001L,
+            name = "clip-one.mp4",
+            path = "/videos/clip-one.mp4",
+            category = FileCategory.VIDEO.name,
+            sizeBytes = 1L,
+            visualSimilarityHash = "0011223344556677"
+        )
+        val second = first.copy(id = 2002L, name = "clip-two.mp4", path = "/videos/clip-two.mp4")
+        val vaultCopy = first.copy(id = 2003L, name = "vault.mp4", isVault = true)
+        val recycledCopy = first.copy(id = 2004L, name = "recycled.mp4", isRecycleBin = true)
+        val malformed = first.copy(id = 2005L, name = "malformed.mp4", visualSimilarityHash = "short")
+
+        val groups = duplicateDetectionEngine.getVideoDuplicates(
+            flowOf(listOf(first, second, vaultCopy, recycledCopy, malformed)),
+            flowOf(100f)
+        ).first()
+
+        assertEquals(1, groups.size)
+        assertEquals(setOf(2001L, 2002L), groups.single().files.map { it.id }.toSet())
+        assertEquals(100, groups.single().similarityScore)
+        assertTrue(groups.single().title.contains("Keyframe Match"))
+    }
+
+    @Test
+    fun documentDuplicates_requireSameFingerprintAndExcludeUnsafeCategories() = runBlocking {
+        val first = FileItemEntity(
+            id = 3001L,
+            name = "report-one.pdf",
+            path = "/docs/report-one.pdf",
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = 1L,
+            visualSimilarityHash = "same-fingerprint"
+        )
+        val second = first.copy(id = 3002L, name = "report-two.pdf", path = "/docs/report-two.pdf")
+        val different = first.copy(id = 3003L, name = "different.pdf", visualSimilarityHash = "different-fingerprint")
+        val vaultCopy = first.copy(id = 3004L, name = "vault.pdf", isVault = true)
+        val recycledCopy = first.copy(id = 3005L, name = "recycled.pdf", isRecycleBin = true)
+        val wrongCategory = first.copy(id = 3006L, name = "photo.jpg", category = FileCategory.IMAGES.name)
+
+        val groups = duplicateDetectionEngine.getDocumentDuplicates(
+            flowOf(listOf(first, second, different, vaultCopy, recycledCopy, wrongCategory))
+        ).first()
+
+        assertEquals(1, groups.size)
+        assertEquals(setOf(3001L, 3002L), groups.single().files.map { it.id }.toSet())
+        assertEquals(95, groups.single().similarityScore)
+        assertTrue(groups.single().title.contains("Document Structural Fingerprint Match"))
+    }
+
+    @Test
+    fun semanticDuplicates_ignoreMalformedEmbeddingsAndReturnNoGroupForSingleton() = runBlocking {
+        val valid = FileItemEntity(
+            id = 4001L,
+            name = "valid.txt",
+            path = "/docs/valid.txt",
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = 1L,
+            semanticIndexed = true,
+            semanticEmbeddingString = "1.0,0.0"
+        )
+        val malformed = valid.copy(id = 4002L, name = "malformed.txt", semanticEmbeddingString = "not,a,vector")
+        val excluded = valid.copy(id = 4003L, name = "vault.txt", isVault = true)
+
+        val groups = duplicateDetectionEngine.getSemanticDuplicates(
+            flowOf(listOf(valid, malformed, excluded)),
+            flowOf(50f)
+        ).first()
+
+        assertTrue(groups.isEmpty())
+    }
 }

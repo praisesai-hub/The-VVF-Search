@@ -2,6 +2,8 @@ package com.example.ui
 
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.WeakHashMap
@@ -20,6 +22,7 @@ private fun MainViewModel.compatState(): VmCompatState = synchronized(compatStat
     compatStates.getOrPut(this) { VmCompatState() }
 }
 
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 private fun <T> Flow<T>.stateInCompat(vm: MainViewModel, initial: T): StateFlow<T> =
     stateIn(vm.viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
 
@@ -43,6 +46,7 @@ val MainViewModel.enteredPin: StateFlow<String> get() = compatState().enteredPin
 val MainViewModel.pinError: StateFlow<String?> get() = compatState().pinError
 val MainViewModel.isVaultPinSetupRequired: Boolean get() = !repository.hasVaultPin()
 
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 val MainViewModel.semanticSearchResults: StateFlow<List<FileItemEntity>> get() =
     semanticQuery.debounce(200).flatMapLatest { repository.searchSemanticFiles(it) }
         .stateInCompat(this, emptyList())

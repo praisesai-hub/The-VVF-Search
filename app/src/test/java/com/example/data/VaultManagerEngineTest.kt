@@ -74,6 +74,64 @@ class VaultManagerEngineTest {
         verify(exactly = 0) { keystore.hashPin(any()) }
     }
 
+    @Test
+    fun initializeVaultPin_rejectsInvalidAndDuplicatePinsBeforeHashing() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "existing-hash")
+        }
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertFalse(engine.initializeVaultPin("1234"))
+        assertFalse(engine.initializeVaultPin("123"))
+        assertFalse(engine.initializeVaultPin("12a4"))
+        assertFalse(engine.initializeVaultPin("12345"))
+        assertEquals("existing-hash", engine.getStoredVaultPinHash())
+        verify(exactly = 0) { keystore.hashPin(any()) }
+    }
+
+    @Test
+    fun verifyVaultPin_failsClosedWithoutStoredHashAndAcceptsVerifiedStoredHash() {
+        val emptyEngine = VaultManagerEngine(context, keystore, CommitControlledPreferences(commitResult = true))
+        assertFalse(emptyEngine.verifyVaultPin("1234"))
+
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "stored-hash")
+        }
+        every { keystore.verifyPin("1234", "stored-hash") } returns true
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertTrue(engine.verifyVaultPin("1234"))
+        verify(exactly = 1) { keystore.verifyPin("1234", "stored-hash") }
+    }
+
+    @Test
+    fun changeVaultPin_failsWhenOldPinDoesNotVerifyAndDoesNotDeriveNewHash() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "stored-hash")
+        }
+        every { keystore.verifyPin("1111", "stored-hash") } returns false
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertFalse(engine.changeVaultPin("1111", "2222"))
+        assertEquals("stored-hash", engine.getStoredVaultPinHash())
+        verify(exactly = 0) { keystore.hashPin(any()) }
+    }
+
+    @Test
+    fun changeVaultPin_updatesHashOnlyAfterOldPinVerifiesAndCommitSucceeds() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "old-hash")
+        }
+        every { keystore.verifyPin("1111", "old-hash") } returns true
+        every { keystore.hashPin("2222") } returns "new-hash"
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertTrue(engine.changeVaultPin("1111", "2222"))
+        assertEquals("new-hash", engine.getStoredVaultPinHash())
+        verify(exactly = 1) { keystore.verifyPin("1111", "old-hash") }
+        verify(exactly = 1) { keystore.hashPin("2222") }
+    }
+
     private class CommitControlledPreferences(
         private val commitResult: Boolean
     ) : SharedPreferences {

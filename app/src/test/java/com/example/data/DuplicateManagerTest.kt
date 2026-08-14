@@ -139,4 +139,63 @@ class DuplicateManagerTest {
         assertEquals(0, fakeDao.moveFilesToRecycleBinAtomicCallCount)
         assertEquals(1, fakeDao.movedFilesList.size)
     }
+
+    @Test
+    fun missingOrAlreadyRecycledSelections_areNoOpsWithoutAtomicWrite() = runBlocking {
+        val fakeDao = FakeFileDao()
+        val alreadyRecycled = FileItemEntity(
+            id = 7L,
+            name = "already-recycled.jpg",
+            path = "/trash/already-recycled.jpg",
+            category = "IMAGES",
+            sizeBytes = 100L,
+            isRecycleBin = true
+        )
+        fakeDao.filesMap[alreadyRecycled.id] = alreadyRecycled
+        val duplicateManager = DuplicateManager(fakeDao)
+
+        duplicateManager.cleanSelectedDuplicates(setOf(7L, 999L))
+
+        assertEquals(0, fakeDao.moveFilesToRecycleBinAtomicCallCount)
+        assertTrue(fakeDao.movedFilesList.isEmpty())
+        assertTrue(fakeDao.filesMap.getValue(7L).isRecycleBin)
+    }
+
+    @Test
+    fun cleanSelectedDuplicates_preservesOriginalPathAndUsesSingleAtomicBatch() = runBlocking {
+        val fakeDao = FakeFileDao()
+        val withoutOriginalPath = FileItemEntity(
+            id = 11L,
+            name = "first.jpg",
+            path = "/files/first.jpg",
+            category = "IMAGES",
+            sizeBytes = 10L,
+            md5Hash = ""
+        )
+        val withOriginalPath = FileItemEntity(
+            id = 12L,
+            name = "second.jpg",
+            path = "/files/second.jpg",
+            originalPath = "/original/second.jpg",
+            category = "IMAGES",
+            sizeBytes = 20L,
+            md5Hash = "hash-two"
+        )
+        fakeDao.filesMap[withoutOriginalPath.id] = withoutOriginalPath
+        fakeDao.filesMap[withOriginalPath.id] = withOriginalPath
+        val duplicateManager = DuplicateManager(fakeDao)
+
+        duplicateManager.cleanSelectedDuplicates(setOf(11L, 12L))
+
+        assertEquals(1, fakeDao.moveFilesToRecycleBinAtomicCallCount)
+        assertEquals(2, fakeDao.movedFilesList.size)
+        val movedWithoutOriginal = fakeDao.filesMap.getValue(11L)
+        val movedWithOriginal = fakeDao.filesMap.getValue(12L)
+        assertTrue(movedWithoutOriginal.isRecycleBin)
+        assertTrue(movedWithOriginal.isRecycleBin)
+        assertEquals("/files/first.jpg", movedWithoutOriginal.originalPath)
+        assertEquals("/original/second.jpg", movedWithOriginal.originalPath)
+        assertTrue(movedWithoutOriginal.deletedTimestampMs > 0L)
+        assertTrue(movedWithOriginal.deletedTimestampMs > 0L)
+    }
 }
