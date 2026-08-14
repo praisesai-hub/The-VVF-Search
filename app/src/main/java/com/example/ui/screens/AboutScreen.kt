@@ -53,10 +53,11 @@ import com.example.ui.theme.BhagwaOrange
 import com.example.ui.theme.CosmicBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod") // Single static About screen keeps all product/legal copy in one audited surface.
 @Composable
 fun AboutScreen(
-    onBackClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBackClick: (() -> Unit)? = null
 ) {
     Scaffold(
         topBar = {

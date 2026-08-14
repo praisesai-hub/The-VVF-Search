@@ -19,12 +19,12 @@ val googleServicesConfigPresent = listOf(
 
 android {
   namespace = "com.example"
-  compileSdk = 35
+  compileSdk = 37
 
   defaultConfig {
     applicationId = "com.aistudio.vvfsmartmanager.app"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 37
     versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
     versionName = project.findProperty("versionName") as String? ?: "1.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -122,15 +122,13 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.androidx.work.runtime.ktx)
-  implementation(libs.converter.moshi)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  implementation(libs.tensorflow.lite)
+  implementation(libs.litert)
   implementation(libs.mlkit.text.recognition)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  implementation(libs.retrofit)
   implementation(platform(libs.firebase.bom))
   implementation(libs.firebase.auth)
   implementation(libs.firebase.crashlytics)
@@ -142,9 +140,9 @@ dependencies {
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
   testImplementation(libs.androidx.room.testing)
-  testImplementation("io.mockk:mockk:1.13.11")
-  testImplementation("androidx.work:work-testing:2.9.1")
-  testImplementation("androidx.arch.core:core-testing:2.2.0")
+  testImplementation(libs.mockk)
+  testImplementation(libs.androidx.work.testing)
+  testImplementation(libs.androidx.arch.core.testing)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
   testImplementation(libs.roborazzi)

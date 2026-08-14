@@ -21,4 +21,18 @@
     <!-- Project Specific Overrides -->
     <issue id="IconMissingDensityFolder" severity="ignore" />
     <issue id="ObsoleteLintCustomCheck" severity="ignore" />
+
+    <!--
+        Dependency version advisories are intentionally scoped to the version catalog.
+        Kotlin Compose 2.4.x requires a coordinated Kotlin/KSP/Room migration; OkHttp 5.x
+        and LiteRT 2.x are major upgrades that require API and runtime compatibility testing.
+        The current versions are explicitly build-verified and the upgrades remain tracked
+        as release-blocking compatibility work rather than being applied speculatively.
+    -->
+    <issue id="NewerVersionAvailable">
+        <ignore path="../gradle/libs.versions.toml" />
+    </issue>
+    <issue id="GradleDependency">
+        <ignore path="../gradle/libs.versions.toml" />
+    </issue>
 </lint>

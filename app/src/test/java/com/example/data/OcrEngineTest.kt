@@ -254,4 +254,34 @@ class OcrEngineTest {
             assertFalse(updatedFile.ocrText.contains("GSTIN"))
         }
     }
+
+    @Test
+    fun withRetry_returnsOnFirstSuccessfulAttemptAfterTransientFailures() = runBlocking {
+        var attempts = 0
+
+        val result = repository.withRetry(maxAttempts = 3, initialDelayMs = 0, factor = 2.0) {
+            attempts++
+            check(attempts >= 3) { "transient" }
+            "persisted"
+        }
+
+        assertEquals("persisted", result)
+        assertEquals(3, attempts)
+    }
+
+    @Test
+    fun withRetry_rethrowsTheFinalFailureAfterAttemptBudgetIsExhausted() = runBlocking {
+        var attempts = 0
+
+        try {
+            repository.withRetry(maxAttempts = 2, initialDelayMs = 0) {
+                attempts++
+                error("permanent")
+            }
+            throw AssertionError("withRetry should rethrow the final failure")
+        } catch (exception: IllegalStateException) {
+            assertEquals("permanent", exception.message)
+            assertEquals(2, attempts)
+        }
+    }
 }

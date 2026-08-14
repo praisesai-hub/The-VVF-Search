@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -72,7 +73,7 @@ fun CloudPluginsScreen(
     plugins: List<PluginEntity>
 ) {
     var conflictResolutionMode by rememberSaveable { mutableStateOf("Keep Local") }
-    var selectedSection by rememberSaveable { mutableStateOf(0) } // 0: Cloud Sync, 1: Plugin Manager
+    var selectedSection by rememberSaveable { mutableIntStateOf(0) } // 0: Cloud Sync, 1: Plugin Manager
     Column(
         modifier = Modifier
             .fillMaxSize()

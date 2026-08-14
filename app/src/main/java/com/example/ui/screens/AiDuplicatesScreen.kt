@@ -53,7 +53,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -88,7 +88,9 @@ fun AiDuplicatesScreen(
     ocrScannedFiles: List<FileItemEntity>,
     semanticSearchResults: List<FileItemEntity>
 ) {
-    var selectedSectionIndex by rememberSaveable { mutableStateOf(0) } // 0: Duplicate Cleaner, 1: OCR Scanner, 2: AI Semantic Search
+    var selectedSectionIndex by rememberSaveable {
+        mutableIntStateOf(0)
+    } // 0: Duplicate Cleaner, 1: OCR Scanner, 2: AI Semantic Search
     Column(
         modifier = Modifier
             .fillMaxSize()
