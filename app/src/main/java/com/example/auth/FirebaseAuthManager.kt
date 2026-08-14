@@ -89,7 +89,7 @@ class FirebaseAuthManager(
     }
 
     fun signInWithMicrosoft(activity: Activity): com.google.android.gms.tasks.Task<FirebaseUser> {
-        val provider = OAuthProvider.newBuilder("microsoft.com")
+        val provider = OAuthProvider.newBuilder("microsoft.com", auth)
             .setScopes(listOf("openid", "profile", "email"))
             .build()
 
