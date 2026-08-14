@@ -110,17 +110,19 @@ class FakeCloudProviderAdapter : CloudProviderAdapter {
     override val providerId: String = "GOOGLE_DRIVE"
     var shouldFail: Boolean = false
     var isRetryable: Boolean = true
+    var returnNotSupported: Boolean = false
     var exceptionToThrow: Exception? = null
 
     override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
         exceptionToThrow?.let { throw it }
-        if (shouldFail) {
-            return CloudSyncResult.Error(
+        return when {
+            returnNotSupported -> CloudSyncResult.NotSupported
+            shouldFail -> CloudSyncResult.Error(
                 message = "Upload failed",
                 isRetryable = isRetryable
             )
+            else -> CloudSyncResult.Success(bytesTransferred = file.length())
         }
-        return CloudSyncResult.Success(bytesTransferred = file.length())
     }
 
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult {
@@ -178,6 +180,16 @@ class CloudSyncWorkerTest {
             .setWorkerFactory(workerFactory)
             .setRunAttemptCount(runAttemptCount)
             .build()
+    }
+
+    @Test
+    fun testEmptyQueue_returnsSuccessWithoutChangingItems() = runBlocking {
+        val worker = createWorker(runAttemptCount = 0)
+
+        val result = worker.doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(emptyList<CloudSyncItemEntity>(), fakeDao.getCloudSyncItems().first())
     }
 
     @Test
@@ -335,6 +347,34 @@ class CloudSyncWorkerTest {
         val itemsInDb = fakeDao.getCloudSyncItems().first()
         val itemInDb = itemsInDb.find { it.id == 105L }
         assertEquals("FAILED", itemInDb?.status)
+    }
+
+    @Test
+    fun testProviderNotSupported_updatesStatusAndReturnsFailure() = runBlocking {
+        val tempFile = File.createTempFile("sync_test_unsupported", ".txt")
+        tempFile.writeText("sample data for upload")
+        tempFile.deleteOnExit()
+
+        val syncItem = CloudSyncItemEntity(
+            id = 107L,
+            provider = "GOOGLE_DRIVE",
+            fileName = tempFile.name,
+            filePath = tempFile.absolutePath,
+            fileSize = tempFile.length(),
+            status = "QUEUED",
+            lastSyncedMs = 0L,
+            isCore = false
+        )
+        fakeDao.insertCloudSyncItem(syncItem)
+        fakeAdapter.returnNotSupported = true
+
+        val result = createWorker(runAttemptCount = 0).doWork()
+
+        assertEquals(ListenableWorker.Result.failure(), result)
+        assertEquals(
+            "NOT_SUPPORTED",
+            fakeDao.getCloudSyncItems().first().find { it.id == 107L }?.status
+        )
     }
 
     @Test
