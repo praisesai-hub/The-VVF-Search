@@ -6,7 +6,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -199,6 +201,11 @@ class SmartManagerRepositoryInstrumentedTest {
             assertFalse(result.semanticIndexed)
             assertTrue(result.semanticEmbeddingString.isBlank())
             assertFalse(repository.isSemanticSearchAvailable)
+            runBlocking {
+                withTimeout(5_000L) {
+                    while (repository.isScanning.value) delay(10L)
+                }
+            }
             assertEquals(1.0f, repository.scanProgress.value)
             assertFalse(repository.isScanning.value)
         } finally {
