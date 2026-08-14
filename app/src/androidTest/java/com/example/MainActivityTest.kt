@@ -82,7 +82,7 @@ class MainActivityTest {
             composeTestRule.onNodeWithText("1 minute").performClick()
             composeTestRule.onNodeWithText("5 minutes").assertIsDisplayed()
             composeTestRule.onNodeWithTag("change_pin_button").performClick()
-            composeTestRule.onNodeWithText("Change Master PIN").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Current PIN").assertIsDisplayed()
             composeTestRule.onNodeWithText("Cancel").performClick()
             composeTestRule.onNodeWithText("Lock Vault").performClick()
             composeTestRule.onNodeWithTag("pin_key_1").assertIsDisplayed()
