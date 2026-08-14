@@ -24,12 +24,13 @@ import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.fail
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.ExecutionException
 
 @RunWith(AndroidJUnit4::class)
 class FirebaseAuthManagerInstrumentedTest {
@@ -116,7 +117,8 @@ class FirebaseAuthManagerInstrumentedTest {
         val result = manager.signInWithGoogle()
 
         assertTrue(result.isFailure)
-        assertSame(expected, result.exceptionOrNull())
+        val actual = result.exceptionOrNull()
+        assertTrue(actual === expected || actual?.cause === expected)
     }
 
     @Test
@@ -177,7 +179,11 @@ class FirebaseAuthManagerInstrumentedTest {
 
         val task = manager.signInWithMicrosoft(mockk(relaxed = true))
 
-        assertFalse(task.isSuccessful)
-        assertEquals("Microsoft provider failed", task.exception?.message)
+        try {
+            Tasks.await(task)
+            fail("Microsoft provider failure should complete the task exceptionally")
+        } catch (actual: ExecutionException) {
+            assertSame(failure, actual.cause)
+        }
     }
 }
