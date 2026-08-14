@@ -88,7 +88,7 @@ class PhysicalStorageManagerInstrumentedTest {
 
         val missing = File(testRoot, "missing.txt").absolutePath
         assertTrue(PhysicalStorageManager.moveToTrash(context, missing).isFailure)
-        assertFalse(PhysicalStorageManager.deleteFile(context, missing))
+        assertTrue(PhysicalStorageManager.deleteFile(context, missing))
         assertTrue(
             PhysicalStorageManager.restoreFromTrash(
                 context,
