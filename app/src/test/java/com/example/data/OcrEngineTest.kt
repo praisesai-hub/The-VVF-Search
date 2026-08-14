@@ -3,6 +3,7 @@ package com.example.data
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -28,6 +29,11 @@ class OcrEngineTest {
         var plugins = mutableListOf<PluginEntity>()
         val updatedFiles = mutableListOf<FileItemEntity>()
         var onUpdateCallback: (() -> Unit)? = null
+        val activeFiles = mutableListOf<FileItemEntity>()
+        val duplicateFiles = mutableListOf<FileItemEntity>()
+        val cloudItems = mutableListOf<CloudSyncItemEntity>()
+        val insertedCloudItems = mutableListOf<CloudSyncItemEntity>()
+        val deletedCloudItemIds = mutableListOf<Long>()
 
         override suspend fun getUnhashedFiles(): List<FileItemEntity> {
             return unhashedFiles
@@ -48,11 +54,12 @@ class OcrEngineTest {
             updateFiles(files)
         }
 
-        override suspend fun getFileById(id: Long): FileItemEntity? = null
+        override suspend fun getFileById(id: Long): FileItemEntity? =
+            activeFiles.firstOrNull { it.id == id } ?: unhashedFiles.firstOrNull { it.id == id }
         override suspend fun getFileByName(name: String): FileItemEntity? = null
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flowOf(activeFiles)
         override fun getRecentFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getCategoryStats(): Flow<List<CategoryStat>> = flowOf(emptyList())
         override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = emptyList()
@@ -60,7 +67,7 @@ class OcrEngineTest {
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(duplicateFiles)
         override suspend fun insertFile(file: FileItemEntity): Long = 0L
         override suspend fun insertFiles(files: List<FileItemEntity>) {}
         override suspend fun updateFile(file: FileItemEntity) {}
@@ -74,9 +81,16 @@ class OcrEngineTest {
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
         override suspend fun deleteVaultItemById(id: Long) {}
-        override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(emptyList())
-        override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long = 0L
-        override suspend fun deleteCloudSyncItem(id: Long) {}
+        override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(cloudItems)
+        override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
+            insertedCloudItems.add(item)
+            cloudItems.add(item)
+            return item.id
+        }
+        override suspend fun deleteCloudSyncItem(id: Long) {
+            deletedCloudItemIds.add(id)
+            cloudItems.removeAll { it.id == id }
+        }
         override suspend fun setPluginEnabled(id: String, enabled: Boolean) {}
         override suspend fun insertPlugins(plugins: List<PluginEntity>) {}
     }
@@ -253,6 +267,172 @@ class OcrEngineTest {
             assertFalse(updatedFile.ocrText.contains("27AAAC"))
             assertFalse(updatedFile.ocrText.contains("GSTIN"))
         }
+    }
+
+    @Test
+    fun documentStats_countsOnlyNonVaultNonRecycleBinDocuments() = runBlocking {
+        fakeDao.activeFiles.addAll(
+            listOf(
+                FileItemEntity(
+                    id = 601L,
+                    name = "indexed.pdf",
+                    path = "/tmp/indexed.pdf",
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = 1L,
+                    md5Hash = "hash"
+                ),
+                FileItemEntity(
+                    id = 602L,
+                    name = "pending.pdf",
+                    path = "/tmp/pending.pdf",
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = 1L
+                ),
+                FileItemEntity(
+                    id = 603L,
+                    name = "vault.pdf",
+                    path = "/tmp/vault.pdf",
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = 1L,
+                    md5Hash = "vault",
+                    isVault = true
+                ),
+                FileItemEntity(
+                    id = 604L,
+                    name = "deleted.pdf",
+                    path = "/tmp/deleted.pdf",
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = 1L,
+                    md5Hash = "deleted",
+                    isRecycleBin = true
+                ),
+                FileItemEntity(
+                    id = 605L,
+                    name = "photo.jpg",
+                    path = "/tmp/photo.jpg",
+                    category = FileCategory.IMAGES.name,
+                    sizeBytes = 1L,
+                    md5Hash = "photo"
+                )
+            )
+        )
+
+        val stats = repository.documentStats.first()
+
+        assertEquals(1, stats.first)
+        assertEquals(1, stats.second)
+        assertEquals(0.5f, stats.third)
+    }
+
+    @Test
+    fun exactDuplicates_groupsOnlyRepeatedNonBlankHashes() = runBlocking {
+        val firstDuplicate = FileItemEntity(
+            id = 611L,
+            name = "one.txt",
+            path = "/tmp/one.txt",
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = 1L,
+            md5Hash = "same"
+        )
+        val secondDuplicate = firstDuplicate.copy(id = 612L, name = "two.txt", path = "/tmp/two.txt")
+        fakeDao.duplicateFiles.addAll(
+            listOf(
+                firstDuplicate,
+                secondDuplicate,
+                firstDuplicate.copy(id = 613L, name = "blank-a.txt", path = "/tmp/blank-a.txt", md5Hash = ""),
+                firstDuplicate.copy(id = 614L, name = "blank-b.txt", path = "/tmp/blank-b.txt", md5Hash = "")
+            )
+        )
+
+        val groups = repository.exactDuplicates.first()
+
+        assertEquals(1, groups.size)
+        assertEquals(100, groups.single().similarityScore)
+        assertEquals(listOf(611L, 612L), groups.single().files.map { it.id })
+    }
+
+    @Test
+    fun searchSemanticFiles_returnsEmptyWhenModelAssetsAreUnavailable() = runBlocking {
+        fakeDao.activeFiles += FileItemEntity(
+            id = 621L,
+            name = "notes.txt",
+            path = "/tmp/notes.txt",
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = 1L
+        )
+
+        assertFalse(repository.isSemanticSearchAvailable)
+        assertTrue(repository.searchSemanticFiles("notes").first().isEmpty())
+    }
+
+    @Test
+    fun enqueueCloudSyncItem_rejectsDisabledProviderAndDuplicate() = runBlocking {
+        fakeDao.plugins += PluginEntity(
+            "gdrive_sync",
+            "Drive",
+            "CLOUD_PROVIDER",
+            "Drive sync",
+            isEnabled = false,
+            isCore = false
+        )
+        assertFalse(repository.enqueueCloudSyncItem("GOOGLE_DRIVE", "report.pdf", 10L))
+
+        fakeDao.plugins[0] = fakeDao.plugins[0].copy(isEnabled = true)
+        fakeDao.cloudItems += CloudSyncItemEntity(
+            id = 631L,
+            provider = "google_drive",
+            fileName = "report.pdf",
+            fileSize = 10L,
+            status = "PENDING"
+        )
+        assertFalse(repository.enqueueCloudSyncItem("GOOGLE_DRIVE", "report.pdf", 10L))
+        assertTrue(fakeDao.insertedCloudItems.isEmpty())
+    }
+
+    @Test
+    fun enqueueRetryAndCancelCloudSyncItem_preserveQueueStateContracts() = runBlocking {
+        fakeDao.plugins += PluginEntity(
+            "gdrive_sync",
+            "Drive",
+            "CLOUD_PROVIDER",
+            "Drive sync",
+            isEnabled = true,
+            isCore = false
+        )
+        assertTrue(
+            repository.enqueueCloudSyncItem(
+                "GOOGLE_DRIVE",
+                "report.pdf",
+                10L,
+                filePath = "/tmp/report.pdf",
+                isCore = true
+            )
+        )
+        assertEquals("QUEUED", fakeDao.insertedCloudItems.single().status)
+
+        val failed = CloudSyncItemEntity(
+            id = 641L,
+            provider = "GOOGLE_DRIVE",
+            fileName = "failed.pdf",
+            fileSize = 20L,
+            status = "FAILED"
+        )
+        fakeDao.cloudItems += failed
+        assertTrue(repository.retryCloudSyncItem(641L))
+        assertEquals("QUEUED", fakeDao.insertedCloudItems.last().status)
+
+        val synced = CloudSyncItemEntity(
+            id = 642L,
+            provider = "GOOGLE_DRIVE",
+            fileName = "synced.pdf",
+            fileSize = 20L,
+            status = "SYNCED"
+        )
+        fakeDao.cloudItems += synced
+        assertFalse(repository.retryCloudSyncItem(642L))
+        assertFalse(repository.cancelCloudSyncItem(642L))
+        assertTrue(repository.cancelCloudSyncItem(641L))
+        assertEquals(listOf(641L), fakeDao.deletedCloudItemIds)
     }
 
     @Test
