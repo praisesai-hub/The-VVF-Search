@@ -46,13 +46,13 @@ jobs:
           build-mode: ${{ matrix.build-mode }}
 
       # CodeQL must observe a fresh Kotlin compilation between init and analyze.
-      # Kotlin's default compiler daemon and cached outputs can hide compilation
-      # from the CodeQL tracer, causing an empty Java/Kotlin database.
+      # Clean/no-cache/incremental-disabled inputs provide that guarantee without
+      # forcing Kotlin's in-process compiler, which is ABI-incompatible with the
+      # Compose compiler registrar in the current verified Kotlin toolchain.
       - name: Build for CodeQL analysis
         run: |
           ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleDebug \
             -Pkotlin.incremental=false \
-            -Pkotlin.compiler.execution.strategy=in-process \
             -Dkotlin.caching.enabled=false
 
       - name: Perform CodeQL analysis

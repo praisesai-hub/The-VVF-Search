@@ -9,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -17,6 +18,7 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class SemanticEmbeddingProviderTest {
 
     private val provider = FallbackSemanticEmbeddingProvider()
