@@ -117,11 +117,11 @@ class SemanticEmbeddingProviderTest {
         assertEquals(128, emb3!!.size)
 
         // Preprocessing is case-insensitive, so identical text with different case must produce identical embeddings
-        assertArrayEquals(emb1, emb2!!, 0.00001f)
+        assertArrayEquals(emb1, emb2, 0.00001f)
 
         // Different text must produce different embeddings
         val simSame = provider.calculateCosineSimilarity(emb1, emb2)
-        val simDiff = provider.calculateCosineSimilarity(emb1, emb3!!)
+        val simDiff = provider.calculateCosineSimilarity(emb1, emb3)
 
         assertEquals(1.0f, simSame, 0.001f)
         assertTrue(simDiff < 0.9f)
