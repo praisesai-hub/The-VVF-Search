@@ -86,7 +86,7 @@ class FilePickerUIInstrumentedTest {
             }
         }
 
-        composeTestRule.onNode(hasScrollToNodeAction())
+        composeTestRule.onAllNodes(hasScrollToNodeAction())[1]
             .performScrollToNode(hasTestTag("file_picker_item_coverage_image_test.png"))
         composeTestRule.onNodeWithTag("file_picker_item_coverage_image_test.png")
             .assertIsDisplayed()
