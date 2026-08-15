@@ -7,6 +7,7 @@ import androidx.core.net.toUri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.data.FileCategory
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -80,6 +81,54 @@ class StorageScannerInstrumentedTest {
             scanner.computeContentUriHash(source.toUri()),
         )
         assertEquals("", scanner.computeContentUriHash(File(testRoot, "missing.txt").toUri()))
+    }
+
+    @Test
+    fun scanDeviceStorageFlow_emitsFullAndFinalBatches(): Unit = runBlocking {
+        val expectedPaths = (0 until 105).map { index ->
+            File(testRoot, "batch-$index.txt").apply { writeText("batch payload $index") }.absolutePath
+        }.toSet()
+
+        val batches = scanner.scanDeviceStorageFlow(computeHashes = false).toList()
+        val discoveredPaths = batches.flatten().map { it.path }.toSet()
+
+        assertTrue(batches.any { it.size == 100 })
+        assertTrue(expectedPaths.all { it in discoveredPaths })
+    }
+
+    @Test
+    fun scanDeviceStorage_skipsHiddenAndroidAndEmptyFiles(): Unit = runBlocking {
+        File(testRoot, ".hidden.txt").writeText("hidden")
+        File(testRoot, "Android").apply {
+            mkdirs()
+            resolve("private.txt").writeText("private")
+        }
+        File(testRoot, "empty.txt").createNewFile()
+        val visible = File(testRoot, "visible.txt").apply { writeText("visible") }
+
+        val discovered = scanner.scanDeviceStorage(computeHashes = false)
+            .filter { it.path.startsWith(testRoot.absolutePath) }
+
+        assertEquals(listOf(visible.absolutePath), discovered.map { it.path })
+    }
+
+    @Test
+    fun computeVideoDHash_invalidMediaFailsClosed(): Unit = runBlocking {
+        val invalid = File(testRoot, "invalid.mp4").apply { writeText("not a media stream") }
+
+        assertEquals("", scanner.computeVideoDHash(invalid))
+        assertEquals("", scanner.computeVideoDHash(File(testRoot, "missing.mp4")))
+    }
+
+    @Test
+    fun computeDocumentFingerprint_handlesEmptyUnsupportedAndLargeFiles(): Unit = runBlocking {
+        val empty = File(testRoot, "empty.txt").apply { createNewFile() }
+        val large = File(testRoot, "large.txt").apply { writeText("x".repeat(9_000)) }
+        val unsupported = File(testRoot, "archive.zip").apply { writeText("archive") }
+
+        assertEquals("", scanner.computeDocumentFingerprint(empty))
+        assertEquals("", scanner.computeDocumentFingerprint(unsupported))
+        assertEquals(16, scanner.computeDocumentFingerprint(large).length)
     }
 
     @Test
