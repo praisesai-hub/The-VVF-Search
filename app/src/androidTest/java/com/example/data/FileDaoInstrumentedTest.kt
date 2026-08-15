@@ -130,7 +130,7 @@ class FileDaoInstrumentedTest {
 
         val active = dao.getAllActiveFiles().first().filter { it.name.startsWith(fixturePrefix) }
         assertEquals(listOf(document.name, image.name, video.name), active.map { it.name })
-        assertEquals(listOf(document.name, image.name), dao.getRecentFiles().first().filter { it.name.startsWith(fixturePrefix) }.map { it.name })
+        assertEquals(listOf(document.name, image.name, video.name), dao.getRecentFiles().first().filter { it.name.startsWith(fixturePrefix) }.map { it.name })
         assertEquals(listOf(document.name, image.name), dao.getOcrScannedFiles().first().filter { it.name.startsWith(fixturePrefix) }.map { it.name })
         assertEquals(listOf(document.name), dao.searchSemanticFiles("invoice").first().filter { it.name.startsWith(fixturePrefix) }.map { it.name })
         assertEquals(listOf(document.name), dao.searchFiles("finance").first().filter { it.name.startsWith(fixturePrefix) }.map { it.name })
