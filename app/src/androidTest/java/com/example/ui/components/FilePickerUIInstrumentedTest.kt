@@ -18,11 +18,14 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Before
+import org.junit.FixMethodOrder
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.runners.MethodSorters
 
 @RunWith(AndroidJUnit4::class)
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class FilePickerUIInstrumentedTest {
 
     @get:Rule
@@ -45,7 +48,7 @@ class FilePickerUIInstrumentedTest {
         fixtureFile.delete()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun filePickerSheet_filtersAndProcessesSelectedLocalFile(): Unit {
         val selectedCount = AtomicInteger(0)
         var dismissed = false
@@ -78,7 +81,7 @@ class FilePickerUIInstrumentedTest {
         check(dismissed)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun filePickerSheet_clearSelectionDisablesProcessButton(): Unit {
         composeTestRule.setContent {
             VVFSmartManagerTheme {
@@ -99,7 +102,7 @@ class FilePickerUIInstrumentedTest {
         composeTestRule.onNodeWithTag("process_selected_files_btn").assertIsNotEnabled()
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun filePickerSheet_closeInvokesDismiss(): Unit {
         var dismissed = false
 
@@ -118,7 +121,7 @@ class FilePickerUIInstrumentedTest {
         check(dismissed)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun filePickerSheet_whenClosedRendersNothing(): Unit {
         composeTestRule.setContent {
             VVFSmartManagerTheme {
@@ -134,7 +137,7 @@ class FilePickerUIInstrumentedTest {
         composeTestRule.onAllNodesWithTag("picker_search_input").assertCountEquals(0)
     }
 
-    @Test
+    @Test(timeout = 60_000)
     fun pickableFileRowItem_togglesSelection(): Unit {
         var selected = false
         val file = PickableLocalFile(
