@@ -155,7 +155,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         fakeInterceptor.responseProvider = { request ->
             requestCount += 1
             if (requestCount == 1) {
-                assertTrue(request.url.toString().contains("name='remote.txt'"))
+                assertTrue(request.url.queryParameter("q")?.contains("name='remote.txt'") == true)
                 response(request, 200, "{\"files\":[{\"id\":\"remote-id\"}]}")
             } else {
                 assertTrue(request.url.toString().contains("/remote-id?alt=media"))
@@ -231,7 +231,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         val result = runBlocking { adapter.downloadFile("remote.txt", destination) }
         assertTrue(result is CloudSyncResult.Error)
         assertFalse((result as CloudSyncResult.Error).isRetryable)
-        assertTrue(result.message.contains("body was empty"))
+        assertTrue("Unexpected empty-body result: ${result.message}", result.message.contains("body was empty"))
         destination.delete()
     }
 
