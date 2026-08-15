@@ -31,6 +31,11 @@ class SmartManagerRepositoryInstrumentedTest {
         val updatedFiles = mutableListOf<FileItemEntity>()
         val activeFiles = mutableListOf<FileItemEntity>()
         val duplicateFiles = mutableListOf<FileItemEntity>()
+        val recycleBinFiles = mutableListOf<FileItemEntity>()
+        val cloudSyncItems = mutableListOf<CloudSyncItemEntity>()
+        val deletedFileIds = mutableListOf<Long>()
+        val deletedCloudSyncIds = mutableListOf<Long>()
+        val updatedSingleFiles = mutableListOf<FileItemEntity>()
         var onUpdate: (() -> Unit)? = null
 
         override suspend fun getUnhashedFiles(): List<FileItemEntity> = unhashedFiles.toList()
@@ -53,26 +58,39 @@ class SmartManagerRepositoryInstrumentedTest {
         override fun getCategoryStats(): Flow<List<CategoryStat>> = flowOf(emptyList())
         override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = emptyList()
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flow { emit(recycleBinFiles.toList()) }
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flow { emit(duplicateFiles.toList()) }
         override suspend fun insertFile(file: FileItemEntity): Long = file.id
         override suspend fun insertFiles(files: List<FileItemEntity>) = Unit
-        override suspend fun updateFile(file: FileItemEntity) = Unit
+        override suspend fun updateFile(file: FileItemEntity) {
+            updatedSingleFiles += file
+        }
         override suspend fun getFileByPath(path: String): FileItemEntity? = null
         override suspend fun insertFileDirect(file: FileItemEntity): Long = file.id
         override suspend fun getAllOrdinaryFilesDirect(): List<FileItemEntity> = emptyList()
         override suspend fun deleteFilesByIds(ids: List<Long>) = Unit
-        override suspend fun deleteFileById(id: Long) = Unit
-        override suspend fun emptyRecycleBin() = Unit
+        override suspend fun deleteFileById(id: Long) {
+            deletedFileIds += id
+        }
+        override suspend fun emptyRecycleBin() {
+            recycleBinFiles.clear()
+        }
         override suspend fun getVaultFileByName(name: String): FileItemEntity? = null
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = item.id
         override suspend fun deleteVaultItemById(id: Long) = Unit
-        override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(emptyList())
-        override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long = item.id
-        override suspend fun deleteCloudSyncItem(id: Long) = Unit
+        override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flow { emit(cloudSyncItems.toList()) }
+        override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
+            cloudSyncItems.removeAll { it.id == item.id }
+            cloudSyncItems += item
+            return item.id
+        }
+        override suspend fun deleteCloudSyncItem(id: Long) {
+            deletedCloudSyncIds += id
+            cloudSyncItems.removeAll { it.id == id }
+        }
         override suspend fun setPluginEnabled(id: String, enabled: Boolean) = Unit
         override suspend fun insertPlugins(plugins: List<PluginEntity>) = Unit
     }
@@ -211,6 +229,105 @@ class SmartManagerRepositoryInstrumentedTest {
         } finally {
             file.delete()
         }
+    }
+
+    @Test
+    fun recycleBinOperations_preservePhysicalDataAndDaoIntegrity(): Unit = runBlocking {
+        val source = File.createTempFile("vvf_repo_move_", ".txt", context.cacheDir)
+        source.writeText("repository move payload")
+        try {
+            val ordinary = document(30L, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
+            fakeDao.activeFiles += ordinary
+
+            repository.moveToRecycleBin(ordinary)
+
+            assertFalse(source.exists())
+            val recycled = fakeDao.updatedSingleFiles.single()
+            assertTrue(recycled.isRecycleBin)
+            assertEquals(source.absolutePath, recycled.originalPath)
+            assertTrue(File(recycled.path).exists())
+
+            fakeDao.updatedSingleFiles.clear()
+            fakeDao.activeFiles.clear()
+            fakeDao.activeFiles += recycled
+            repository.restoreFromRecycleBin(recycled)
+
+            assertTrue(source.exists())
+            val restored = fakeDao.updatedSingleFiles.single()
+            assertFalse(restored.isRecycleBin)
+            assertEquals(source.absolutePath, restored.path)
+            assertTrue(restored.originalPath.isBlank())
+        } finally {
+            source.delete()
+            fakeDao.updatedSingleFiles.map { it.path }.distinct().forEach { File(it).delete() }
+        }
+    }
+
+    @Test
+    fun deletePermanently_removesPhysicalFileAndDaoRecord(): Unit = runBlocking {
+        val source = File.createTempFile("vvf_repo_delete_", ".txt", context.cacheDir)
+        try {
+            val ordinary = document(31L, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
+            fakeDao.activeFiles += ordinary
+
+            repository.deletePermanently(ordinary)
+
+            assertFalse(source.exists())
+            assertEquals(listOf(31L), fakeDao.deletedFileIds)
+        } finally {
+            source.delete()
+        }
+    }
+
+    @Test
+    fun emptyRecycleBin_deletesPhysicalTrashBeforeDaoRows(): Unit = runBlocking {
+        val trash = File.createTempFile("vvf_repo_trash_", ".txt", context.cacheDir)
+        try {
+            trash.writeText("trash payload")
+            fakeDao.recycleBinFiles += document(32L, trash.name, isRecycleBin = true).copy(
+                path = trash.absolutePath,
+                sizeBytes = trash.length()
+            )
+
+            repository.emptyRecycleBin()
+
+            assertFalse(trash.exists())
+            assertTrue(fakeDao.recycleBinFiles.isEmpty())
+        } finally {
+            trash.delete()
+        }
+    }
+
+    @Test
+    fun cloudSyncGuards_rejectDisabledDuplicateMissingAndTerminalItems(): Unit = runBlocking {
+        val pending = CloudSyncItemEntity(
+            id = 40L,
+            provider = "GOOGLE_DRIVE",
+            fileName = "report.pdf",
+            filePath = "/docs/report.pdf",
+            fileSize = 10L,
+            status = "PENDING",
+            lastSyncedMs = 0L,
+            isCore = false
+        )
+        fakeDao.cloudSyncItems += pending
+        fakeDao.plugins += PluginEntity("gdrive_sync", "Google Drive", "CLOUD", "Sync", true, false)
+
+        assertFalse(repository.enqueueCloudSyncItem("GOOGLE_DRIVE", "report.pdf", 10L, "/docs/report.pdf"))
+        assertFalse(repository.retryCloudSyncItem(999L))
+        assertFalse(repository.cancelCloudSyncItem(999L))
+
+        fakeDao.plugins.clear()
+        fakeDao.plugins += PluginEntity("gdrive_sync", "Google Drive", "CLOUD", "Sync", false, false)
+        assertFalse(repository.enqueueCloudSyncItem("GOOGLE_DRIVE", "new.pdf", 5L, "/docs/new.pdf"))
+        assertFalse(repository.retryCloudSyncItem(40L))
+
+        fakeDao.plugins.clear()
+        fakeDao.plugins += PluginEntity("gdrive_sync", "Google Drive", "CLOUD", "Sync", true, false)
+        fakeDao.cloudSyncItems += pending.copy(id = 41L, status = "SYNCED")
+        assertFalse(repository.retryCloudSyncItem(41L))
+        assertFalse(repository.cancelCloudSyncItem(41L))
+        assertTrue(fakeDao.deletedCloudSyncIds.isEmpty())
     }
 
     @Test
