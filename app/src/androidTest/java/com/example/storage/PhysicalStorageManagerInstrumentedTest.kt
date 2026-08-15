@@ -97,4 +97,84 @@ class PhysicalStorageManagerInstrumentedTest {
             ).isFailure,
         )
     }
+
+    @Test
+    fun directoriesAndUriFallbacks_areDeterministic(): Unit {
+        assertTrue(PhysicalStorageManager.getRecycleBinDir(context).isDirectory)
+        assertTrue(PhysicalStorageManager.getVaultDir(context).isDirectory)
+        assertTrue(PhysicalStorageManager.getRestoredDir(context).isDirectory)
+
+        val fallbackUri = android.net.Uri.parse("content://vvf.test.provider/fallback name.txt")
+        assertEquals(
+            "source_file.txt",
+            PhysicalStorageManager.getFileNameFromVaultPathOrUri(
+                context,
+                "/tmp/ENC_123_source file.txt.vvf",
+                fallbackUri,
+            ),
+        )
+        assertEquals(
+            "original_name.pdf",
+            PhysicalStorageManager.getFileNameFromTrashPathOrUri(context, "456_original name.pdf", fallbackUri),
+        )
+        assertEquals("fallback_name.txt", PhysicalStorageManager.getFileNameFromContentUri(context, fallbackUri))
+        assertEquals(-1L, PhysicalStorageManager.getFileSizeFromContentUri(context, fallbackUri))
+    }
+
+    @Test
+    fun invalidNamesAndMissingEncryptionOperations_failClosed(): Unit {
+        val missing = File(testRoot, "missing-encryption.txt").absolutePath
+        assertTrue(PhysicalStorageManager.renameFile(context, missing, "../escape.txt").isFailure)
+        assertTrue(PhysicalStorageManager.renameFile(context, missing, "renamed.txt").isFailure)
+        assertTrue(
+            PhysicalStorageManager.encryptAndWipeSource(context, missing) { error("encrypt action must not run") }.isFailure,
+        )
+        assertTrue(
+            PhysicalStorageManager.decryptAndRestore(context, missing, File(testRoot, "restored.txt").absolutePath) {
+                error("decrypt action must not run")
+            }.isFailure,
+        )
+    }
+
+    @Test
+    fun keystoreStreamRoundTrip_removesEncryptedSource(): Unit {
+        val source = File(testRoot, "keystore-secret.txt").apply { writeText("keystore-backed device data") }
+        val manager = com.example.security.KeystoreVaultManager()
+
+        val encrypted = PhysicalStorageManager.encryptAndWipeSource(context, source.absolutePath, manager)
+        assertTrue(encrypted.isSuccess)
+        assertFalse(source.exists())
+        val vaultPath = encrypted.getOrThrow().vaultFilePath
+        assertTrue(File(vaultPath).exists())
+
+        val restoredPath = File(testRoot, "keystore-restored.txt").absolutePath
+        val restored = PhysicalStorageManager.decryptAndRestore(
+            context,
+            vaultPath,
+            restoredPath,
+            encrypted.getOrThrow().iv,
+            manager,
+        )
+        assertTrue(restored.isSuccess)
+        assertEquals("keystore-backed device data", File(restoredPath).readText())
+        assertFalse(File(vaultPath).exists())
+    }
+
+    @Test
+    fun emptySourceCanBeEncryptedAndRestored(): Unit {
+        val source = File(testRoot, "empty.txt").apply { writeBytes(byteArrayOf()) }
+        val encrypted = PhysicalStorageManager.encryptAndWipeSource(context, source.absolutePath) { _ ->
+            byteArrayOf(1, 2, 3) to byteArrayOf(4, 5, 6)
+        }
+        assertTrue(encrypted.isSuccess)
+        assertFalse(source.exists())
+
+        val restoredPath = File(testRoot, "empty-restored.txt").absolutePath
+        val restored = PhysicalStorageManager.decryptAndRestore(context, encrypted.getOrThrow().vaultFilePath, restoredPath) {
+            byteArrayOf()
+        }
+        assertTrue(restored.isSuccess)
+        assertTrue(File(restoredPath).exists())
+        assertEquals(0L, File(restoredPath).length())
+    }
 }
