@@ -4,12 +4,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -105,28 +108,35 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNodeWithText("VVF Smart Manager v2.0").assertIsDisplayed()
         composeTestRule.onNodeWithText("System Health: 94% Excellent").assertIsDisplayed()
         composeTestRule.onNodeWithText("Storage Used: 3.0 KB").assertIsDisplayed()
+        val dashboardList = composeTestRule.onNode(hasScrollToIndexAction())
+        dashboardList.performScrollToNode(hasText("Recent Storage Files"))
         composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
         composeTestRule.onNodeWithText("1.0 KB").assertIsDisplayed()
         composeTestRule.onNodeWithText("Tags: fixture").assertIsDisplayed()
 
+        dashboardList.performScrollToNode(hasText("View Report"))
         composeTestRule.onNodeWithText("View Report").performClick()
         composeTestRule.onNodeWithText("Golden Rule Audit Report").assertIsDisplayed()
         composeTestRule.onNodeWithText("Hide").performClick()
         composeTestRule.onAllNodesWithText("Golden Rule Audit Report").assertCountEquals(0)
 
+        dashboardList.performScrollToNode(hasText("Pick Files"))
         composeTestRule.onNodeWithText("Pick Files").performClick()
         composeTestRule.onNodeWithTag("picker_search_input").assertIsDisplayed()
         composeTestRule.onNodeWithTag("file_picker_close_btn").performClick()
 
+        dashboardList.performScrollToNode(hasText("Clean Dupes"))
         composeTestRule.onNodeWithText("Clean Dupes").performClick()
+        dashboardList.performScrollToNode(hasText("Secure Vault"))
         composeTestRule.onNodeWithText("Secure Vault").performClick()
+        dashboardList.performScrollToNode(hasText("Cloud Sync"))
         composeTestRule.onNodeWithText("Cloud Sync").performClick()
-        composeTestRule.onNodeWithText("Images").performClick()
-        composeTestRule.onNodeWithText("Documents").performClick()
-        composeTestRule.onNodeWithText("Audio Files").performClick()
-        composeTestRule.onNodeWithText("Videos").performClick()
-        composeTestRule.onNodeWithText("Archives & Downloads").performClick()
+        listOf("Images", "Documents", "Audio Files", "Videos", "Archives & Downloads").forEach { label ->
+            dashboardList.performScrollToNode(hasText(label))
+            composeTestRule.onNodeWithText(label).performClick()
+        }
+        dashboardList.performScrollToNode(hasText("View All"))
         composeTestRule.onNodeWithText("View All").performClick()
 
         assertTrue(navigatedTabs.contains(1))
@@ -172,6 +182,7 @@ class DashboardScreenInstrumentedTest {
             }
         }
 
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(file.name))
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
         composeTestRule.onNodeWithText("Add Custom Tag").performClick()
         composeTestRule.onNodeWithText("Tag name (e.g. tax, work)").performTextInput("dashboard")
@@ -233,6 +244,7 @@ class DashboardScreenInstrumentedTest {
             }
         }
 
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(file.name))
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
         composeTestRule.onNodeWithText("Encrypt to Vault").performClick()
         composeTestRule.onNodeWithText("Encrypt & Best-Effort Wipe").assertIsDisplayed()
