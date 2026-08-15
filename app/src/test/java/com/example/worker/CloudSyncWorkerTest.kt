@@ -31,8 +31,10 @@ import java.io.IOException
 
 class FakeFileDao : FileDao {
     val cloudSyncItems = mutableListOf<CloudSyncItemEntity>()
+    var exceptionOnCloudSyncItems: Exception? = null
 
     override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> {
+        exceptionOnCloudSyncItems?.let { throw it }
         return flowOf(cloudSyncItems)
     }
 
@@ -112,8 +114,10 @@ class FakeCloudProviderAdapter : CloudProviderAdapter {
     var isRetryable: Boolean = true
     var returnNotSupported: Boolean = false
     var exceptionToThrow: Exception? = null
+    val resultByRemotePath = mutableMapOf<String, CloudSyncResult>()
 
     override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
+        resultByRemotePath[remotePath]?.let { return it }
         exceptionToThrow?.let { throw it }
         return when {
             returnNotSupported -> CloudSyncResult.NotSupported
@@ -375,6 +379,95 @@ class CloudSyncWorkerTest {
             "NOT_SUPPORTED",
             fakeDao.getCloudSyncItems().first().find { it.id == 107L }?.status
         )
+    }
+
+    private fun createTempSyncFile(prefix: String, content: String): File =
+        File.createTempFile(prefix, ".txt").also {
+            it.writeText(content)
+            it.deleteOnExit()
+        }
+
+    private suspend fun insertSyncItem(id: Long, provider: String, file: File, status: String): Unit {
+        fakeDao.insertCloudSyncItem(
+            CloudSyncItemEntity(
+                id,
+                provider,
+                file.name,
+                file.absolutePath,
+                file.length(),
+                status
+            )
+        )
+    }
+
+    @Test
+    fun testMixedStatuses_reprocessesFailedAndUploadingOnlyForEnabledProvider() = runBlocking {
+        val failedFile = createTempSyncFile("sync_mixed_failed", "failed item")
+        val uploadingFile = createTempSyncFile("sync_mixed_uploading", "uploading item")
+        val alreadySyncedFile = createTempSyncFile("sync_mixed_synced", "synced item")
+        val disabledProviderFile = createTempSyncFile("sync_mixed_disabled", "disabled provider item")
+        insertSyncItem(201L, "GOOGLE_DRIVE", failedFile, "FAILED")
+        insertSyncItem(202L, "GOOGLE_DRIVE", uploadingFile, "UPLOADING")
+        insertSyncItem(203L, "GOOGLE_DRIVE", alreadySyncedFile, "SYNCED")
+        insertSyncItem(204L, "DROPBOX", disabledProviderFile, "PENDING")
+
+        val result = createWorker(runAttemptCount = 0).doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        val items = fakeDao.getCloudSyncItems().first().associateBy { it.id }
+        assertEquals("SYNCED", items.getValue(201L).status)
+        assertEquals("SYNCED", items.getValue(202L).status)
+        assertEquals("SYNCED", items.getValue(203L).status)
+        assertEquals("PENDING", items.getValue(204L).status)
+    }
+
+    @Test
+    fun testMixedPermanentAndRetryableFailures_retryThenStopsAtMaxAttempts() = runBlocking {
+        val permanentFile = File.createTempFile("sync_mixed_permanent", ".txt").also {
+            it.writeText("permanent failure")
+            it.deleteOnExit()
+        }
+        val retryableFile = File.createTempFile("sync_mixed_retryable", ".txt").also {
+            it.writeText("retryable failure")
+            it.deleteOnExit()
+        }
+        fakeDao.insertCloudSyncItem(
+            CloudSyncItemEntity(
+                205L,
+                "GOOGLE_DRIVE",
+                permanentFile.name,
+                permanentFile.absolutePath,
+                permanentFile.length(),
+                "PENDING"
+            )
+        )
+        fakeDao.insertCloudSyncItem(
+            CloudSyncItemEntity(
+                206L,
+                "GOOGLE_DRIVE",
+                retryableFile.name,
+                retryableFile.absolutePath,
+                retryableFile.length(),
+                "PENDING"
+            )
+        )
+        fakeAdapter.resultByRemotePath[permanentFile.name] = CloudSyncResult.Error("permanent", isRetryable = false)
+        fakeAdapter.resultByRemotePath[retryableFile.name] = CloudSyncResult.Error("temporary", isRetryable = true)
+
+        assertEquals(ListenableWorker.Result.retry(), createWorker(runAttemptCount = 0).doWork())
+        assertEquals(ListenableWorker.Result.failure(), createWorker(runAttemptCount = 3).doWork())
+        fakeDao.getCloudSyncItems().first().forEach { item ->
+            if (item.id == 205L || item.id == 206L) assertEquals("FAILED", item.status)
+        }
+    }
+
+    @Test
+    fun testFatalDaoFailure_returnsFailure() = runBlocking {
+        fakeDao.exceptionOnCloudSyncItems = IllegalStateException("database unavailable")
+
+        val result = createWorker(runAttemptCount = 0).doWork()
+
+        assertEquals(ListenableWorker.Result.failure(), result)
     }
 
     @Test
