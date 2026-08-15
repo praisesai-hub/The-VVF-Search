@@ -700,6 +700,7 @@ fun FileManagerItemRow(modifier: Modifier = Modifier,
                     value = tagText,
                     onValueChange = { tagText = it },
                     label = { Text(stringResource(R.string.tag_name_e_g_urgent_personal)) },
+                    modifier = Modifier.testTag("file_tag_input"),
                     singleLine = true
                 )
             },
