@@ -56,10 +56,12 @@ class AiDuplicatesScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
         composeTestRule.onNodeWithText("1 files selected for deletion").assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Exact hashes").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("exact-a.txt").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Visual matches").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("visual-a.jpg").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (1 sets)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Exact hashes").assertIsDisplayed()
+        composeTestRule.onNodeWithText("exact-a.txt").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (1 sets)").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Visual matches").assertIsDisplayed()
+        composeTestRule.onNodeWithText("visual-a.jpg").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onNodeWithText("OCR Indexed Documents (1)").assertIsDisplayed()
@@ -90,8 +92,11 @@ class AiDuplicatesScreenInstrumentedTest {
             }
         }
 
+        composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (0 sets)").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("No exact hash duplicate files detected.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (0 sets)").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("No visual duplicates matching 80%").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Step 6: AI Semantic Vector Matches (0 sets)").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertIsDisplayed()
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onNodeWithText("OCR Indexed Documents (0)").assertIsDisplayed()
