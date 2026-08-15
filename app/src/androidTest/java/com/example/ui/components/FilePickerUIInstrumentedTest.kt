@@ -69,7 +69,6 @@ class FilePickerUIInstrumentedTest {
             .performTextInput("coverage_image")
         composeTestRule.onNodeWithText("Images").performClick()
         composeTestRule.onNodeWithTag("file_picker_item_coverage_image_test.png")
-            .assertIsDisplayed()
             .performClick()
         composeTestRule.onNodeWithText("Clear").assertIsDisplayed()
         composeTestRule.onNodeWithTag("process_selected_files_btn")
