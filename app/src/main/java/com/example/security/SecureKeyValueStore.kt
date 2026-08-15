@@ -32,11 +32,12 @@ class SharedPreferencesKeyValueStore(
         preferences.getString(key, defaultValue)
 
     override fun commit(values: Map<String, String?>): Boolean {
-        val editor = preferences.edit()
+        val updates = mutableMapOf<String, String>()
+        val removals = mutableListOf<String>()
         values.forEach { (key, value) ->
-            if (value == null) editor.remove(key) else editor.putString(key, value)
+            if (value == null) removals += key else updates[key] = value
         }
-        return editor.commit()
+        return SharedPreferencesCommitter.commit(preferences, updates, removals)
     }
 }
 
