@@ -4,11 +4,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.VVFApplication
@@ -56,11 +58,18 @@ class AiDuplicatesScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
         composeTestRule.onNodeWithText("1 files selected for deletion").assertIsDisplayed()
 
+        val duplicateList = composeTestRule.onNode(hasScrollToIndexAction())
+        duplicateList.performScrollToNode(hasText("Level 1-2: Exact Hash Duplicates (1 sets)"))
         composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (1 sets)").assertExists()
+        duplicateList.performScrollToNode(hasText("Exact hashes"))
         composeTestRule.onNodeWithText("Exact hashes").assertExists()
+        duplicateList.performScrollToNode(hasText("exact-a.txt"))
         composeTestRule.onNodeWithText("exact-a.txt").assertExists()
+        duplicateList.performScrollToNode(hasText("Level 3-4: Visual & Semantic AI Duplicates (1 sets)"))
         composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (1 sets)").assertExists()
+        duplicateList.performScrollToNode(hasText("Visual matches"))
         composeTestRule.onNodeWithText("Visual matches").assertExists()
+        duplicateList.performScrollToNode(hasText("visual-a.jpg"))
         composeTestRule.onNodeWithText("visual-a.jpg").assertExists()
 
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
@@ -92,11 +101,18 @@ class AiDuplicatesScreenInstrumentedTest {
             }
         }
 
+        val duplicateList = composeTestRule.onNode(hasScrollToIndexAction())
+        duplicateList.performScrollToNode(hasText("Level 1-2: Exact Hash Duplicates (0 sets)"))
         composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (0 sets)").assertExists()
+        duplicateList.performScrollToNode(hasText("No exact hash duplicate files detected."))
         composeTestRule.onNodeWithText("No exact hash duplicate files detected.").assertExists()
+        duplicateList.performScrollToNode(hasText("Level 3-4: Visual & Semantic AI Duplicates (0 sets)"))
         composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (0 sets)").assertExists()
+        duplicateList.performScrollToNode(hasText("No visual duplicates matching 80%"))
         composeTestRule.onNodeWithText("No visual duplicates matching 80%").assertExists()
+        duplicateList.performScrollToNode(hasText("Step 6: AI Semantic Vector Matches (0 sets)"))
         composeTestRule.onNodeWithText("Step 6: AI Semantic Vector Matches (0 sets)").assertExists()
+        duplicateList.performScrollToNode(hasText("Semantic Search — Coming Soon (model not bundled)"))
         composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertExists()
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onNodeWithText("OCR Indexed Documents (0)").assertIsDisplayed()
