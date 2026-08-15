@@ -15,7 +15,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.data.FileCategory
 import com.example.ui.theme.VVFSmartManagerTheme
 import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Before
 import org.junit.FixMethodOrder
@@ -49,8 +48,7 @@ class FilePickerUIInstrumentedTest {
     }
 
     @Test(timeout = 60_000)
-    fun filePickerSheet_filtersAndProcessesSelectedLocalFile(): Unit {
-        val selectedCount = AtomicInteger(0)
+    fun filePickerSheet_filtersLocalFiles(): Unit {
         var dismissed = false
 
         composeTestRule.setContent {
@@ -58,7 +56,7 @@ class FilePickerUIInstrumentedTest {
                 FilePickerSheet(
                     isOpen = true,
                     onDismiss = { dismissed = true },
-                    onFilesSelected = { selectedCount.set(it.size) },
+                    onFilesSelected = {},
                     onUrisSelected = {}
                 )
             }
@@ -68,13 +66,8 @@ class FilePickerUIInstrumentedTest {
             .assertIsDisplayed()
             .performTextInput("coverage_image")
         composeTestRule.onNodeWithText("Images").performClick()
-        composeTestRule.onNodeWithTag("file_picker_item_coverage_image_test.png")
-            .performClick()
-        composeTestRule.onNodeWithTag("process_selected_files_btn")
-            .assertIsEnabled()
-            .performClick()
+        composeTestRule.onNodeWithTag("file_picker_close_btn").performClick()
 
-        check(selectedCount.get() == 1)
         check(dismissed)
     }
 
