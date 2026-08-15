@@ -105,10 +105,22 @@ object PhysicalStorageManager {
             return try {
                 val uri = oldPath.toUri()
                 val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
-                if (doc != null && doc.exists()) {
-                    if (doc.renameTo(newName)) Result.success(doc.uri.toString())
-                    else Result.failure(java.io.IOException("SAF DocumentFile rename failed for $oldPath"))
-                } else Result.failure(java.io.FileNotFoundException("Document not found for URI $oldPath"))
+                val renamedByDocument = try { doc?.exists() == true && doc.renameTo(newName) } catch (e: Exception) {
+                    Log.w(TAG, "SAF DocumentFile rename failed for $oldPath: ${e.message}")
+                    false
+                }
+                if (renamedByDocument) {
+                    Result.success(uri.toString())
+                } else {
+                    val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, newName) }
+                    if (context.contentResolver.update(uri, values, null, null) > 0) {
+                        Result.success(uri.toString())
+                    } else if (doc == null || !doc.exists()) {
+                        Result.failure(java.io.FileNotFoundException("Document not found for URI $oldPath"))
+                    } else {
+                        Result.failure(java.io.IOException("SAF and content resolver rename failed for $oldPath"))
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error renaming content URI $oldPath: ${e.message}", e)
                 Result.failure(e)
@@ -178,8 +190,7 @@ object PhysicalStorageManager {
             return try {
                 val copied = context.contentResolver.openInputStream(uri)?.use { input -> trashFile.outputStream().use { output -> input.copyTo(output) }; true } ?: false
                 if (!copied) { try { trashFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to copy content URI to trash: $path")) }
-                val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
-                val originalDeleted = doc?.delete() ?: (context.contentResolver.delete(uri, null, null) > 0)
+                val originalDeleted = deleteContentUri(context, uri)
                 if (originalDeleted) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) }
                 else { try { trashFile.delete() } catch (_: Exception) {}; Result.failure(java.io.IOException("Failed to delete original content URI after trash copy: $path")) }
             } catch (e: Exception) { try { trashFile.delete() } catch (_: Exception) {}; Result.failure(e) }
@@ -338,8 +349,7 @@ object PhysicalStorageManager {
                 val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${docName}.vvf")
                 try { FileOutputStream(vaultFile).use { it.write(encryptedBytes) } } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
                 if (!vaultFile.exists() || vaultFile.length() == 0L) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Vault file creation failed.")) }
-                val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
-                val originalDeleted = doc?.delete() ?: (context.contentResolver.delete(uri, null, null) > 0)
+                val originalDeleted = deleteContentUri(context, uri)
                 if (originalDeleted) { notifyMediaStoreFileDeleted(context, srcPath); Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv)) }
                 else { try { vaultFile.delete() } catch (_: Exception) {}; Result.failure(java.io.IOException("Failed to delete original content URI after vault encryption: $srcPath")) }
             } catch (e: Exception) { Log.e(TAG, "Error encrypting content URI $srcPath: ${e.message}", e); Result.failure(e) }
@@ -379,8 +389,7 @@ object PhysicalStorageManager {
                     }
                 } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
                 if (!vaultFile.exists() || vaultFile.length() == 0L) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Vault file creation failed or empty.")) }
-                val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
-                val originalDeleted = doc?.delete() ?: (context.contentResolver.delete(uri, null, null) > 0)
+                val originalDeleted = deleteContentUri(context, uri)
                 if (originalDeleted) { notifyMediaStoreFileDeleted(context, srcPath); Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv)) }
                 else { try { vaultFile.delete() } catch (_: Exception) {}; Result.failure(java.io.IOException("Failed to delete original content URI after vault encryption: $srcPath")) }
             } catch (e: Exception) { Log.e(TAG, "Error encrypting content URI $srcPath: ${e.message}", e); Result.failure(e) }
@@ -436,6 +445,24 @@ object PhysicalStorageManager {
             !file.exists()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to securely overwrite file contents: ${e.message}", e)
+            false
+        }
+    }
+
+    private fun deleteContentUri(context: Context, uri: Uri): Boolean {
+        val doc = try {
+            DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not open DocumentFile for $uri: ${e.message}")
+            null
+        }
+        val deletedByDocument = try { doc?.delete() == true } catch (e: Exception) {
+            Log.w(TAG, "DocumentFile delete failed for $uri: ${e.message}")
+            false
+        }
+        if (deletedByDocument) return true
+        return try { context.contentResolver.delete(uri, null, null) > 0 } catch (e: Exception) {
+            Log.w(TAG, "Content resolver delete failed for $uri: ${e.message}")
             false
         }
     }
