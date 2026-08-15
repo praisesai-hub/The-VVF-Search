@@ -7,6 +7,7 @@ import android.content.Context
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
+import com.example.data.FileCategory
 import com.example.data.SmartManagerRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -154,6 +155,57 @@ class MainViewModelTest {
         viewModel.selectTab(2)
 
         assertEquals(2, viewModel.selectedTabIndex.value)
+    }
+
+    @Test
+    fun selectCategory_updatesCategoryAndSupportsClearing() {
+        viewModel.selectCategory(FileCategory.IMAGES)
+
+        assertEquals(FileCategory.IMAGES, viewModel.selectedCategory.value)
+
+        viewModel.selectCategory(null)
+
+        assertNull(viewModel.selectedCategory.value)
+    }
+
+    @Test
+    fun semanticSettings_updateStateAndExposeRepositoryAvailability() {
+        viewModel.setSemanticQuery("receipt from last month")
+        viewModel.setSimilarityThreshold(92.5f)
+
+        assertEquals("receipt from last month", viewModel.semanticQuery.value)
+        assertEquals(92.5f, viewModel.similarityThreshold.value)
+        assertFalse(viewModel.isSemanticSearchAvailable)
+    }
+
+    @Test
+    fun autoCleanDuplicatesSetting_updatesStateAndPersists() {
+        viewModel.setAutoCleanDuplicatesBg(true)
+
+        assertTrue(viewModel.autoCleanDuplicatesBg.value)
+        assertTrue(
+            viewModel.getApplication<Application>()
+                .getSharedPreferences("vvf_app_settings", Context.MODE_PRIVATE)
+                .getBoolean("auto_clean_duplicates_bg", false)
+        )
+
+        viewModel.setAutoCleanDuplicatesBg(false)
+
+        assertFalse(viewModel.autoCleanDuplicatesBg.value)
+    }
+
+    @Test
+    fun googleSignIn_isFailClosedAndGlobalErrorCanBeCleared() {
+        viewModel.signInToGoogle("user@example.com", "User")
+
+        assertEquals(
+            "Google sign-in requires the real OAuth authorization flow; local/mock sign-in is disabled.",
+            viewModel.globalError.value
+        )
+
+        viewModel.clearGlobalError()
+
+        assertNull(viewModel.globalError.value)
     }
 
     @Test
