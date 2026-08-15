@@ -1,11 +1,17 @@
 package com.example.storage
 
+import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -176,5 +182,132 @@ class PhysicalStorageManagerInstrumentedTest {
         assertTrue(restored.isSuccess)
         assertTrue(File(restoredPath).exists())
         assertEquals(0L, File(restoredPath).length())
+    }
+
+    @Test
+    fun contentUriRenameAndDelete_useSafDocumentOperations() {
+        val sourceUri = insertMediaFile("vvf-rename-${System.nanoTime()}.txt")
+        try {
+            context.contentResolver.openOutputStream(sourceUri)!!.use { it.write("rename me".toByteArray()) }
+
+            val renamed = PhysicalStorageManager.renameFile(context, sourceUri.toString(), "vvf-renamed-${System.nanoTime()}.txt")
+
+            assertTrue(renamed.isSuccess)
+            assertTrue(PhysicalStorageManager.deleteFile(context, renamed.getOrThrow()))
+        } finally {
+            context.contentResolver.delete(sourceUri, null, null)
+        }
+    }
+
+    @Test
+    fun contentUriTrash_copiesDataAndDeletesOriginal() {
+        val sourceBytes = "content provider trash".toByteArray()
+        val sourceUri = insertMediaFile("vvf-trash-${System.nanoTime()}.txt")
+        var trashPath: String? = null
+        try {
+            context.contentResolver.openOutputStream(sourceUri)!!.use { it.write(sourceBytes) }
+
+            val moved = PhysicalStorageManager.moveToTrash(context, sourceUri.toString())
+
+            assertTrue(moved.isSuccess)
+            trashPath = moved.getOrThrow()
+            assertArrayEquals(sourceBytes, File(trashPath).readBytes())
+            assertTrue(PhysicalStorageManager.deleteFile(context, trashPath))
+        } finally {
+            trashPath?.let { File(it).delete() }
+            context.contentResolver.delete(sourceUri, null, null)
+        }
+    }
+
+    @Test
+    fun contentUriEncryptionAndDecryption_preserveDataAndDeleteVaultSource() {
+        val sourceBytes = "content-provider secret".toByteArray()
+        val sourceUri = insertMediaFile("vvf-source-${System.nanoTime()}.txt")
+        val destinationUri = insertMediaFile("vvf-destination-${System.nanoTime()}.txt")
+        var vaultPath: String? = null
+        try {
+            context.contentResolver.openOutputStream(sourceUri)!!.use { it.write(sourceBytes) }
+            assertEquals(sourceBytes.size.toLong(), PhysicalStorageManager.getFileSizeFromContentUri(context, sourceUri))
+            assertNotNull(PhysicalStorageManager.getFileNameFromContentUri(context, sourceUri))
+
+            val encrypted = PhysicalStorageManager.encryptAndWipeSource(context, sourceUri.toString()) { bytes ->
+                assertArrayEquals(sourceBytes, bytes)
+                byteArrayOf(8, 7, 6, 5) to byteArrayOf(1, 2, 3, 4)
+            }
+            assertTrue(encrypted.isSuccess)
+            vaultPath = encrypted.getOrThrow().vaultFilePath
+            assertTrue(File(vaultPath).exists())
+
+            val restored = PhysicalStorageManager.decryptAndRestore(
+                context,
+                vaultPath,
+                destinationUri.toString(),
+            ) { encryptedBytes ->
+                assertArrayEquals(byteArrayOf(8, 7, 6, 5), encryptedBytes)
+                sourceBytes
+            }
+            assertTrue(restored.isSuccess)
+            assertEquals(destinationUri.toString(), restored.getOrThrow())
+            context.contentResolver.openInputStream(destinationUri)!!.use { input ->
+                assertArrayEquals(sourceBytes, input.readBytes())
+            }
+            assertFalse(File(vaultPath).exists())
+            assertTrue(PhysicalStorageManager.deleteFile(context, destinationUri.toString()))
+        } finally {
+            vaultPath?.let { File(it).delete() }
+            context.contentResolver.delete(sourceUri, null, null)
+            context.contentResolver.delete(destinationUri, null, null)
+        }
+    }
+
+    @Test
+    fun contentUriRestore_fallsBackToRestoredDirectoryWhenWriteIsUnavailable() {
+        val trashFile = File(testRoot, "456_original-content.txt").apply { writeText("restored content") }
+        val unavailableUri = Uri.parse("content://vvf.test.provider/unavailable-content.txt")
+
+        val restored = PhysicalStorageManager.restoreFromTrash(context, trashFile.absolutePath, unavailableUri.toString())
+
+        assertTrue(restored.isSuccess)
+        val restoredFile = File(restored.getOrThrow())
+        assertTrue(restoredFile.exists())
+        assertEquals("restored content", restoredFile.readText())
+        assertFalse(trashFile.exists())
+        restoredFile.delete()
+    }
+
+    @Test
+    fun sizeGuards_failClosedWithoutDeletingSourceOrVault() {
+        val oversizedSource = File(testRoot, "oversized-source.bin").apply {
+            java.io.RandomAccessFile(this, "rw").use { it.setLength(50 * 1024 * 1024L + 1L) }
+        }
+        val encryption = PhysicalStorageManager.encryptAndWipeSource(context, oversizedSource.absolutePath) {
+            error("oversized source must be rejected before encryption")
+        }
+        assertTrue(encryption.isFailure)
+        assertTrue(oversizedSource.exists())
+
+        val oversizedVault = File(testRoot, "oversized-vault.vvf").apply {
+            java.io.RandomAccessFile(this, "rw").use { it.setLength(50 * 1024 * 1024L + 1L) }
+        }
+        val restoration = PhysicalStorageManager.decryptAndRestore(
+            context,
+            oversizedVault.absolutePath,
+            File(testRoot, "guarded-restore.txt").absolutePath,
+        ) {
+            error("oversized vault must be rejected before decryption")
+        }
+        assertTrue(restoration.isFailure)
+        assertTrue(oversizedVault.exists())
+    }
+
+    private fun insertMediaFile(displayName: String): Uri {
+        val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/VVF-Test")
+        }
+        return context.contentResolver.insert(collection, values)
+            ?: throw AssertionError("MediaStore test row could not be created")
     }
 }
