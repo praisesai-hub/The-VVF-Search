@@ -99,17 +99,35 @@ class StorageScannerInstrumentedTest {
     @Test
     fun scanDeviceStorage_skipsHiddenAndroidAndEmptyFiles(): Unit = runBlocking {
         File(testRoot, ".hidden.txt").writeText("hidden")
-        File(testRoot, "Android").apply {
+        File(testRoot, "nested").apply {
             mkdirs()
             resolve("private.txt").writeText("private")
         }
         File(testRoot, "empty.txt").createNewFile()
         val visible = File(testRoot, "visible.txt").apply { writeText("visible") }
+        val androidRoot = File(context.cacheDir, "Android")
+        val createdAndroidRoot = !androidRoot.exists()
+        if (createdAndroidRoot) assertTrue(androidRoot.mkdirs())
+        assertTrue(androidRoot.isDirectory)
+        val excludedAndroidFile = File(androidRoot, "scanner-${System.nanoTime()}.txt").apply {
+            writeText("excluded")
+        }
 
-        val discovered = scanner.scanDeviceStorage(computeHashes = false)
-            .filter { it.path.startsWith(testRoot.absolutePath) }
+        try {
+            val discovered = scanner.scanDeviceStorage(computeHashes = false)
+            val testRootPaths = discovered
+                .filter { it.path.startsWith(testRoot.absolutePath) }
+                .map { it.path }
 
-        assertEquals(listOf(visible.absolutePath), discovered.map { it.path })
+            assertEquals(
+                setOf(visible.absolutePath, File(testRoot, "nested/private.txt").absolutePath),
+                testRootPaths.toSet(),
+            )
+            assertFalse(discovered.any { it.path == excludedAndroidFile.absolutePath })
+        } finally {
+            assertTrue(excludedAndroidFile.delete())
+            if (createdAndroidRoot) assertTrue(androidRoot.delete())
+        }
     }
 
     @Test
