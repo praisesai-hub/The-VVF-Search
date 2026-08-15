@@ -114,6 +114,8 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.biometric)
   implementation(libs.androidx.security.crypto)
+  // Patch the Gson version brought by the legacy security-crypto migration reader.
+  implementation(libs.gson)
   implementation(libs.androidx.documentfile)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
