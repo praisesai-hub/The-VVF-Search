@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -9,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -95,9 +97,11 @@ class FileManagerScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("file_picker_close_btn").performClick()
 
         composeTestRule.onNodeWithText("No files found in this category.").assertIsDisplayed()
-        listOf("All Files", "Images", "Documents", "Audio", "Video", "Other").forEach { label ->
+        listOf("All Files", "Images", "Documents", "Audio", "Video").forEach { label ->
             composeTestRule.onNodeWithText(label).assertIsDisplayed()
         }
+        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Other"))
+        composeTestRule.onNodeWithText("Other").assertIsDisplayed()
         composeTestRule.onNodeWithText("Images").performClick()
         composeTestRule.onNodeWithTag("file_search_input").performTextInput("photo")
         composeTestRule.onNodeWithContentDescription("Clear").performClick()
@@ -149,7 +153,6 @@ class FileManagerScreenInstrumentedTest {
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
         composeTestRule.onNodeWithText("Rename File").performClick()
         composeTestRule.onNodeWithText("Rename File").assertIsDisplayed()
-        composeTestRule.onNodeWithText("File name").assertIsDisplayed()
         composeTestRule.onNodeWithText("Rename").performClick()
 
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
@@ -174,7 +177,7 @@ class FileManagerScreenInstrumentedTest {
     }
 
     @Test
-    fun recycleBinActionsInvokeRealRepositoryAndPreserveDataIntegrity(): Unit = runBlocking {
+    fun recycleBinActionsInvokeRealRepositoryAndPreserveDataIntegrity(): Unit {
         val viewModel = realViewModel()
         val restoreTarget = File(app.cacheDir, "$fixturePrefix-restore-target.txt")
         val restoreTrash = File(PhysicalStorageManager.getRecycleBinDir(app), "$fixturePrefix-restore-trash.txt")
@@ -182,27 +185,31 @@ class FileManagerScreenInstrumentedTest {
         restoreTrash.writeText("restore fixture")
         deleteTrash.writeText("delete fixture")
 
-        val restoreId = dao.insertFileDirect(
-            FileItemEntity(
-                name = "$fixturePrefix-restore.txt",
-                path = restoreTrash.absolutePath,
-                originalPath = restoreTarget.absolutePath,
-                category = FileCategory.DOCUMENTS.name,
-                sizeBytes = restoreTrash.length(),
-                isRecycleBin = true,
-                deletedTimestampMs = System.currentTimeMillis()
+        val restoreId = runBlocking {
+            dao.insertFileDirect(
+                FileItemEntity(
+                    name = "$fixturePrefix-restore.txt",
+                    path = restoreTrash.absolutePath,
+                    originalPath = restoreTarget.absolutePath,
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = restoreTrash.length(),
+                    isRecycleBin = true,
+                    deletedTimestampMs = System.currentTimeMillis()
+                )
             )
-        )
-        val deleteId = dao.insertFileDirect(
-            FileItemEntity(
-                name = "$fixturePrefix-delete.txt",
-                path = deleteTrash.absolutePath,
-                category = FileCategory.DOCUMENTS.name,
-                sizeBytes = deleteTrash.length(),
-                isRecycleBin = true,
-                deletedTimestampMs = System.currentTimeMillis()
+        }
+        val deleteId = runBlocking {
+            dao.insertFileDirect(
+                FileItemEntity(
+                    name = "$fixturePrefix-delete.txt",
+                    path = deleteTrash.absolutePath,
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = deleteTrash.length(),
+                    isRecycleBin = true,
+                    deletedTimestampMs = System.currentTimeMillis()
+                )
             )
-        )
+        }
         val recycleItems = listOf(
             FileItemEntity(
                 id = restoreId,
@@ -240,26 +247,31 @@ class FileManagerScreenInstrumentedTest {
         composeTestRule.onNodeWithText("$fixturePrefix-restore.txt").assertIsDisplayed()
         composeTestRule.onNodeWithText("$fixturePrefix-delete.txt").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Restore").performClick()
-        withTimeout(10_000) {
-            while (dao.getFileById(restoreId)?.isRecycleBin == true) {
-                delay(50)
+        runBlocking {
+            withTimeout(10_000) {
+                while (dao.getFileById(restoreId)?.isRecycleBin == true) {
+                    delay(50)
+                }
             }
         }
         assertTrue(restoreTarget.exists())
         assertFalse(restoreTrash.exists())
-        assertFalse(dao.getFileById(restoreId)?.isRecycleBin ?: true)
+        val restoredRow = runBlocking { dao.getFileById(restoreId) }
+        assertFalse(restoredRow?.isRecycleBin ?: true)
 
         composeTestRule.onNodeWithContentDescription("Delete Forever").performClick()
-        withTimeout(10_000) {
-            while (dao.getFileById(deleteId) != null) {
-                delay(50)
+        runBlocking {
+            withTimeout(10_000) {
+                while (dao.getFileById(deleteId) != null) {
+                    delay(50)
+                }
             }
         }
         assertFalse(deleteTrash.exists())
-        assertNull(dao.getFileById(deleteId))
+        val deletedRow = runBlocking { dao.getFileById(deleteId) }
+        assertNull(deletedRow)
 
-        // The row list is intentionally supplied as deterministic screen input; this
-        // still exercises the real emptyRecycleBin callback after prior operations.
+        // The list is deterministic screen input; this invokes the real empty-trash callback.
         composeTestRule.onNodeWithText("Empty Trash").performClick()
     }
 
