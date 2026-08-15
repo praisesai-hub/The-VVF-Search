@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
@@ -81,13 +83,14 @@ class FileManagerScreenInstrumentedTest {
         viewModel.savePersistedFolderUri(persistedFolder)
 
         composeTestRule.setContent {
+            val liveSearchQuery by viewModel.searchQuery.collectAsState()
             VVFSmartManagerTheme {
                 FileManagerScreen(
                     viewModel = viewModel,
                     files = emptyList(),
                     recycleBinFiles = emptyList(),
                     selectedCategory = null,
-                    searchQuery = ""
+                    searchQuery = liveSearchQuery
                 )
             }
         }
