@@ -1,0 +1,250 @@
+package com.example.ui.screens
+
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.VVFApplication
+import com.example.data.AppDatabase
+import com.example.data.CategoryStat
+import com.example.data.FileCategory
+import com.example.data.FileItemEntity
+import com.example.storage.PhysicalStorageManager
+import com.example.ui.MainViewModel
+import com.example.ui.theme.VVFSmartManagerTheme
+import java.io.File
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.After
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class DashboardScreenInstrumentedTest {
+
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    private lateinit var app: VVFApplication
+    private lateinit var dao: com.example.data.FileDao
+    private lateinit var fixturePrefix: String
+
+    @Before
+    fun setUp(): Unit {
+        app = ApplicationProvider.getApplicationContext<VVFApplication>()
+        dao = AppDatabase.getDatabase(app).fileDao()
+        fixturePrefix = "dashboard-fixture-${System.nanoTime()}-"
+    }
+
+    @After
+    fun tearDown(): Unit = runBlocking {
+        val rows = dao.getAllOrdinaryFilesDirect() + dao.getVaultFiles().first() + dao.getRecycleBinFiles().first()
+        val rowIds = rows.filter { it.name.startsWith(fixturePrefix) }.map { it.id }
+        if (rowIds.isNotEmpty()) {
+            dao.deleteFilesByIds(rowIds)
+        }
+
+        dao.getAllVaultItems().first()
+            .filter { it.originalName.startsWith(fixturePrefix) }
+            .forEach { vaultItem ->
+                PhysicalStorageManager.deleteFile(app, vaultItem.encryptedFilePath)
+                dao.deleteVaultItemById(vaultItem.id)
+            }
+
+        app.cacheDir.listFiles()
+            ?.filter { it.name.startsWith(fixturePrefix) }
+            ?.forEach { it.delete() }
+        PhysicalStorageManager.getRecycleBinDir(app).listFiles()
+            ?.filter { it.name.startsWith(fixturePrefix) }
+            ?.forEach { it.delete() }
+    }
+
+    @Test
+    fun dashboardRendersHealthRoadmapQuickActionsAndCategoryNavigation(): Unit {
+        val viewModel = MainViewModel(app)
+        val navigatedTabs = mutableListOf<Int>()
+        val categoryStats = listOf(
+            CategoryStat(FileCategory.IMAGES.name, count = 2, totalSize = 2048L),
+            CategoryStat(FileCategory.DOCUMENTS.name, count = 1, totalSize = 1024L)
+        )
+        val recentFile = FileItemEntity(
+            name = "$fixturePrefix-photo.jpg",
+            path = "/data/local/tmp/$fixturePrefix-photo.jpg",
+            category = FileCategory.IMAGES.name,
+            sizeBytes = 1024L,
+            tags = "fixture"
+        )
+
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                DashboardScreen(
+                    viewModel = viewModel,
+                    categoryStats = categoryStats,
+                    recentFiles = listOf(recentFile),
+                    onNavigateTab = { navigatedTabs += it }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("dashboard_health_card").assertIsDisplayed()
+        composeTestRule.onNodeWithText("VVF Smart Manager v2.0").assertIsDisplayed()
+        composeTestRule.onNodeWithText("System Health: 94% Excellent").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Storage Used: 3.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
+        composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
+        composeTestRule.onNodeWithText("1.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Tags: fixture").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("View Report").performClick()
+        composeTestRule.onNodeWithText("Golden Rule Audit Report").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hide").performClick()
+        composeTestRule.onAllNodesWithText("Golden Rule Audit Report").assertCountEquals(0)
+
+        composeTestRule.onNodeWithText("Pick Files").performClick()
+        composeTestRule.onNodeWithTag("picker_search_input").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("file_picker_close_btn").performClick()
+
+        composeTestRule.onNodeWithText("Clean Dupes").performClick()
+        composeTestRule.onNodeWithText("Secure Vault").performClick()
+        composeTestRule.onNodeWithText("Cloud Sync").performClick()
+        composeTestRule.onNodeWithText("Images").performClick()
+        composeTestRule.onNodeWithText("Documents").performClick()
+        composeTestRule.onNodeWithText("Audio Files").performClick()
+        composeTestRule.onNodeWithText("Videos").performClick()
+        composeTestRule.onNodeWithText("Archives & Downloads").performClick()
+        composeTestRule.onNodeWithText("View All").performClick()
+
+        assertTrue(navigatedTabs.contains(1))
+        assertTrue(navigatedTabs.contains(2))
+        assertTrue(navigatedTabs.contains(3))
+        assertTrue(navigatedTabs.contains(4))
+    }
+
+    @Test
+    fun dashboardTagAndMoveToTrashUseRealRepositoryCallbacks(): Unit {
+        val viewModel = MainViewModel(app)
+        val sourceFile = File(app.cacheDir, "$fixturePrefix-tag.txt").apply {
+            writeText("dashboard tag fixture")
+        }
+        val insertedId = runBlocking {
+            dao.insertFileDirect(
+                FileItemEntity(
+                    name = sourceFile.name,
+                    path = sourceFile.absolutePath,
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = sourceFile.length(),
+                    tags = "existing"
+                )
+            )
+        }
+        val file = FileItemEntity(
+            id = insertedId,
+            name = sourceFile.name,
+            path = sourceFile.absolutePath,
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = sourceFile.length(),
+            tags = "existing"
+        )
+
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                DashboardScreen(
+                    viewModel = viewModel,
+                    categoryStats = emptyList(),
+                    recentFiles = listOf(file),
+                    onNavigateTab = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Menu").performClick()
+        composeTestRule.onNodeWithText("Add Custom Tag").performClick()
+        composeTestRule.onNodeWithText("Tag name (e.g. tax, work)").performTextInput("dashboard")
+        composeTestRule.onNodeWithText("Add Tag").performClick()
+
+        runBlocking {
+            withTimeout(10_000) {
+                while (dao.getFileById(insertedId)?.tags != "existing, dashboard") {
+                    delay(50)
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Menu").performClick()
+        composeTestRule.onNodeWithText("Move to Trash").performClick()
+        runBlocking {
+            withTimeout(10_000) {
+                while (dao.getFileById(insertedId)?.isRecycleBin != true) {
+                    delay(50)
+                }
+            }
+        }
+        assertFalse(sourceFile.exists())
+        assertTrue(PhysicalStorageManager.getRecycleBinDir(app).listFiles()?.any { it.name.startsWith(fixturePrefix) } == true)
+    }
+
+    @Test
+    fun dashboardEncryptActionCreatesVaultItemAndWipesSource(): Unit {
+        val viewModel = MainViewModel(app)
+        val sourceFile = File(app.cacheDir, "$fixturePrefix-vault.txt").apply {
+            writeText("dashboard vault fixture")
+        }
+        val insertedId = runBlocking {
+            dao.insertFileDirect(
+                FileItemEntity(
+                    name = sourceFile.name,
+                    path = sourceFile.absolutePath,
+                    category = FileCategory.DOCUMENTS.name,
+                    sizeBytes = sourceFile.length()
+                )
+            )
+        }
+        val file = FileItemEntity(
+            id = insertedId,
+            name = sourceFile.name,
+            path = sourceFile.absolutePath,
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = sourceFile.length()
+        )
+
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                DashboardScreen(
+                    viewModel = viewModel,
+                    categoryStats = emptyList(),
+                    recentFiles = listOf(file),
+                    onNavigateTab = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Menu").performClick()
+        composeTestRule.onNodeWithText("Encrypt to Vault").performClick()
+        composeTestRule.onNodeWithText("Encrypt & Best-Effort Wipe").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Encrypt & Wipe").performClick()
+
+        runBlocking {
+            withTimeout(10_000) {
+                while (dao.getAllVaultItems().first().none { it.originalName == file.name }) {
+                    delay(50)
+                }
+            }
+        }
+        assertFalse(sourceFile.exists())
+    }
+}
