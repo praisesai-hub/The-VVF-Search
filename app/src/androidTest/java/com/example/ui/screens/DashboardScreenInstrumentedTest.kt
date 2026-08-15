@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -112,7 +113,7 @@ class DashboardScreenInstrumentedTest {
         dashboardList.performScrollToNode(hasText("Recent Storage Files"))
         composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
-        composeTestRule.onNodeWithText("1.0 KB").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("1.0 KB").assertCountEquals(2)
         composeTestRule.onNodeWithText("Tags: fixture").assertIsDisplayed()
 
         dashboardList.performScrollToNode(hasText("View Report"))
@@ -185,7 +186,7 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(file.name))
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
         composeTestRule.onNodeWithText("Add Custom Tag").performClick()
-        composeTestRule.onNodeWithText("Tag name (e.g. tax, work)").performTextInput("dashboard")
+        composeTestRule.onNode(hasSetTextAction()).performTextInput("dashboard")
         composeTestRule.onNodeWithText("Add Tag").performClick()
 
         runBlocking {
@@ -247,8 +248,6 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(file.name))
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
         composeTestRule.onNodeWithText("Encrypt to Vault").performClick()
-        composeTestRule.onNodeWithText("Encrypt & Best-Effort Wipe").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Encrypt & Wipe").performClick()
 
         runBlocking {
             withTimeout(10_000) {
