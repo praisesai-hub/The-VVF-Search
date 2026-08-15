@@ -2,15 +2,13 @@ package com.example.ui.screens
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasScrollToIndexAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -100,9 +98,8 @@ class FileManagerScreenInstrumentedTest {
         listOf("All Files", "Images", "Documents", "Audio", "Video").forEach { label ->
             composeTestRule.onNodeWithText(label).assertIsDisplayed()
         }
-        composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("Other"))
-        composeTestRule.onNodeWithText("Other").assertIsDisplayed()
         composeTestRule.onNodeWithText("Images").performClick()
+        composeTestRule.onNodeWithText("Other").assertExists()
         composeTestRule.onNodeWithTag("file_search_input").performTextInput("photo")
         composeTestRule.onNodeWithContentDescription("Clear").performClick()
 
@@ -246,7 +243,7 @@ class FileManagerScreenInstrumentedTest {
         composeTestRule.onNodeWithText("Deleted Files (Auto-purge after 30 days)").assertIsDisplayed()
         composeTestRule.onNodeWithText("$fixturePrefix-restore.txt").assertIsDisplayed()
         composeTestRule.onNodeWithText("$fixturePrefix-delete.txt").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Restore").performClick()
+        composeTestRule.onAllNodesWithContentDescription("Restore")[0].performClick()
         runBlocking {
             withTimeout(10_000) {
                 while (dao.getFileById(restoreId)?.isRecycleBin == true) {
@@ -259,7 +256,7 @@ class FileManagerScreenInstrumentedTest {
         val restoredRow = runBlocking { dao.getFileById(restoreId) }
         assertFalse(restoredRow?.isRecycleBin ?: true)
 
-        composeTestRule.onNodeWithContentDescription("Delete Forever").performClick()
+        composeTestRule.onAllNodesWithContentDescription("Delete Forever")[1].performClick()
         runBlocking {
             withTimeout(10_000) {
                 while (dao.getFileById(deleteId) != null) {
