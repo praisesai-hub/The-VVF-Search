@@ -2,7 +2,10 @@ package com.example.data
 
 import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import okhttp3.Call
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -218,20 +221,25 @@ class GoogleDriveProviderAdapterInstrumentedTest {
     fun emptyMediaBodyFailsClosed(): Unit {
         authenticate()
         val destination = temporaryFile("download-empty", ".txt")
-        var requestCount = 0
-        fakeInterceptor.responseProvider = { request ->
-            requestCount += 1
-            if (requestCount == 1) {
-                response(request, 200, "{\"files\":[{\"id\":\"remote-id\"}]}")
-            } else {
-                response(request, 200, null)
-            }
-        }
+        val mockedHttpClient = mockk<okhttp3.OkHttpClient>()
+        val mockedCall = mockk<Call>()
+        val searchRequest = Request.Builder().url("https://search.test").build()
+        val mediaRequest = Request.Builder().url("https://media.test").build()
+        val searchResponse = response(
+            searchRequest,
+            200,
+            "{\"files\":[{\"id\":\"remote-id\"}]}",
+        )
+        val emptyMediaResponse = response(mediaRequest, 200, null)
+        every { mockedHttpClient.newCall(any()) } returns mockedCall
+        every { mockedCall.execute() } returns searchResponse andThen emptyMediaResponse
+        val isolatedAdapter = GoogleDriveProviderAdapter(authManager, mockedHttpClient)
 
-        val result = runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val result = runBlocking { isolatedAdapter.downloadFile("remote.txt", destination) }
         assertTrue(result is CloudSyncResult.Error)
-        assertFalse((result as CloudSyncResult.Error).isRetryable)
-        assertTrue("Unexpected empty-body result: ${result.message}", result.message.contains("body was empty"))
+        val error = result as CloudSyncResult.Error
+        assertFalse(error.isRetryable)
+        assertEquals("Media download response body was empty.", error.message)
         destination.delete()
     }
 
