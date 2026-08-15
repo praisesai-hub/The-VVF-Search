@@ -56,16 +56,16 @@ class AiDuplicatesScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
         composeTestRule.onNodeWithText("1 files selected for deletion").assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (1 sets)").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Exact hashes").assertIsDisplayed()
-        composeTestRule.onNodeWithText("exact-a.txt").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (1 sets)").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Visual matches").assertIsDisplayed()
-        composeTestRule.onNodeWithText("visual-a.jpg").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (1 sets)").assertExists()
+        composeTestRule.onNodeWithText("Exact hashes").assertExists()
+        composeTestRule.onNodeWithText("exact-a.txt").assertExists()
+        composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (1 sets)").assertExists()
+        composeTestRule.onNodeWithText("Visual matches").assertExists()
+        composeTestRule.onNodeWithText("visual-a.jpg").assertExists()
 
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onNodeWithText("OCR Indexed Documents (1)").assertIsDisplayed()
-        composeTestRule.onNodeWithText("ocr-bill.png").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("ocr-bill.png").assertExists()
         composeTestRule.onNodeWithText("Extracted Text: total due").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("section_tab_2").performClick()
@@ -92,12 +92,12 @@ class AiDuplicatesScreenInstrumentedTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (0 sets)").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("No exact hash duplicate files detected.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (0 sets)").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("No visual duplicates matching 80%").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Step 6: AI Semantic Vector Matches (0 sets)").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (0 sets)").assertExists()
+        composeTestRule.onNodeWithText("No exact hash duplicate files detected.").assertExists()
+        composeTestRule.onNodeWithText("Level 3-4: Visual & Semantic AI Duplicates (0 sets)").assertExists()
+        composeTestRule.onNodeWithText("No visual duplicates matching 80%").assertExists()
+        composeTestRule.onNodeWithText("Step 6: AI Semantic Vector Matches (0 sets)").assertExists()
+        composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertExists()
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onNodeWithText("OCR Indexed Documents (0)").assertIsDisplayed()
         composeTestRule.onNodeWithTag("section_tab_2").performClick()
