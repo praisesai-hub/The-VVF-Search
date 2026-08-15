@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.data.FileCategory
@@ -65,6 +66,7 @@ class FilePickerUIInstrumentedTest {
             .performTextInput("coverage_image")
         composeTestRule.onNodeWithText("Images").performClick()
         composeTestRule.onNodeWithTag("file_picker_item_coverage_image_test.png")
+            .performScrollTo()
             .assertIsDisplayed()
             .performClick()
         composeTestRule.onNodeWithText("Clear").assertIsDisplayed()
