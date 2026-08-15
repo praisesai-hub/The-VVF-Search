@@ -114,7 +114,7 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("1.0 KB").assertCountEquals(2)
-        composeTestRule.onNodeWithText("Tags: fixture").assertIsDisplayed()
+        composeTestRule.onNodeWithText(" • fixture").assertIsDisplayed()
 
         dashboardList.performScrollToNode(hasText("View Report"))
         composeTestRule.onNodeWithText("View Report").performClick()
@@ -199,15 +199,23 @@ class DashboardScreenInstrumentedTest {
 
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
         composeTestRule.onNodeWithText("Move to Trash").performClick()
-        runBlocking {
+        val trashedFile = runBlocking {
             withTimeout(10_000) {
-                while (dao.getFileById(insertedId)?.isRecycleBin != true) {
-                    delay(50)
+                var current: FileItemEntity? = null
+                while (current?.isRecycleBin != true) {
+                    current = dao.getFileById(insertedId)
+                    if (current?.isRecycleBin != true) {
+                        delay(50)
+                    }
                 }
+                current
             }
         }
+        val persistedTrashedFile = requireNotNull(trashedFile)
+        assertTrue(persistedTrashedFile.isRecycleBin)
         assertFalse(sourceFile.exists())
-        assertTrue(PhysicalStorageManager.getRecycleBinDir(app).listFiles()?.any { it.name.startsWith(fixturePrefix) } == true)
+        assertTrue(File(persistedTrashedFile.path).exists())
+        assertTrue(File(persistedTrashedFile.path).name.endsWith(sourceFile.name))
     }
 
     @Test
