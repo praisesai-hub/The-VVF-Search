@@ -189,6 +189,7 @@ class PhysicalStorageManagerInstrumentedTest {
         val sourceUri = insertMediaFile("vvf-rename-${System.nanoTime()}.txt")
         try {
             context.contentResolver.openOutputStream(sourceUri)!!.use { it.write("rename me".toByteArray()) }
+            publishMediaFile(sourceUri)
 
             val renamed = PhysicalStorageManager.renameFile(context, sourceUri.toString(), "vvf-renamed-${System.nanoTime()}.txt")
 
@@ -206,6 +207,7 @@ class PhysicalStorageManagerInstrumentedTest {
         var trashPath: String? = null
         try {
             context.contentResolver.openOutputStream(sourceUri)!!.use { it.write(sourceBytes) }
+            publishMediaFile(sourceUri)
 
             val moved = PhysicalStorageManager.moveToTrash(context, sourceUri.toString())
 
@@ -227,6 +229,8 @@ class PhysicalStorageManagerInstrumentedTest {
         var vaultPath: String? = null
         try {
             context.contentResolver.openOutputStream(sourceUri)!!.use { it.write(sourceBytes) }
+            publishMediaFile(sourceUri)
+            publishMediaFile(destinationUri)
             assertEquals(sourceBytes.size.toLong(), PhysicalStorageManager.getFileSizeFromContentUri(context, sourceUri))
             assertNotNull(PhysicalStorageManager.getFileNameFromContentUri(context, sourceUri))
 
@@ -306,8 +310,14 @@ class PhysicalStorageManagerInstrumentedTest {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
             put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/VVF-Test")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         return context.contentResolver.insert(collection, values)
             ?: throw AssertionError("MediaStore test row could not be created")
+    }
+
+    private fun publishMediaFile(uri: Uri) {
+        val values = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+        assertEquals(1, context.contentResolver.update(uri, values, null, null))
     }
 }
