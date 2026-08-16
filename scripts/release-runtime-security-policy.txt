@@ -1,0 +1,14 @@
+# coordinate-prefix rules: coordinate family must not enter releaseRuntimeClasspath
+# These families are present in the authenticated Dependabot build-tool inventory
+# but absent from the current Android release runtime graph.
+deny-prefix|io.netty|any|Dependabot Netty alert family is not a shipped Android runtime dependency
+deny-prefix|org.jdom:jdom2|any|JDOM alert family is not a shipped Android runtime dependency
+deny-prefix|org.bitbucket.b_c:jose4j|any|jose4j alert family is not a shipped Android runtime dependency
+deny-prefix|org.apache.commons:commons-lang3|any|commons-lang3 alert family is not a shipped Android runtime dependency
+deny-prefix|org.apache.httpcomponents:httpclient|any|httpclient alert family is not a shipped Android runtime dependency
+deny-prefix|org.jetbrains.kotlin:kotlin-gradle-plugin|any|Kotlin Gradle plugin is build-time only and must not ship in the app runtime
+
+# minimum-version rules: if these crypto providers ever enter app runtime, they
+# must be at or above the patched floor represented by the current inventory.
+min-version|org.bouncycastle:bcprov-jdk18on|1.80.2|Bouncy Castle provider must be at or above the critical-alert patched floor
+min-version|org.bouncycastle:bcpkix-jdk18on|1.80.2|Bouncy Castle PKIX provider must be at or above the critical-alert patched floor
