@@ -82,6 +82,43 @@ class SecureKeyValueStoreInstrumentedTest {
     }
 
     @Test
+    fun commit_rejects_oversized_values_without_persisting() {
+        val store = newStore()
+        val oversized = "x".repeat(16_385)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            store.commit(mapOf("oversized" to oversized))
+        }
+        assertTrue(!store.containsStoreFile())
+    }
+
+    @Test
+    fun commit_rejects_more_than_supported_entry_count() {
+        val store = newStore()
+        val tooManyEntries = (0..32).associate { index -> "key-$index" to "value-$index" }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            store.commit(tooManyEntries)
+        }
+        assertTrue(!store.containsStoreFile())
+    }
+
+    @Test
+    fun read_rejects_invalid_envelope_component_size() {
+        val store = newStore()
+        java.io.DataOutputStream(secureFile.outputStream()).use { envelope ->
+            envelope.writeInt(0x56564645)
+            envelope.writeInt(1)
+            envelope.writeInt(0)
+            envelope.flush()
+        }
+
+        assertThrows(IllegalStateException::class.java) {
+            store.getString("missing")
+        }
+    }
+
+    @Test
     fun legacy_encrypted_preferences_are_migrated_once() {
         val legacyMasterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -125,3 +162,4 @@ class SecureKeyValueStoreInstrumentedTest {
         const val KEY_ALIAS = "VVF_TEST_SECURE_MIGRATION_KEY"
     }
 }
+
