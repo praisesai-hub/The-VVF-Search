@@ -18,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import kotlin.math.sqrt
 
@@ -112,6 +113,20 @@ class SemanticEmbeddingProviderInstrumentedTest {
         assertFalse(provider.isModelLoaded())
         assertNull(provider.generateTextEmbedding("sensitive query"))
         assertNull(provider.generateImageEmbedding(File(tempDirectory, "photo.jpg")))
+    }
+
+    @Test
+    fun tfliteProvider_rejectsEmptyVocabularyInvalidAssetAndOversizedInput() = runBlocking {
+        val provider = TFLiteSemanticEmbeddingProvider(File(tempDirectory, "missing.tflite"))
+        val oversized = File(tempDirectory, "oversized.bin")
+        RandomAccessFile(oversized, "rw").use { file ->
+            file.setLength(50L * 1024L * 1024L + 1L)
+        }
+
+        assertFalse(provider.loadModelFromAssets(context, "invalid_model.tflite", "empty_vocab.txt"))
+        assertFalse(provider.loadModelFromAssets(context, "invalid_model.tflite", "invalid_vocab.txt"))
+        assertNull(provider.generateImageEmbedding(oversized))
+        provider.close()
     }
 
     @Test
