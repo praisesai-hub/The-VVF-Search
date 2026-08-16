@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -178,6 +180,15 @@ fun CloudSyncSection(
                             }
                         }
                     } else {
+                        Image(
+                            painter = painterResource(R.drawable.vvf_foundation_logo),
+                            contentDescription = "VVF Foundation logo",
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .testTag("vvf_login_brand_logo")
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = "Cloud Sync: Link your Google Drive account to activate secure, automated cloud sync.",
                             fontSize = 12.sp,
