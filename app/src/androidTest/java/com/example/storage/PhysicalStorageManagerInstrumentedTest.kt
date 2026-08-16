@@ -273,6 +273,45 @@ class PhysicalStorageManagerInstrumentedTest {
     }
 
     @Test
+    fun contentUriKeystoreStreamRoundTrip_preservesDataAndRemovesVaultSource() {
+        val sourceBytes = "content-provider keystore stream secret".toByteArray()
+        val sourceUri = insertMediaFile("vvf-keystore-stream-source-${System.nanoTime()}.txt")
+        val destinationUri = insertMediaFile("vvf-keystore-stream-destination-${System.nanoTime()}.txt")
+        var vaultPath: String? = null
+        try {
+            context.contentResolver.openOutputStream(sourceUri)!!.use { it.write(sourceBytes) }
+            publishMediaFile(sourceUri)
+            publishMediaFile(destinationUri)
+            val manager = com.example.security.KeystoreVaultManager()
+
+            val encrypted = PhysicalStorageManager.encryptAndWipeSource(context, sourceUri.toString(), manager)
+
+            assertTrue(encrypted.isSuccess)
+            vaultPath = encrypted.getOrThrow().vaultFilePath
+            assertTrue(File(vaultPath).exists())
+
+            val restored = PhysicalStorageManager.decryptAndRestore(
+                context,
+                vaultPath,
+                destinationUri.toString(),
+                encrypted.getOrThrow().iv,
+                manager,
+            )
+
+            assertTrue(restored.isSuccess)
+            assertEquals(destinationUri.toString(), restored.getOrThrow())
+            context.contentResolver.openInputStream(destinationUri)!!.use { input ->
+                assertArrayEquals(sourceBytes, input.readBytes())
+            }
+            assertFalse(File(vaultPath).exists())
+        } finally {
+            vaultPath?.let { File(it).delete() }
+            context.contentResolver.delete(sourceUri, null, null)
+            context.contentResolver.delete(destinationUri, null, null)
+        }
+    }
+
+    @Test
     fun contentUriRestore_fallsBackToRestoredDirectoryWhenWriteIsUnavailable() {
         val trashFile = File(testRoot, "456_original-content.txt").apply { writeText("restored content") }
         val unavailableUri = Uri.parse("content://vvf.test.provider/unavailable-content.txt")
