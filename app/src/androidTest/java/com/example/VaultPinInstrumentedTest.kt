@@ -78,22 +78,22 @@ class VaultPinInstrumentedTest {
 
         assertTrue(viewModel.isVaultPinSetupRequired)
         viewModel.appendPinDigit("x")
-        "2468".forEach(viewModel::appendPinDigit)
+        "2468".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertEquals("Re-enter the new PIN to confirm.", viewModel.pinError.value)
         assertEquals("", viewModel.enteredPin.value)
 
-        "1357".forEach(viewModel::appendPinDigit)
+        "1357".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertEquals("PINs did not match. Try again.", viewModel.pinError.value)
         assertFalse(viewModel.isVaultUnlocked.value)
 
-        "2468".forEach(viewModel::appendPinDigit)
-        "2468".forEach(viewModel::appendPinDigit)
+        "2468".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+        "2468".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertTrue(viewModel.isVaultUnlocked.value)
         assertNull(viewModel.pinError.value)
 
         viewModel.lockVault()
         assertFalse(viewModel.isVaultUnlocked.value)
-        "0000".forEach(viewModel::appendPinDigit)
+        "0000".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertEquals("Incorrect PIN. Try again.", viewModel.pinError.value)
 
         viewModel.clearPinDigit()
