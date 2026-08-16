@@ -200,7 +200,21 @@ class StorageScannerInstrumentedTest {
     }
 
     @Test
-    fun fileHashAndQuietDHash_failClosedForMissingOrUnsupportedFiles() = runBlocking {
+    fun scanSafTree_rejectsUnavailableTreeUris() = runBlocking {
+        val invalidTree = android.net.Uri.parse("content://missing.provider/tree/not-granted")
+
+        try {
+            scanner.scanSafTree(invalidTree) { }
+            throw AssertionError("Unavailable SAF tree should fail closed")
+        } catch (exception: java.io.FileNotFoundException) {
+            assertTrue(exception.message?.contains("Unable to open SAF tree") == true)
+        } catch (exception: java.io.IOException) {
+            assertTrue(exception.message?.contains("SAF tree") == true)
+        }
+    }
+
+    @Test
+    fun fileHashAndQuietDHash_failClosedForMissingOrUnsupportedFiles(): Unit = runBlocking {
         val missing = File(testRoot, "missing.txt")
         assertEquals("", scanner.computeFileHash(missing))
         assertEquals("", scanner.computeDHashQuietly(missing))
