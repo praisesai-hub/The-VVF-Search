@@ -9,7 +9,15 @@ import com.example.data.VaultManagerEngine
 import com.example.security.KeystoreVaultManager
 import java.io.File
 import com.example.ui.MainViewModel
+import com.example.ui.appendPinDigit
 import com.example.ui.changeVaultPin
+import com.example.ui.clearPinDigit
+import com.example.ui.enteredPin
+import com.example.ui.isVaultPinSetupRequired
+import com.example.ui.isVaultUnlocked
+import com.example.ui.lockVault
+import com.example.ui.onBiometricError
+import com.example.ui.onBiometricSuccess
 import com.example.ui.pinError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -62,6 +70,39 @@ class VaultPinInstrumentedTest {
 
         assertTrue(reopened.hasVaultPin())
         assertTrue(reopened.verifyVaultPin("1357"))
+    }
+
+    @Test
+    fun mainViewModelCompat_pinAndBiometricStateMachine_handlesRealVaultState() {
+        val viewModel = MainViewModel(app)
+
+        assertTrue(viewModel.isVaultPinSetupRequired)
+        viewModel.appendPinDigit("x")
+        "2468".forEach(viewModel::appendPinDigit)
+        assertEquals("Re-enter the new PIN to confirm.", viewModel.pinError.value)
+        assertEquals("", viewModel.enteredPin.value)
+
+        "1357".forEach(viewModel::appendPinDigit)
+        assertEquals("PINs did not match. Try again.", viewModel.pinError.value)
+        assertFalse(viewModel.isVaultUnlocked.value)
+
+        "2468".forEach(viewModel::appendPinDigit)
+        "2468".forEach(viewModel::appendPinDigit)
+        assertTrue(viewModel.isVaultUnlocked.value)
+        assertNull(viewModel.pinError.value)
+
+        viewModel.lockVault()
+        assertFalse(viewModel.isVaultUnlocked.value)
+        "0000".forEach(viewModel::appendPinDigit)
+        assertEquals("Incorrect PIN. Try again.", viewModel.pinError.value)
+
+        viewModel.clearPinDigit()
+        assertEquals("", viewModel.enteredPin.value)
+        viewModel.onBiometricError("Biometric unavailable")
+        assertEquals("Biometric unavailable", viewModel.pinError.value)
+        viewModel.onBiometricSuccess()
+        assertTrue(viewModel.isVaultUnlocked.value)
+        assertNull(viewModel.pinError.value)
     }
 
     @Test
