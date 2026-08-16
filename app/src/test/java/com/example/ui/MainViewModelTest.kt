@@ -8,6 +8,7 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
 import com.example.data.FileCategory
+import com.example.ui.components.PickableLocalFile
 import com.example.data.SmartManagerRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,6 +26,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(context) {
     var verifyPinResult = true
@@ -206,6 +208,67 @@ class MainViewModelTest {
         viewModel.clearGlobalError()
 
         assertNull(viewModel.globalError.value)
+    }
+
+    @Test
+    fun processPickedLocalFiles_importsPickedMetadataAndSchedulesIndexing() {
+        val picked = PickableLocalFile(
+            name = "photo.png",
+            path = "/storage/emulated/0/Pictures/photo.png",
+            sizeBytes = 42L,
+            category = FileCategory.IMAGES,
+            dateModifiedMs = 1234L
+        )
+
+        viewModel.processPickedLocalFiles(listOf(picked))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val imported = fakeRepository.insertedFiles.single()
+        assertEquals("photo.png", imported.name)
+        assertEquals(picked.path, imported.path)
+        assertEquals(FileCategory.IMAGES.name, imported.category)
+        assertEquals(42L, imported.sizeBytes)
+        assertEquals(1234L, imported.dateModifiedMs)
+        assertEquals("Imported", imported.tags)
+        assertTrue(fakeRepository.backgroundIndexWorkEnqueued)
+    }
+
+    @Test
+    fun processPickedJavaFiles_infersCategoryAndPersistsActualSize() {
+        val importedFile = File.createTempFile("vvf_main_vm_", ".pdf")
+        try {
+            importedFile.writeText("document import fixture")
+
+            viewModel.processPickedLocalFiles(listOf(importedFile))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val imported = fakeRepository.insertedFiles.single()
+            assertEquals(importedFile.name, imported.name)
+            assertEquals(importedFile.absolutePath, imported.path)
+            assertEquals(FileCategory.DOCUMENTS.name, imported.category)
+            assertEquals(importedFile.length(), imported.sizeBytes)
+            assertEquals("Local_Import", imported.tags)
+            assertTrue(fakeRepository.backgroundIndexWorkEnqueued)
+        } finally {
+            importedFile.delete()
+        }
+    }
+
+    @Test
+    fun processPickedUris_generatesSafeFallbackMetadataWhenResolverProvidesNoMetadata() {
+        val uri = android.net.Uri.parse("content://unknown.vvf.provider/fallback.pdf")
+
+        viewModel.processPickedUris(listOf(uri))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val imported = fakeRepository.insertedFiles.single()
+        assertTrue(imported.name.startsWith("Picked_File_"))
+        assertTrue(imported.name.endsWith("_0.bin"))
+        assertEquals(uri.toString(), imported.path)
+        assertEquals(FileCategory.OTHER.name, imported.category)
+        assertEquals(0L, imported.sizeBytes)
+        assertEquals("SAF_Import", imported.tags)
+        assertTrue(fakeRepository.backgroundIndexWorkEnqueued)
     }
 
     @Test
