@@ -232,6 +232,35 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
+    fun recycleBinOperations_ignoreMissingAndAlreadyTerminalRows(): Unit = runBlocking {
+        val missing = document(301L, "missing.pdf")
+        repository.moveToRecycleBin(missing)
+        repository.restoreFromRecycleBin(missing)
+        repository.deletePermanently(missing)
+        assertTrue(fakeDao.updatedSingleFiles.isEmpty())
+        assertTrue(fakeDao.deletedFileIds.isEmpty())
+
+        val alreadyRecycled = document(302L, "already-recycled.pdf", isRecycleBin = true)
+        fakeDao.activeFiles += alreadyRecycled
+        repository.moveToRecycleBin(alreadyRecycled)
+        assertTrue(fakeDao.updatedSingleFiles.isEmpty())
+
+        val ordinary = document(303L, "ordinary.pdf")
+        fakeDao.activeFiles += ordinary
+        repository.restoreFromRecycleBin(ordinary)
+        assertTrue(fakeDao.updatedSingleFiles.isEmpty())
+    }
+
+    @Test
+    fun workSchedulingAndMemoryTrim_useRealWorkManagerIntegration(): Unit {
+        repository.trimMemory()
+        repository.enqueueDuplicateCleanupWork()
+        repository.enqueueCloudSyncWork()
+        repository.enqueueCacheCleanupWork()
+        repository.enqueueBackgroundIndexWork()
+    }
+
+    @Test
     fun recycleBinOperations_preservePhysicalDataAndDaoIntegrity(): Unit = runBlocking {
         val source = File.createTempFile("vvf_repo_move_", ".txt", context.cacheDir)
         source.writeText("repository move payload")
