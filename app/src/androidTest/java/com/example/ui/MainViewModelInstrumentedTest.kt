@@ -40,6 +40,7 @@ class MainViewModelInstrumentedTest {
 
         viewModel.clearGlobalError()
         viewModel.selectCategory(null)
+        viewModel.setAutoCleanDuplicatesBg(false)
         assertFalse(viewModel.globalError.value != null)
         assertEquals(null, viewModel.selectedCategory.value)
     }
@@ -72,7 +73,7 @@ class MainViewModelInstrumentedTest {
     @Test
     fun invalidUriImport_usesSafeFallbackNameAndCategory(): Unit = runBlocking {
         val viewModel = MainViewModel(application)
-        val uri = Uri.parse("content://missing.provider/not-found.txt")
+        val uri = Uri.parse("content:///not-found.txt")
 
         viewModel.processPickedUris(listOf(uri))
         withTimeout(10_000L) {
