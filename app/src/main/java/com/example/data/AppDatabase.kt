@@ -7,6 +7,10 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+private const val LEGACY_VAULT_FORMAT_VERSION = 1
+private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
+private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
+
 @Database(
     entities = [
         FileItemEntity::class,
@@ -14,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CloudSyncItemEntity::class,
         PluginEntity::class
     ],
-    version = 4,
+    version = DATABASE_VERSION_WITH_VAULT_FORMAT,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -85,6 +89,20 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(
+            DATABASE_VERSION_BEFORE_VAULT_FORMAT,
+            DATABASE_VERSION_WITH_VAULT_FORMAT
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(
+                    db,
+                    "vault_items",
+                    "vaultFormatVersion",
+                    "INTEGER NOT NULL DEFAULT $LEGACY_VAULT_FORMAT_VERSION"
+                )
+            }
+        }
+
         private fun addColumnIfNotExists(
             db: SupportSQLiteDatabase,
             tableName: String,
@@ -120,7 +138,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 
                 val instance = builder.build()
                 INSTANCE = instance

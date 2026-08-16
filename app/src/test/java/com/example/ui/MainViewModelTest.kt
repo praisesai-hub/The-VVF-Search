@@ -31,6 +31,7 @@ import java.io.File
 class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(context) {
     var verifyPinResult = true
     var changePinResult = true
+    var unlockPinResult = true
     override fun hasVaultPin(): Boolean = true
     override fun getStoredVaultPinHash(): String = "test-stored-hash"
     var lastVerifiedPin: String? = null
@@ -49,6 +50,10 @@ class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(cont
         lastChangedNewPin = newPin
         return changePinResult
     }
+
+    override fun unlockVaultWithPin(pin: String): Boolean = unlockPinResult
+
+    override fun lockVaultSession() = Unit
 
     override suspend fun insertFiles(files: List<com.example.data.FileItemEntity>) {
         insertedFiles.addAll(files)

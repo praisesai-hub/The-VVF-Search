@@ -52,6 +52,10 @@ class FileManagerScreenInstrumentedTest {
     fun setUp(): Unit {
         app = ApplicationProvider.getApplicationContext<VVFApplication>()
         dao = AppDatabase.getDatabase(app).fileDao()
+        app.deleteSharedPreferences("vvf_vault_prefs")
+        File(app.noBackupFilesDir, "vvf_vault_prefs.secure").delete()
+        File(app.noBackupFilesDir, "vvf_vault_prefs.secure.tmp").delete()
+        app.repository = com.example.data.SmartManagerRepository(app, dao)
         fixturePrefix = "file-manager-fixture-${System.nanoTime()}-"
     }
 
@@ -125,7 +129,7 @@ class FileManagerScreenInstrumentedTest {
 
     @Test
     fun activeFileRenameEncryptAndOcrDialogsUseRealViewModelCallbacks(): Unit {
-        val viewModel = realViewModel()
+        val viewModel = authenticatedViewModel()
         val sourceFile = File(app.cacheDir, "$fixturePrefix-report.txt").apply {
             writeText("deterministic FileManagerScreen fixture")
         }
@@ -281,4 +285,11 @@ class FileManagerScreenInstrumentedTest {
     }
 
     private fun realViewModel(): MainViewModel = MainViewModel(app)
+
+    private fun authenticatedViewModel(): MainViewModel {
+        val viewModel = MainViewModel(app)
+        check(viewModel.repository.initializeVaultPin("2468"))
+        check(viewModel.repository.unlockVaultWithPin("2468"))
+        return viewModel
+    }
 }

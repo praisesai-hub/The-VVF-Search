@@ -293,6 +293,16 @@ open class SmartManagerRepository(
     open fun initializeVaultPin(pin: String): Boolean = vaultRepository.initializeVaultPin(pin)
     open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean = vaultRepository.verifyVaultPin(inputPin, storedHash)
     open fun changeVaultPin(oldPin: String, newPin: String): Boolean = vaultRepository.changeVaultPin(oldPin, newPin)
+    open fun unlockVaultWithPin(pin: String): Boolean = vaultRepository.unlockWithPin(pin)
+    open fun hasBiometricEnrollment(): Boolean = vaultRepository.hasBiometricEnrollment()
+    open fun prepareBiometricEnrollmentCipher() = vaultRepository.prepareBiometricEnrollmentCipher()
+    open fun completeBiometricEnrollment(result: androidx.biometric.BiometricPrompt.AuthenticationResult): Boolean =
+        vaultRepository.completeBiometricEnrollment(result)
+    open fun prepareBiometricUnlockCipher() = vaultRepository.prepareBiometricUnlockCipher()
+    open fun completeBiometricUnlock(result: androidx.biometric.BiometricPrompt.AuthenticationResult): Boolean =
+        vaultRepository.completeBiometricUnlock(result)
+    open fun disableBiometricEnrollment(): Boolean = vaultRepository.disableBiometricEnrollment()
+    open fun lockVaultSession() = vaultRepository.lockSession()
 
     suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = withContext(Dispatchers.IO) { withRetry { fileRepository.getFilteredFilesPaged(category, query, limit, offset) } }
     suspend fun renameFile(file: FileItemEntity, newName: String) = withContext(Dispatchers.IO) { withRetry { fileRepository.renameFile(file, newName) } }

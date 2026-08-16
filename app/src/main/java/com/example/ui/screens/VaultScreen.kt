@@ -78,6 +78,8 @@ import com.example.ui.lockVault
 import com.example.ui.isVaultPinSetupRequired
 import com.example.ui.onBiometricError
 import com.example.ui.onBiometricSuccess
+import com.example.ui.onBiometricEnrollmentSuccess
+import com.example.ui.hasBiometricEnrollment
 import com.example.ui.theme.BhagwaOrange
 import com.example.ui.theme.CosmicBlue
 import com.example.ui.theme.EmeraldGreen
@@ -107,55 +109,79 @@ fun VaultScreen(
     
     val isBiometricAvailable = remember(context) {
         val biometricManager = BiometricManager.from(context)
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or 
-                BiometricManager.Authenticators.BIOMETRIC_WEAK
-        biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+        biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+            BiometricManager.BIOMETRIC_SUCCESS
     }
 
     var biometricEnabled by rememberSaveable { mutableStateOf(true) }
+    var biometricKeyReady by rememberSaveable { mutableStateOf(viewModel.hasBiometricEnrollment) }
 
-    val showBiometricPrompt = remember(activity, executor, viewModel, isBiometricAvailable, biometricEnabled) {
+    val showBiometricPrompt = remember(
+        activity,
+        executor,
+        viewModel,
+        isBiometricAvailable,
+        biometricEnabled,
+        biometricKeyReady,
+        isUnlocked
+    ) {
         {
             if (activity != null && isBiometricAvailable && biometricEnabled) {
-                val biometricPrompt = BiometricPrompt(
-                    activity,
-                    executor,
-                    object : BiometricPrompt.AuthenticationCallback() {
-                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                            super.onAuthenticationError(errorCode, errString)
-                            if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && 
-                                errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
-                                viewModel.onBiometricError(errString.toString())
+                val enrollment = isUnlocked && !biometricKeyReady
+                val cipher = try {
+                    if (enrollment) viewModel.repository.prepareBiometricEnrollmentCipher()
+                    else if (!isUnlocked && biometricKeyReady) viewModel.repository.prepareBiometricUnlockCipher()
+                    else null
+                } catch (_: Exception) {
+                    null
+                }
+                if (cipher == null) {
+                    viewModel.onBiometricError("Biometric vault authentication is unavailable.")
+                } else {
+                    val biometricPrompt = BiometricPrompt(
+                        activity,
+                        executor,
+                        object : BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                super.onAuthenticationError(errorCode, errString)
+                                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                                    errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
+                                ) {
+                                    viewModel.onBiometricError(errString.toString())
+                                }
+                            }
+
+                            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                super.onAuthenticationSucceeded(result)
+                                if (enrollment) {
+                                    biometricKeyReady = viewModel.onBiometricEnrollmentSuccess(result)
+                                } else {
+                                    viewModel.onBiometricSuccess(result)
+                                }
+                            }
+
+                            override fun onAuthenticationFailed() {
+                                super.onAuthenticationFailed()
+                                viewModel.onBiometricError("Authentication failed")
                             }
                         }
+                    )
 
-                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                            super.onAuthenticationSucceeded(result)
-                            viewModel.onBiometricSuccess()
-                        }
+                    val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                        .setTitle(if (enrollment) "Protect Vault with Biometrics" else "Unlock Vault")
+                        .setSubtitle("Authenticate using your strong biometric credential")
+                        .setNegativeButtonText("Use PIN")
+                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                        .build()
 
-                        override fun onAuthenticationFailed() {
-                            super.onAuthenticationFailed()
-                            viewModel.onBiometricError("Authentication failed")
-                        }
-                    }
-                )
-
-                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("Unlock Vault")
-                    .setSubtitle("Authenticate using your biometric credential")
-                    .setNegativeButtonText("Use PIN")
-                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or 
-                            BiometricManager.Authenticators.BIOMETRIC_WEAK)
-                    .build()
-
-                biometricPrompt.authenticate(promptInfo)
+                    biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
+                }
             }
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(isUnlocked, isBiometricAvailable, biometricEnabled) {
-        if (!isUnlocked && isBiometricAvailable && biometricEnabled) {
+    androidx.compose.runtime.LaunchedEffect(isUnlocked, isBiometricAvailable, biometricEnabled, biometricKeyReady) {
+        if (shouldAutoPromptBiometric(isUnlocked, isBiometricAvailable, biometricEnabled, biometricKeyReady)) {
             showBiometricPrompt()
         }
     }
@@ -224,7 +250,23 @@ fun VaultScreen(
             LazyVerticalGrid(columns = GridCells.Fixed(3), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.width(280.dp)) {
                 items(keypadDigits) { digit ->
                     when (digit) {
-                        "BIO" -> if (isBiometricAvailable && biometricEnabled) IconButton(onClick = { showBiometricPrompt() }, modifier = Modifier.size(64.dp).clip(CircleShape).background(EmeraldGreen.copy(alpha = 0.15f))) { Icon(Icons.Default.Fingerprint, contentDescription = stringResource(R.string.biometric), tint = EmeraldGreen) } else Box(modifier = Modifier.size(64.dp))
+                        "BIO" -> if (isBiometricAvailable && biometricEnabled && biometricKeyReady) {
+                            IconButton(
+                                onClick = { showBiometricPrompt() },
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(EmeraldGreen.copy(alpha = 0.15f))
+                            ) {
+                                Icon(
+                                    Icons.Default.Fingerprint,
+                                    contentDescription = stringResource(R.string.biometric),
+                                    tint = EmeraldGreen
+                                )
+                            }
+                        } else {
+                            Box(modifier = Modifier.size(64.dp))
+                        }
                         "DEL" -> IconButton(onClick = { viewModel.clearPinDigit() }, modifier = Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) { Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurface) }
                         else -> Surface(onClick = { viewModel.appendPinDigit(digit) }, modifier = Modifier.size(64.dp).testTag("pin_key_$digit"), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) { Box(contentAlignment = Alignment.Center) { Text(text = digit, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) } }
                     }
@@ -254,7 +296,17 @@ fun VaultScreen(
                         if (isBiometricAvailable) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column { Text(text = stringResource(R.string.biometric_unlock), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.use_fingerprint_or_face_id_to_), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                Switch(checked = biometricEnabled, onCheckedChange = { biometricEnabled = it }, colors = SwitchDefaults.colors(checkedThumbColor = BhagwaOrange))
+                                Switch(
+                                    checked = biometricEnabled,
+                                    onCheckedChange = {
+                                        biometricEnabled = it
+                                        if (!it) {
+                                            biometricKeyReady = false
+                                            viewModel.repository.disableBiometricEnrollment()
+                                        }
+                                    },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = BhagwaOrange)
+                                )
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                         }
@@ -310,3 +362,12 @@ fun VaultScreen(
         }
     }
 }
+
+private fun shouldAutoPromptBiometric(
+    isUnlocked: Boolean,
+    isBiometricAvailable: Boolean,
+    biometricEnabled: Boolean,
+    biometricKeyReady: Boolean
+): Boolean =
+    isBiometricAvailable && biometricEnabled &&
+        ((!isUnlocked && biometricKeyReady) || (isUnlocked && !biometricKeyReady))

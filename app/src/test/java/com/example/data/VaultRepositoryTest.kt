@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import com.example.security.KeystoreVaultManager
+import com.example.security.VaultCryptoSession
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.VaultStorageResult
 import io.mockk.Runs
@@ -42,6 +43,8 @@ class VaultRepositoryTest {
         dao = mockk(relaxed = true)
         keystore = mockk(relaxed = true)
         vaultEngine = mockk(relaxed = true)
+        every { vaultEngine.unlockWithPin(any()) } returns VaultCryptoSession.fromKeyBytes(ByteArray(32) { 7 })
+        every { vaultEngine.hasBiometricEnrollment } returns false
         repository = VaultRepository(context, dao, keystore, vaultEngine)
         mockkObject(PhysicalStorageManager)
     }
@@ -74,8 +77,13 @@ class VaultRepositoryTest {
             encryptedFileName = "ENC_123_report.pdf.vvf",
             iv = byteArrayOf(1, 2, 3, 4)
         )
+        repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.encryptAndWipeSource(context, file.path, keystore)
+            PhysicalStorageManager.encryptAndWipeSource(
+                context,
+                file.path,
+                any<(ByteArray) -> Pair<ByteArray, ByteArray>>()
+            )
         } returns Result.success(result)
         val updated = slot<FileItemEntity>()
         val inserted = slot<VaultItemEntity>()
@@ -101,8 +109,13 @@ class VaultRepositoryTest {
     fun encryptToVault_throwsPhysicalFailureAndDoesNotMutateDao() = runBlocking {
         val file = fileItem(name = "report.pdf", path = "/source/report.pdf")
         val failure = IOException("source could not be securely wiped")
+        repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.encryptAndWipeSource(context, file.path, keystore)
+            PhysicalStorageManager.encryptAndWipeSource(
+                context,
+                file.path,
+                any<(ByteArray) -> Pair<ByteArray, ByteArray>>()
+            )
         } returns Result.failure(failure)
 
         try {
@@ -121,13 +134,13 @@ class VaultRepositoryTest {
         val target = fileItem(id = 12L, name = "photo.jpg", path = "/source/photo.jpg")
         val vaultItem = vaultItem(id = 31L, originalName = target.name)
         coEvery { dao.getVaultFileByName(target.name) } returns target
+        repository.unlockWithPin("1234")
         every {
             PhysicalStorageManager.decryptAndRestore(
                 context,
                 vaultItem.encryptedFilePath,
                 target.path,
-                any(),
-                keystore
+                any()
             )
         } returns Result.success(target.path)
         val updated = slot<FileItemEntity>()
@@ -146,6 +159,7 @@ class VaultRepositoryTest {
     @Test
     fun unlockFromVault_deletesOrphanedVaultMetadataWhenTargetIsMissing() = runBlocking {
         val vaultItem = vaultItem(id = 44L, originalName = "missing.txt")
+        repository.unlockWithPin("1234")
         coEvery { dao.getVaultFileByName(vaultItem.originalName) } returns null
         coEvery { dao.deleteVaultItemById(vaultItem.id) } just Runs
 
@@ -161,13 +175,13 @@ class VaultRepositoryTest {
         val target = fileItem(id = 16L, name = "secret.txt", path = "/source/secret.txt")
         val vaultItem = vaultItem(id = 52L, originalName = target.name)
         val failure = IOException("tampered vault data")
+        repository.unlockWithPin("1234")
         every {
             PhysicalStorageManager.decryptAndRestore(
                 context,
                 vaultItem.encryptedFilePath,
                 target.path,
-                any(),
-                keystore
+                any()
             )
         } returns Result.failure(failure)
 
@@ -208,6 +222,7 @@ class VaultRepositoryTest {
         ivBase64 = "AQIDBA==",
         category = "DOCUMENTS",
         sizeBytes = 128L,
-        encryptedAtMs = 1_700_000_000_000L
+        encryptedAtMs = 1_700_000_000_000L,
+        vaultFormatVersion = 2
     )
 }

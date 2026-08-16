@@ -106,8 +106,8 @@ class VaultPinInstrumentedTest {
         viewModel.onBiometricError("Biometric unavailable")
         assertEquals("Biometric unavailable", viewModel.pinError.value)
         viewModel.onBiometricSuccess()
-        assertTrue(viewModel.isVaultUnlocked.value)
-        assertNull(viewModel.pinError.value)
+        assertFalse(viewModel.isVaultUnlocked.value)
+        assertEquals("Authenticated CryptoObject is required.", viewModel.pinError.value)
     }
 
     @Test

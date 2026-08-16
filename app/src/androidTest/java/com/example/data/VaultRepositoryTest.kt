@@ -82,11 +82,21 @@ class VaultRepositoryTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         fakeDao = FakeFileDao()
         keystoreVaultManager = KeystoreVaultManager()
-        repository = VaultRepository(context, fakeDao, keystoreVaultManager)
+        keystoreVaultManager.deleteBiometricWrapKey()
+        val testPrefs = context.getSharedPreferences("vault-repository-test", Context.MODE_PRIVATE)
+        check(testPrefs.edit().clear().commit())
+        val engine = VaultManagerEngine(
+            context = context,
+            keystoreVaultManager = keystoreVaultManager,
+            injectedVaultPrefs = testPrefs
+        )
+        repository = VaultRepository(context, fakeDao, keystoreVaultManager, engine)
     }
 
     @Test
     fun testEncryptToVaultSuccess(): Unit = runBlocking {
+        assertTrue(repository.initializeVaultPin("2468"))
+        assertTrue(repository.unlockWithPin("2468"))
         val tempFile = java.io.File(context.filesDir, "secret.png")
         tempFile.writeText("sensitive secure data to encrypt")
         val file = FileItemEntity(id = 5, name = "secret.png", path = tempFile.absolutePath, category = "IMAGES", sizeBytes = tempFile.length())
@@ -97,6 +107,7 @@ class VaultRepositoryTest {
         assertTrue(fakeDao.updatedFile!!.isVault)
         assertNotNull(fakeDao.insertedVaultItem)
         assertEquals("secret.png", fakeDao.insertedVaultItem!!.originalName)
+        assertEquals(2, fakeDao.insertedVaultItem!!.vaultFormatVersion)
         
         // Original file should be securely wiped and deleted
         assertFalse(tempFile.exists())
@@ -104,6 +115,8 @@ class VaultRepositoryTest {
 
     @Test
     fun testUnlockFromVaultDelegation(): Unit = runBlocking {
+        assertTrue(repository.initializeVaultPin("2468"))
+        assertTrue(repository.unlockWithPin("2468"))
         val tempFile = java.io.File(context.filesDir, "secret.png")
         if (tempFile.exists()) tempFile.delete()
         
