@@ -52,6 +52,10 @@ class DashboardScreenInstrumentedTest {
     fun setUp(): Unit {
         app = ApplicationProvider.getApplicationContext<VVFApplication>()
         dao = AppDatabase.getDatabase(app).fileDao()
+        app.deleteSharedPreferences("vvf_vault_prefs")
+        File(app.noBackupFilesDir, "vvf_vault_prefs.secure").delete()
+        File(app.noBackupFilesDir, "vvf_vault_prefs.secure.tmp").delete()
+        app.repository = com.example.data.SmartManagerRepository(app, dao)
         fixturePrefix = "dashboard-fixture-${System.nanoTime()}-"
     }
 
@@ -220,7 +224,7 @@ class DashboardScreenInstrumentedTest {
 
     @Test
     fun dashboardEncryptActionCreatesVaultItemAndWipesSource(): Unit {
-        val viewModel = MainViewModel(app)
+        val viewModel = authenticatedViewModel()
         val sourceFile = File(app.cacheDir, "$fixturePrefix-vault.txt").apply {
             writeText("dashboard vault fixture")
         }
@@ -265,5 +269,12 @@ class DashboardScreenInstrumentedTest {
             }
         }
         assertFalse(sourceFile.exists())
+    }
+
+    private fun authenticatedViewModel(): MainViewModel {
+        val viewModel = MainViewModel(app)
+        check(viewModel.repository.initializeVaultPin("2468"))
+        check(viewModel.repository.unlockVaultWithPin("2468"))
+        return viewModel
     }
 }
