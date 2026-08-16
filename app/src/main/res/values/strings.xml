@@ -91,4 +91,15 @@
 
     <string name="back">Back</string>
     <string name="about">About</string>
+    <string name="google_drive_provider">Google Drive (Core Provider)</string>
+    <string name="google_drive_connected">Google Drive connected</string>
+    <string name="google_drive_not_connected">Google Drive not connected</string>
+    <string name="connected">Connected</string>
+    <string name="not_connected">Not Connected</string>
+    <string name="drive_session_present_sync_unavailable">Drive session is present; file sync is unavailable until a real local-file upload flow is configured.</string>
+    <string name="cloud_sync_oauth_required">No Google OAuth flow is configured in this build. Cloud sync remains disabled.</string>
+    <string name="configure_google_drive_oauth">Configure Google Drive OAuth</string>
+    <string name="sync_unavailable">Sync unavailable</string>
+    <string name="sync_action">Sync action</string>
+    <string name="disconnect">Disconnect</string>
 </resources>

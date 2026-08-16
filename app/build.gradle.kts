@@ -128,6 +128,7 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.litert)
   implementation(libs.mlkit.text.recognition)
+  implementation(libs.mlkit.text.recognition.devanagari)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)

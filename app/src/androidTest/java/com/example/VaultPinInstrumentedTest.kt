@@ -111,6 +111,21 @@ class VaultPinInstrumentedTest {
     }
 
     @Test
+    fun mainViewModelCompat_fiveFailedPins_triggerCooldown() {
+        val viewModel = MainViewModel(app)
+        assertTrue(viewModel.repository.initializeVaultPin("2468"))
+
+        repeat(5) {
+            "0000".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+        }
+
+        assertEquals("Too many incorrect attempts. Try again in 30 seconds.", viewModel.pinError.value)
+        viewModel.appendPinDigit("2")
+        assertEquals("", viewModel.enteredPin.value)
+        assertEquals("Too many incorrect attempts. Try again in 30 seconds.", viewModel.pinError.value)
+    }
+
+    @Test
     fun mainViewModelCompat_selectionAndEmptyOperations_areSafe() {
         val viewModel = MainViewModel(app)
 

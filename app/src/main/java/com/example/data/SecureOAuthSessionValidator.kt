@@ -7,12 +7,11 @@ package com.example.data
  */
 object SecureOAuthSessionValidator {
     private val demoAccessToken = Regex("^ya29\\.a0AcEw0eB-")
-    private val demoRefreshToken = Regex("^1//0")
 
     fun isValid(accessToken: String, refreshToken: String?): Boolean {
         if (accessToken.isBlank()) return false
         if (demoAccessToken.containsMatchIn(accessToken)) return false
-        if (refreshToken != null && demoRefreshToken.containsMatchIn(refreshToken)) return false
+        if (refreshToken != null && refreshToken.isBlank()) return false
         return true
     }
 }

@@ -112,9 +112,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncCloudProvider(provider: String) {
-        viewModelScope.launch(coroutineExceptionHandler) {
-            repository.addSyncItem(provider, "Sync_Batch_${System.currentTimeMillis() / 1000}.zip", 12_500_000L)
-        }
+        val providerLabel = provider.ifBlank { "requested provider" }
+        _globalError.value =
+            "Cloud sync for $providerLabel requires a real OAuth session and a selected " +
+                "local file; no placeholder sync was queued."
     }
 
     fun retryCloudSyncItem(id: Long) { viewModelScope.launch(coroutineExceptionHandler) { repository.retryCloudSyncItem(id) } }

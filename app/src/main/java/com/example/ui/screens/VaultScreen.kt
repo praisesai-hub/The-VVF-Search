@@ -49,9 +49,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager
 import androidx.core.content.ContextCompat
+import android.view.WindowManager
 import android.widget.Toast
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,6 +97,13 @@ fun VaultScreen(
     val context = LocalContext.current
     val activity = remember(context) { context as? FragmentActivity }
     val executor = remember(context) { ContextCompat.getMainExecutor(context) }
+
+    DisposableEffect(activity) {
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
     
     val isBiometricAvailable = remember(context) {
         val biometricManager = BiometricManager.from(context)

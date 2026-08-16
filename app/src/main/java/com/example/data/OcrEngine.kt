@@ -2,21 +2,22 @@ package com.example.data
 
 import android.content.Context
 import android.graphics.Bitmap
-import androidx.core.graphics.createBitmap
+import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.resume
-
-import android.graphics.Rect
-import android.graphics.BitmapFactory
 
 data class OcrTextBlock(
     val text: String,
@@ -31,82 +32,63 @@ interface OcrEngine {
 }
 
 class MLKitOcrEngine(private val context: Context) : OcrEngine {
-    private val textRecognizer by lazy {
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    private val recognizers by lazy {
+        listOf<TextRecognizer>(
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS),
+            TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build()),
+        )
     }
 
     override suspend fun extractOcrBlocks(filePath: String): List<OcrTextBlock> = withContext(Dispatchers.IO) {
         val file = File(filePath)
         if (!file.exists() || !file.canRead()) return@withContext emptyList()
 
-        val lowerName = file.name.lowercase()
-        var renderedBitmap: Bitmap? = null
-        if (lowerName.endsWith(".pdf")) {
-            try {
-                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)?.use { pfd ->
-                    PdfRenderer(pfd).use { renderer ->
-                        if (renderer.pageCount > 0) {
-                            renderer.openPage(0).use { page ->
-                                val width = page.width
-                                val height = page.height
-                                val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                renderedBitmap = bitmap
+        val pdfPages = if (file.extension.equals("pdf", ignoreCase = true)) renderPdfPages(file) else emptyList()
+        if (file.extension.equals("pdf", ignoreCase = true)) {
+            if (pdfPages.isEmpty()) return@withContext emptyList()
+            return@withContext try {
+                pdfPages.flatMap { bitmap ->
+                    try {
+                        val image = InputImage.fromBitmap(bitmap, 0)
+                        recognize(image, filePath).flatMap { visionText ->
+                            visionText.textBlocks.mapNotNull { block ->
+                                block.boundingBox?.let { box ->
+                                    OcrTextBlock(
+                                        text = block.text,
+                                        boundingBox = box,
+                                        imageWidth = image.width,
+                                        imageHeight = image.height,
+                                    )
+                                }
                             }
                         }
+                    } finally {
+                        bitmap.recycle()
                     }
                 }
             } catch (e: Exception) {
-                Log.e("MLKitOcrEngine", "PDF page rendering for OCR failed on $filePath: ${e.message}")
+                Log.e(TAG, "PDF OCR failed on $filePath: ${e.message}")
+                emptyList()
             }
         }
 
-        val imageToProcess = renderedBitmap?.let { bitmap ->
-            InputImage.fromBitmap(bitmap, 0)
-        } ?: run {
-            try {
-                InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
-            } catch (e: Exception) {
-                null
-            }
-        }
-
-        if (imageToProcess == null) {
-            renderedBitmap?.recycle()
+        val image = try {
+            InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
+        } catch (e: Exception) {
+            Log.e(TAG, "Image loading for OCR failed on $filePath: ${e.message}")
             return@withContext emptyList()
         }
-
-        val imgWidth = imageToProcess.width
-        val imgHeight = imageToProcess.height
-
-        try {
-            suspendCancellableCoroutine { continuation ->
-                textRecognizer.process(imageToProcess)
-                    .addOnSuccessListener { visionText ->
-                        val blocks = visionText.textBlocks.mapNotNull { block ->
-                            val box = block.boundingBox
-                            if (box != null) {
-                                OcrTextBlock(
-                                    text = block.text,
-                                    boundingBox = box,
-                                    imageWidth = imgWidth,
-                                    imageHeight = imgHeight
-                                )
-                            } else null
-                        }
-                        if (continuation.isActive) {
-                            continuation.resume(blocks)
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("MLKitOcrEngine", "ML Kit OCR blocks extraction failed on $filePath: ${e.message}")
-                        if (continuation.isActive) {
-                            continuation.resume(emptyList())
-                        }
-                    }
+        recognize(image, filePath).flatMap { visionText ->
+            visionText.textBlocks.mapNotNull { block ->
+                block.boundingBox?.let { box ->
+                    OcrTextBlock(
+                        text = block.text,
+                        boundingBox = box,
+                        imageWidth = image.width,
+                        imageHeight = image.height,
+                    )
+                }
             }
-        } finally {
-            renderedBitmap?.recycle()
         }
     }
 
@@ -114,60 +96,79 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
         val file = File(filePath)
         if (!file.exists() || !file.canRead()) return@withContext ""
 
-        val lowerName = file.name.lowercase()
-        var renderedBitmap: Bitmap? = null
-        if (lowerName.endsWith(".pdf")) {
-            try {
-                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)?.use { pfd ->
-                    PdfRenderer(pfd).use { renderer ->
-                        if (renderer.pageCount > 0) {
-                            renderer.openPage(0).use { page ->
-                                val width = page.width
-                                val height = page.height
-                                val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                renderedBitmap = bitmap
-                            }
-                        }
+        val pdfPages = if (file.extension.equals("pdf", ignoreCase = true)) renderPdfPages(file) else emptyList()
+        if (file.extension.equals("pdf", ignoreCase = true)) {
+            if (pdfPages.isEmpty()) return@withContext ""
+            return@withContext try {
+                pdfPages.map { bitmap ->
+                    try {
+                        recognizedText(InputImage.fromBitmap(bitmap, 0), filePath)
+                    } finally {
+                        bitmap.recycle()
                     }
-                }
+                }.filter(String::isNotBlank).joinToString("\n\n")
             } catch (e: Exception) {
-                Log.e("MLKitOcrEngine", "PDF page rendering for OCR failed on $filePath: ${e.message}")
+                Log.e(TAG, "PDF OCR failed on $filePath: ${e.message}")
+                ""
             }
         }
 
-        val imageToProcess = renderedBitmap?.let { bitmap ->
-            InputImage.fromBitmap(bitmap, 0)
-        } ?: run {
-            try {
-                InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
-            } catch (e: Exception) {
-                null
-            }
-        }
-
-        if (imageToProcess == null) {
-            renderedBitmap?.recycle()
+        val image = try {
+            InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
+        } catch (e: Exception) {
+            Log.e(TAG, "Image loading for OCR failed on $filePath: ${e.message}")
             return@withContext ""
         }
+        recognizedText(image, filePath)
+    }
 
-        try {
+    private fun renderPdfPages(file: File): List<Bitmap> {
+        return try {
+            ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                PdfRenderer(pfd).use(::renderPages)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "PDF page rendering for OCR failed on ${file.path}: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun renderPages(renderer: PdfRenderer): List<Bitmap> = buildList {
+        for (pageIndex in 0 until renderer.pageCount) {
+            add(renderPage(renderer, pageIndex))
+        }
+    }
+
+    private fun renderPage(renderer: PdfRenderer, pageIndex: Int): Bitmap =
+        renderer.openPage(pageIndex).use { page ->
+            Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            }
+        }
+
+    private suspend fun recognize(image: InputImage, filePath: String): List<Text> =
+        recognizers.mapNotNull { recognizer ->
             suspendCancellableCoroutine { continuation ->
-                textRecognizer.process(imageToProcess)
+                recognizer.process(image)
                     .addOnSuccessListener { visionText ->
-                        if (continuation.isActive) {
-                            continuation.resume(visionText.text)
-                        }
+                        if (continuation.isActive) continuation.resume(visionText)
                     }
-                    .addOnFailureListener { e ->
-                        Log.e("MLKitOcrEngine", "ML Kit text recognition failed on $filePath: ${e.message}")
-                        if (continuation.isActive) {
-                            continuation.resume("")
-                        }
+                    .addOnFailureListener { error ->
+                        Log.e(TAG, "ML Kit OCR failed on $filePath: ${error.message}")
+                        if (continuation.isActive) continuation.resume(null)
                     }
             }
-        } finally {
-            renderedBitmap?.recycle()
         }
+
+    private suspend fun recognizedText(image: InputImage, filePath: String): String =
+        recognize(image, filePath)
+            .asSequence()
+            .map { it.text.trim() }
+            .filter(String::isNotBlank)
+            .distinct()
+            .joinToString("\n")
+
+    private companion object {
+        const val TAG = "MLKitOcrEngine"
     }
 }

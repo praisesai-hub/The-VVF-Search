@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.os.SystemClock
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -15,8 +16,12 @@ private class VmCompatState {
     val setupPinFirstEntry = MutableStateFlow<String?>(null)
     val selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val pageLoading = MutableStateFlow(false)
+    var failedPinAttempts: Int = 0
+    var pinLockedUntilElapsedMs: Long = 0L
 }
 
+private const val PIN_LOCKOUT_THRESHOLD = 5
+private const val PIN_LOCKOUT_DURATION_MS = 30_000L
 private val compatStates = WeakHashMap<MainViewModel, VmCompatState>()
 private fun MainViewModel.compatState(): VmCompatState = synchronized(compatStates) {
     compatStates.getOrPut(this) { VmCompatState() }
@@ -84,6 +89,17 @@ fun MainViewModel.loadNextPage() { }
 
 fun MainViewModel.appendPinDigit(digit: String) {
     val state = compatState()
+    val now = SystemClock.elapsedRealtime()
+    if (state.pinLockedUntilElapsedMs > now) {
+        state.enteredPin.value = ""
+        state.pinError.value = "Too many incorrect attempts. Try again in 30 seconds."
+        return
+    }
+    if (state.pinLockedUntilElapsedMs != 0L) {
+        state.pinLockedUntilElapsedMs = 0L
+        state.failedPinAttempts = 0
+        state.pinError.value = null
+    }
     if (state.enteredPin.value.length >= 4 || digit.length != 1 || !digit[0].isDigit()) return
     val pin = state.enteredPin.value + digit
     state.enteredPin.value = pin
@@ -97,6 +113,8 @@ fun MainViewModel.appendPinDigit(digit: String) {
                 state.pinError.value = "Re-enter the new PIN to confirm."
             } else if (firstEntry == pin && repository.initializeVaultPin(pin)) {
                 state.setupPinFirstEntry.value = null
+                state.failedPinAttempts = 0
+                state.pinLockedUntilElapsedMs = 0L
                 state.vaultUnlocked.value = true
                 state.enteredPin.value = ""
                 state.pinError.value = null
@@ -106,11 +124,19 @@ fun MainViewModel.appendPinDigit(digit: String) {
                 state.pinError.value = "PINs did not match. Try again."
             }
         } else if (repository.verifyVaultPin(pin, repository.getStoredVaultPinHash())) {
+            state.failedPinAttempts = 0
+            state.pinLockedUntilElapsedMs = 0L
             state.vaultUnlocked.value = true
             state.enteredPin.value = ""
         } else {
-            state.pinError.value = "Incorrect PIN. Try again."
+            state.failedPinAttempts += 1
             state.enteredPin.value = ""
+            if (state.failedPinAttempts >= PIN_LOCKOUT_THRESHOLD) {
+                state.pinLockedUntilElapsedMs = now + PIN_LOCKOUT_DURATION_MS
+                state.pinError.value = "Too many incorrect attempts. Try again in 30 seconds."
+            } else {
+                state.pinError.value = "Incorrect PIN. Try again."
+            }
         }
     }
 }
@@ -130,8 +156,11 @@ fun MainViewModel.lockVault() {
 }
 
 fun MainViewModel.onBiometricSuccess() {
-    compatState().vaultUnlocked.value = true
-    compatState().pinError.value = null
+    val state = compatState()
+    state.failedPinAttempts = 0
+    state.pinLockedUntilElapsedMs = 0L
+    state.vaultUnlocked.value = true
+    state.pinError.value = null
 }
 
 fun MainViewModel.onBiometricError(message: String) {

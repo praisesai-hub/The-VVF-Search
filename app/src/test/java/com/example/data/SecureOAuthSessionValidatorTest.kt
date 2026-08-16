@@ -33,11 +33,21 @@ class SecureOAuthSessionValidatorTest {
     }
 
     @Test
-    fun isValid_rejectsKnownDemoRefreshTokenPrefix() {
+    fun isValid_acceptsRefreshTokenWithGooglePrefix() {
+        assertTrue(
+            SecureOAuthSessionValidator.isValid(
+                accessToken = "real-issued-access-token",
+                refreshToken = "1//0-refresh-token"
+            )
+        )
+    }
+
+    @Test
+    fun isValid_rejectsBlankRefreshTokensWhenProvided() {
         assertFalse(
             SecureOAuthSessionValidator.isValid(
                 accessToken = "real-issued-access-token",
-                refreshToken = "1//0-demo-refresh-token"
+                refreshToken = "   "
             )
         )
     }

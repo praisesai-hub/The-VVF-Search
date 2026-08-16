@@ -129,23 +129,39 @@ fun CloudSyncSection(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = if (auth is GoogleAuthState.SignedIn) Icons.Default.CloudDone else Icons.Default.CloudQueue,
-                                contentDescription = null,
+                                imageVector = if (auth is GoogleAuthState.SignedIn) {
+                                    Icons.Default.CloudDone
+                                } else {
+                                    Icons.Default.CloudQueue
+                                },
+                                contentDescription = stringResource(
+                                    if (auth is GoogleAuthState.SignedIn) {
+                                        R.string.google_drive_connected
+                                    } else {
+                                        R.string.google_drive_not_connected
+                                    }
+                                ),
                                 tint = if (auth is GoogleAuthState.SignedIn) EmeraldGreen else SoftGold
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Google Drive (Core Provider)",
+                                text = stringResource(R.string.google_drive_provider),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
                         }
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = if (auth is GoogleAuthState.SignedIn) EmeraldGreen.copy(alpha = 0.2f) else SoftGold.copy(alpha = 0.2f)
+                            color = if (auth is GoogleAuthState.SignedIn) {
+                                EmeraldGreen.copy(alpha = 0.2f)
+                            } else {
+                                SoftGold.copy(alpha = 0.2f)
+                            }
                         ) {
                             Text(
-                                text = if (auth is GoogleAuthState.SignedIn) "Connected" else "Not Connected",
+                                text = stringResource(
+                                    if (auth is GoogleAuthState.SignedIn) R.string.connected else R.string.not_connected
+                                ),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (auth is GoogleAuthState.SignedIn) EmeraldGreen else SoftGold,
@@ -157,7 +173,7 @@ fun CloudSyncSection(
                     
                     if (auth is GoogleAuthState.SignedIn) {
                         Text(
-                            text = "Linked account: ${auth.email}\nSecure, automated background cloud synchronization active.",
+                            text = stringResource(R.string.drive_session_present_sync_unavailable),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -168,15 +184,19 @@ fun CloudSyncSection(
                                 colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange),
                                 modifier = Modifier.testTag("trigger_google_drive_sync_btn")
                             ) {
-                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(
+                                    Icons.Default.Sync,
+                                    contentDescription = stringResource(R.string.sync_action),
+                                    modifier = Modifier.size(16.dp)
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.trigger_drive_sync_now))
+                                Text(stringResource(R.string.sync_unavailable))
                             }
                             TextButton(
                                 onClick = { viewModel.signOutFromGoogle() },
                                 modifier = Modifier.testTag("google_drive_disconnect_btn")
                             ) {
-                                Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.disconnect), color = MaterialTheme.colorScheme.error)
                             }
                         }
                     } else {
@@ -190,7 +210,7 @@ fun CloudSyncSection(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "Cloud Sync: Link your Google Drive account to activate secure, automated cloud sync.",
+                            text = stringResource(R.string.cloud_sync_oauth_required),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -208,7 +228,7 @@ fun CloudSyncSection(
                             colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange),
                             modifier = Modifier.testTag("google_drive_connect_btn")
                         ) {
-                            Text("Connect Google Drive")
+                            Text(stringResource(R.string.configure_google_drive_oauth))
                         }
                     }
                 }
