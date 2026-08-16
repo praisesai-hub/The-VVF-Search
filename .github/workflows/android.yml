@@ -75,6 +75,10 @@ jobs:
           --expected-revision "$GITHUB_SHA" \
           --manifest gradle/libs.versions.toml \
           --manifest app/build.gradle.kts
+        python3 scripts/verify_release_runtime_security.py \
+          --report "$reports_dir/releaseRuntimeClasspath.txt" \
+          --policy scripts/release-runtime-security-policy.txt
+        PYTHONPATH=scripts python3 -m unittest scripts/test_verify_release_runtime_security.py
     - name: Run Unit Tests
       run: ./gradlew :app:testDebugUnitTest
     - name: Generate JVM Unit Test Coverage Report
