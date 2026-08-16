@@ -299,9 +299,17 @@ class PhysicalStorageManagerInstrumentedTest {
             )
 
             assertTrue(restored.isSuccess)
-            assertEquals(destinationUri.toString(), restored.getOrThrow())
-            context.contentResolver.openInputStream(destinationUri)!!.use { input ->
-                assertArrayEquals(sourceBytes, input.readBytes())
+            val restoredPath = restored.getOrThrow()
+            if (restoredPath.startsWith("content://")) {
+                assertEquals(destinationUri.toString(), restoredPath)
+                context.contentResolver.openInputStream(destinationUri)!!.use { input ->
+                    assertArrayEquals(sourceBytes, input.readBytes())
+                }
+            } else {
+                val restoredFile = File(restoredPath)
+                assertTrue(restoredFile.exists())
+                assertArrayEquals(sourceBytes, restoredFile.readBytes())
+                assertTrue(restoredFile.delete())
             }
             assertFalse(File(vaultPath).exists())
         } finally {
