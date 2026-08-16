@@ -174,6 +174,40 @@ class StorageScannerInstrumentedTest {
         }
     }
 
+    @Test
+    fun categoryAndFileTypePredicates_coverSupportedAndFallbackExtensions() {
+        assertEquals(FileCategory.IMAGES, scanner.determineCategory("photo.JPEG"))
+        assertEquals(FileCategory.DOCUMENTS, scanner.determineCategory("report.csv"))
+        assertEquals(FileCategory.AUDIO, scanner.determineCategory("voice.ogg"))
+        assertEquals(FileCategory.VIDEO, scanner.determineCategory("clip.webm"))
+        assertEquals(FileCategory.ARCHIVES, scanner.determineCategory("backup.tar"))
+        assertEquals(FileCategory.APKS, scanner.determineCategory("bundle.apks"))
+        assertEquals(FileCategory.OTHER, scanner.determineCategory("unknown.bin"))
+        assertTrue(scanner.isImageFile("photo.webp"))
+        assertTrue(scanner.isVideoFile("clip.mp4"))
+        assertTrue(scanner.isPdfFile("report.PDF"))
+        assertTrue(scanner.isDocumentFile("report.docx"))
+        assertFalse(scanner.isImageFile("report.txt"))
+        assertFalse(scanner.isVideoFile("photo.jpg"))
+    }
+
+    @Test
+    fun hammingDistance_validatesLengthAndHexInput() {
+        assertEquals(0, scanner.calculateHammingDistance("0000000000000000", "0000000000000000"))
+        assertEquals(64, scanner.calculateHammingDistance("0000000000000000", "ffffffffffffffff"))
+        assertEquals(-1, scanner.calculateHammingDistance("short", "0000000000000000"))
+        assertEquals(-1, scanner.calculateHammingDistance("zzzzzzzzzzzzzzzz", "0000000000000000"))
+    }
+
+    @Test
+    fun fileHashAndQuietDHash_failClosedForMissingOrUnsupportedFiles() = runBlocking {
+        val missing = File(testRoot, "missing.txt")
+        assertEquals("", scanner.computeFileHash(missing))
+        assertEquals("", scanner.computeDHashQuietly(missing))
+        assertEquals("", scanner.computeDHash(File(testRoot, "not-image.txt").apply { writeText("payload") }))
+        assertEquals("", scanner.computeDocumentFingerprint(File(testRoot, "not-document.bin").apply { writeText("payload") }))
+    }
+
     private fun createDescendingBitmap(): Bitmap {
         return Bitmap.createBitmap(9, 8, Bitmap.Config.ARGB_8888).also { bitmap ->
             for (y in 0 until 8) {
