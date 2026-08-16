@@ -157,7 +157,8 @@ class StorageScannerInstrumentedTest {
 
     @Test
     fun scanDeviceStorage_discoversPublishedMediaStoreImageAndComputesHashes(): Unit = runBlocking {
-        val mediaUri = insertMediaFile("vvf-scanner-${System.nanoTime()}.png", "image/png")
+        val displayName = "vvf-scanner-${System.nanoTime()}.png"
+        val mediaUri = insertMediaFile(displayName, "image/png")
         val bitmap = createDescendingBitmap()
         try {
             context.contentResolver.openOutputStream(mediaUri)!!.use { output ->
@@ -166,7 +167,7 @@ class StorageScannerInstrumentedTest {
             publishMediaFile(mediaUri)
 
             val discovered = scanner.scanDeviceStorage(computeHashes = true)
-            val item = discovered.firstOrNull { it.path == mediaUri.toString() }
+            val item = discovered.firstOrNull { it.name == displayName }
 
             assertNotNull(item)
             assertEquals(FileCategory.IMAGES.name, item?.category)
