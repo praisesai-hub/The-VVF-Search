@@ -360,6 +360,24 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
+    fun cloudSyncSuccesses_coverProviderMappingEnqueueRetryAndCancel(): Unit = runBlocking {
+        fakeDao.plugins += PluginEntity("onedrive_sync", "OneDrive", "CLOUD", "Sync", true, false)
+        fakeDao.plugins += PluginEntity("dropbox_sync", "Dropbox", "CLOUD", "Sync", true, false)
+
+        assertTrue(repository.enqueueCloudSyncItem("ONEDRIVE", "one.txt", 12L))
+        assertTrue(repository.enqueueCloudSyncItem("DROPBOX", "two.txt", 24L))
+        assertFalse(repository.enqueueCloudSyncItem("UNKNOWN_PROVIDER", "three.txt", 36L))
+
+        val queued = fakeDao.cloudSyncItems.single()
+        assertEquals("DROPBOX", queued.provider)
+        assertEquals("QUEUED", queued.status)
+        assertTrue(repository.retryCloudSyncItem(queued.id))
+        assertEquals("QUEUED", fakeDao.cloudSyncItems.single().status)
+        assertTrue(repository.cancelCloudSyncItem(queued.id))
+        assertEquals(listOf(queued.id), fakeDao.deletedCloudSyncIds)
+    }
+
+    @Test
     fun repository_lookup_delegatesToDao(): Unit {
         runBlocking {
             val expected = image(30L, "lookup.jpg")

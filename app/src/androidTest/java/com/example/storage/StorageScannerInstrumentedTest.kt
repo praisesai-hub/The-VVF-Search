@@ -1,8 +1,12 @@
 package com.example.storage
 
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -139,14 +143,39 @@ class StorageScannerInstrumentedTest {
     }
 
     @Test
-    fun computeDocumentFingerprint_handlesEmptyUnsupportedAndLargeFiles(): Unit = runBlocking {
+    fun computeDocumentFingerprint_handlesEmptySmallUnsupportedAndLargeFiles(): Unit = runBlocking {
         val empty = File(testRoot, "empty.txt").apply { createNewFile() }
+        val small = File(testRoot, "small.txt").apply { writeText("small document") }
         val large = File(testRoot, "large.txt").apply { writeText("x".repeat(9_000)) }
         val unsupported = File(testRoot, "archive.zip").apply { writeText("archive") }
 
         assertEquals("", scanner.computeDocumentFingerprint(empty))
+        assertEquals(16, scanner.computeDocumentFingerprint(small).length)
         assertEquals("", scanner.computeDocumentFingerprint(unsupported))
         assertEquals(16, scanner.computeDocumentFingerprint(large).length)
+    }
+
+    @Test
+    fun scanDeviceStorage_discoversPublishedMediaStoreImageAndComputesHashes(): Unit = runBlocking {
+        val mediaUri = insertMediaFile("vvf-scanner-${System.nanoTime()}.png", "image/png")
+        val bitmap = createDescendingBitmap()
+        try {
+            context.contentResolver.openOutputStream(mediaUri)!!.use { output ->
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+            }
+            publishMediaFile(mediaUri)
+
+            val discovered = scanner.scanDeviceStorage(computeHashes = true)
+            val item = discovered.firstOrNull { it.path == mediaUri.toString() }
+
+            assertNotNull(item)
+            assertEquals(FileCategory.IMAGES.name, item?.category)
+            assertTrue(item?.md5Hash?.matches(Regex("[0-9a-f]{64}")) == true)
+            assertTrue(item?.visualSimilarityHash?.matches(Regex("[0-9a-f]{16}")) == true)
+        } finally {
+            bitmap.recycle()
+            context.contentResolver.delete(mediaUri, null, null)
+        }
     }
 
     @Test
@@ -220,6 +249,31 @@ class StorageScannerInstrumentedTest {
         assertEquals("", scanner.computeDHashQuietly(missing))
         assertEquals("", scanner.computeDHash(File(testRoot, "not-image.txt").apply { writeText("payload") }))
         assertEquals("", scanner.computeDocumentFingerprint(File(testRoot, "not-document.bin").apply { writeText("payload") }))
+    }
+
+    private fun insertMediaFile(displayName: String, mimeType: String): android.net.Uri {
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        } else {
+            MediaStore.Files.getContentUri("external")
+        }
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/VVF-Test")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+        }
+        return context.contentResolver.insert(collection, values)
+            ?: throw AssertionError("MediaStore scanner fixture could not be created")
+    }
+
+    private fun publishMediaFile(uri: android.net.Uri) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            assertEquals(1, context.contentResolver.update(uri, values, null, null))
+        }
     }
 
     private fun createDescendingBitmap(): Bitmap {
