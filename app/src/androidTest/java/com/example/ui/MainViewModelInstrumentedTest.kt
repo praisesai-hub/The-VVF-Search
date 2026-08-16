@@ -71,7 +71,7 @@ class MainViewModelInstrumentedTest {
     }
 
     @Test
-    fun invalidUriImport_usesSafeFallbackNameAndCategory(): Unit = runBlocking {
+    fun uriImport_withoutMetadata_usesDeterministicDefaultNameAndCategory(): Unit = runBlocking {
         val viewModel = MainViewModel(application)
         val uri = Uri.parse("content:///not-found.txt")
 
@@ -81,8 +81,9 @@ class MainViewModelInstrumentedTest {
         }
         val imported = viewModel.repository.activeFiles.first { rows -> rows.any { it.path == uri.toString() } }
             .first { it.path == uri.toString() }
-        assertEquals("not-found.txt", imported.name)
-        assertEquals(FileCategory.DOCUMENTS.name, imported.category)
+        assertTrue(imported.name.startsWith("Picked_File_"))
+        assertTrue(imported.name.endsWith(".bin"))
+        assertEquals(FileCategory.OTHER.name, imported.category)
         assertEquals("SAF_Import", imported.tags)
     }
 
