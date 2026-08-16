@@ -61,6 +61,27 @@ class SecureKeyValueStoreInstrumentedTest {
     }
 
     @Test
+    fun migrationEntries_filtersNullAndUnallowlistedValues() {
+        val committed = mutableMapOf<String, String?>()
+        val target = object : StringKeyValueStore {
+            override fun getString(key: String, defaultValue: String?): String? = committed[key] ?: defaultValue
+            override fun commit(values: Map<String, String?>): Boolean {
+                committed.putAll(values)
+                return true
+            }
+        }
+
+        assertTrue(
+            LegacyEncryptedPreferencesMigration.migrateEntries(
+                target = target,
+                legacyEntries = mapOf("allowed" to "value", "nullValue" to null, "unrelated" to "ignored"),
+                keys = setOf("allowed", "nullValue")
+            )
+        )
+        assertEquals(mapOf("allowed" to "value"), committed)
+    }
+
+    @Test
     fun legacy_encrypted_preferences_are_migrated_once() {
         val legacyMasterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
