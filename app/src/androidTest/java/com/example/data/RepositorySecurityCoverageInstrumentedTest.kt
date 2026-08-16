@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,6 +30,7 @@ class RepositorySecurityCoverageInstrumentedTest {
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
+        clearDefaultSecureVaultStore()
         keystore = KeystoreVaultManager()
         keystore.deleteBiometricWrapKey()
         dao = VaultRepositoryTest.FakeFileDao()
@@ -36,6 +38,17 @@ class RepositorySecurityCoverageInstrumentedTest {
         check(preferences.edit().clear().commit())
         val engine = VaultManagerEngine(context, keystore, injectedVaultPrefs = preferences)
         repository = VaultRepository(context, dao, keystore, engine)
+    }
+
+    @After
+    fun tearDown() {
+        clearDefaultSecureVaultStore()
+        keystore.deleteBiometricWrapKey()
+    }
+
+    private fun clearDefaultSecureVaultStore() {
+        File(context.noBackupFilesDir, "vvf_vault_prefs.secure").delete()
+        File(context.noBackupFilesDir, "vvf_vault_prefs.secure.tmp").delete()
     }
 
     @Test
