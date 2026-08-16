@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.os.SystemClock
+import androidx.biometric.BiometricPrompt
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -50,6 +51,7 @@ val MainViewModel.isVaultUnlocked: StateFlow<Boolean> get() = compatState().vaul
 val MainViewModel.enteredPin: StateFlow<String> get() = compatState().enteredPin
 val MainViewModel.pinError: StateFlow<String?> get() = compatState().pinError
 val MainViewModel.isVaultPinSetupRequired: Boolean get() = !repository.hasVaultPin()
+val MainViewModel.hasBiometricEnrollment: Boolean get() = repository.hasBiometricEnrollment()
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 val MainViewModel.semanticSearchResults: StateFlow<List<FileItemEntity>> get() =
@@ -90,54 +92,86 @@ fun MainViewModel.loadNextPage() { }
 fun MainViewModel.appendPinDigit(digit: String) {
     val state = compatState()
     val now = SystemClock.elapsedRealtime()
-    if (state.pinLockedUntilElapsedMs > now) {
-        state.enteredPin.value = ""
-        state.pinError.value = "Too many incorrect attempts. Try again in 30 seconds."
-        return
-    }
-    if (state.pinLockedUntilElapsedMs != 0L) {
-        state.pinLockedUntilElapsedMs = 0L
-        state.failedPinAttempts = 0
-        state.pinError.value = null
-    }
-    if (state.enteredPin.value.length >= 4 || digit.length != 1 || !digit[0].isDigit()) return
+    if (state.isPinCooldownActive(now)) return
+    state.clearExpiredPinCooldown()
+    processPinDigit(state, digit, now)
+}
+
+private fun MainViewModel.processPinDigit(state: VmCompatState, digit: String, now: Long) {
+    if (!state.acceptsPinDigit(digit)) return
     val pin = state.enteredPin.value + digit
     state.enteredPin.value = pin
     state.pinError.value = null
-    if (pin.length == 4) {
-        if (isVaultPinSetupRequired) {
-            val firstEntry = state.setupPinFirstEntry.value
-            if (firstEntry == null) {
-                state.setupPinFirstEntry.value = pin
-                state.enteredPin.value = ""
-                state.pinError.value = "Re-enter the new PIN to confirm."
-            } else if (firstEntry == pin && repository.initializeVaultPin(pin)) {
-                state.setupPinFirstEntry.value = null
-                state.failedPinAttempts = 0
-                state.pinLockedUntilElapsedMs = 0L
-                state.vaultUnlocked.value = true
-                state.enteredPin.value = ""
-                state.pinError.value = null
-            } else {
-                state.setupPinFirstEntry.value = null
-                state.enteredPin.value = ""
-                state.pinError.value = "PINs did not match. Try again."
-            }
-        } else if (repository.verifyVaultPin(pin, repository.getStoredVaultPinHash())) {
-            state.failedPinAttempts = 0
-            state.pinLockedUntilElapsedMs = 0L
-            state.vaultUnlocked.value = true
-            state.enteredPin.value = ""
-        } else {
-            state.failedPinAttempts += 1
-            state.enteredPin.value = ""
-            if (state.failedPinAttempts >= PIN_LOCKOUT_THRESHOLD) {
-                state.pinLockedUntilElapsedMs = now + PIN_LOCKOUT_DURATION_MS
-                state.pinError.value = "Too many incorrect attempts. Try again in 30 seconds."
-            } else {
-                state.pinError.value = "Incorrect PIN. Try again."
-            }
-        }
+    if (pin.length != 4) return
+    if (isVaultPinSetupRequired) {
+        handlePinSetup(state, pin)
+    } else {
+        handlePinUnlock(state, pin, now)
+    }
+}
+
+private fun VmCompatState.isPinCooldownActive(now: Long): Boolean {
+    if (pinLockedUntilElapsedMs <= now) return false
+    enteredPin.value = ""
+    pinError.value = "Too many incorrect attempts. Try again in 30 seconds."
+    return true
+}
+
+private fun VmCompatState.clearExpiredPinCooldown() {
+    if (pinLockedUntilElapsedMs == 0L) return
+    pinLockedUntilElapsedMs = 0L
+    failedPinAttempts = 0
+    pinError.value = null
+}
+
+private fun VmCompatState.acceptsPinDigit(digit: String): Boolean =
+    enteredPin.value.length < 4 && digit.length == 1 && digit[0].isDigit()
+
+private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
+    val firstEntry = state.setupPinFirstEntry.value
+    if (firstEntry == null) {
+        state.setupPinFirstEntry.value = pin
+        state.enteredPin.value = ""
+        state.pinError.value = "Re-enter the new PIN to confirm."
+        return
+    }
+    if (firstEntry != pin || !repository.initializeVaultPin(pin)) {
+        state.setupPinFirstEntry.value = null
+        state.enteredPin.value = ""
+        state.pinError.value = "PINs did not match. Try again."
+        return
+    }
+    state.setupPinFirstEntry.value = null
+    state.failedPinAttempts = 0
+    state.pinLockedUntilElapsedMs = 0L
+    if (repository.unlockVaultWithPin(pin)) {
+        state.vaultUnlocked.value = true
+        state.enteredPin.value = ""
+        state.pinError.value = null
+    } else {
+        state.vaultUnlocked.value = false
+        state.pinError.value = "Vault session could not be created."
+    }
+}
+
+private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String, now: Long) {
+    val storedHash = repository.getStoredVaultPinHash()
+    val unlocked = repository.verifyVaultPin(pin, storedHash) && repository.unlockVaultWithPin(pin)
+    if (unlocked) {
+        state.failedPinAttempts = 0
+        state.pinLockedUntilElapsedMs = 0L
+        state.vaultUnlocked.value = true
+        state.enteredPin.value = ""
+        state.pinError.value = null
+        return
+    }
+    state.failedPinAttempts += 1
+    state.enteredPin.value = ""
+    state.pinError.value = if (state.failedPinAttempts >= PIN_LOCKOUT_THRESHOLD) {
+        state.pinLockedUntilElapsedMs = now + PIN_LOCKOUT_DURATION_MS
+        "Too many incorrect attempts. Try again in 30 seconds."
+    } else {
+        "Incorrect PIN. Try again."
     }
 }
 
@@ -149,18 +183,51 @@ fun MainViewModel.clearPinDigit() {
 
 fun MainViewModel.lockVault() {
     val state = compatState()
+    repository.lockVaultSession()
     state.vaultUnlocked.value = false
     state.enteredPin.value = ""
     state.setupPinFirstEntry.value = null
     state.pinError.value = null
 }
 
-fun MainViewModel.onBiometricSuccess() {
+fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResult) {
     val state = compatState()
-    state.failedPinAttempts = 0
-    state.pinLockedUntilElapsedMs = 0L
-    state.vaultUnlocked.value = true
-    state.pinError.value = null
+    try {
+        if (!repository.completeBiometricUnlock(result)) {
+            state.pinError.value = "Authenticated vault session could not be created."
+            return
+        }
+        state.failedPinAttempts = 0
+        state.pinLockedUntilElapsedMs = 0L
+        state.vaultUnlocked.value = true
+        state.pinError.value = null
+    } catch (_: java.security.GeneralSecurityException) {
+        state.vaultUnlocked.value = false
+        state.pinError.value = "Biometric vault unlock failed."
+    } catch (_: SecurityException) {
+        state.vaultUnlocked.value = false
+        state.pinError.value = "Biometric vault unlock failed."
+    }
+}
+
+fun MainViewModel.onBiometricEnrollmentSuccess(result: BiometricPrompt.AuthenticationResult): Boolean {
+    return try {
+        val success = repository.completeBiometricEnrollment(result)
+        if (!success) compatState().pinError.value = "Biometric enrollment could not be saved."
+        success
+    } catch (_: java.security.GeneralSecurityException) {
+        compatState().pinError.value = "Biometric enrollment failed."
+        false
+    } catch (_: SecurityException) {
+        compatState().pinError.value = "Biometric enrollment failed."
+        false
+    }
+}
+
+/** Callback-only unlock is intentionally fail-closed and cannot change vault state. */
+@Deprecated("Use onBiometricSuccess(AuthenticationResult)")
+fun MainViewModel.onBiometricSuccess() {
+    onBiometricError("Authenticated CryptoObject is required.")
 }
 
 fun MainViewModel.onBiometricError(message: String) {

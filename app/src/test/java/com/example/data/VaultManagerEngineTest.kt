@@ -2,9 +2,12 @@ package com.example.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Base64
 import com.example.security.KeystoreVaultManager
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,6 +23,19 @@ class VaultManagerEngineTest {
     fun setUp() {
         context = mockk(relaxed = true)
         keystore = mockk(relaxed = true)
+        every { keystore.randomVaultDek() } returns ByteArray(32) { index -> (index + 1).toByte() }
+        mockkStatic(Base64::class)
+        every { Base64.encodeToString(any<ByteArray>(), Base64.NO_WRAP) } answers {
+            java.util.Base64.getEncoder().encodeToString(firstArg())
+        }
+        every { Base64.decode(any<String>(), Base64.NO_WRAP) } answers {
+            java.util.Base64.getDecoder().decode(firstArg<String>())
+        }
+    }
+
+    @org.junit.After
+    fun tearDownBase64() {
+        unmockkStatic(Base64::class)
     }
 
     @Test
@@ -58,7 +74,7 @@ class VaultManagerEngineTest {
         assertFalse(engine.changeVaultPin("1111", "2222"))
         assertEquals("existing-hash", engine.getStoredVaultPinHash())
         verify(exactly = 1) { keystore.verifyPin("1111", "existing-hash") }
-        verify(exactly = 1) { keystore.hashPin("2222") }
+        verify(exactly = 0) { keystore.hashPin("2222") }
     }
 
     @Test

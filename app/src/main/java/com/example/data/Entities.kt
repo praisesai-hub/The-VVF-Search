@@ -62,7 +62,8 @@ data class VaultItemEntity(
     val category: String,
     val sizeBytes: Long,
     val encryptedAtMs: Long = System.currentTimeMillis(),
-    val isBiometricProtected: Boolean = true
+    val isBiometricProtected: Boolean = true,
+    val vaultFormatVersion: Int = 1
 )
 
 @JsonClass(generateAdapter = true)

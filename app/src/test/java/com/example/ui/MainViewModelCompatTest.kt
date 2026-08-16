@@ -92,8 +92,8 @@ class MainViewModelCompatTest {
         assertFalse(viewModel.isVaultUnlocked.value)
 
         viewModel.onBiometricSuccess()
-        assertTrue(viewModel.isVaultUnlocked.value)
-        assertEquals(null, viewModel.pinError.value)
+        assertFalse(viewModel.isVaultUnlocked.value)
+        assertEquals("Authenticated CryptoObject is required.", viewModel.pinError.value)
     }
 
     @Test
