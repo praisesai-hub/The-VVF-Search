@@ -39,7 +39,7 @@ class RepositorySecurityCoverageInstrumentedTest {
     }
 
     @Test
-    fun legacyVaultItem_isMigratedThroughAuthenticatedSession() = runBlocking {
+    fun legacyVaultItem_isMigratedThroughAuthenticatedSession(): Unit = runBlocking {
         val pin = "2468"
         assertTrue(repository.initializeVaultPin(pin))
         assertTrue(repository.unlockWithPin(pin))
@@ -84,7 +84,7 @@ class RepositorySecurityCoverageInstrumentedTest {
     }
 
     @Test
-    fun smartRepository_delegatesVaultAndFailClosedSyncPaths() = runBlocking {
+    fun smartRepository_delegatesVaultAndFailClosedSyncPaths(): Unit = runBlocking {
         val facade = SmartManagerRepository(context, dao)
 
         assertFalse(facade.isSemanticSearchAvailable)
