@@ -10,6 +10,8 @@ import com.example.security.KeystoreVaultManager
 import java.io.File
 import com.example.ui.MainViewModel
 import com.example.ui.appendPinDigit
+import com.example.ui.autoSelectExtraDuplicates
+import com.example.ui.cleanSelectedDuplicates
 import com.example.ui.changeVaultPin
 import com.example.ui.clearPinDigit
 import com.example.ui.enteredPin
@@ -19,6 +21,9 @@ import com.example.ui.lockVault
 import com.example.ui.onBiometricError
 import com.example.ui.onBiometricSuccess
 import com.example.ui.pinError
+import com.example.ui.selectedDuplicateIds
+import com.example.ui.toggleDuplicateSelection
+import com.example.ui.loadNextPage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -103,6 +108,20 @@ class VaultPinInstrumentedTest {
         viewModel.onBiometricSuccess()
         assertTrue(viewModel.isVaultUnlocked.value)
         assertNull(viewModel.pinError.value)
+    }
+
+    @Test
+    fun mainViewModelCompat_selectionAndEmptyOperations_areSafe() {
+        val viewModel = MainViewModel(app)
+
+        viewModel.toggleDuplicateSelection(42L)
+        assertEquals(setOf(42L), viewModel.selectedDuplicateIds.value)
+        viewModel.toggleDuplicateSelection(42L)
+        assertTrue(viewModel.selectedDuplicateIds.value.isEmpty())
+        viewModel.autoSelectExtraDuplicates()
+        assertTrue(viewModel.selectedDuplicateIds.value.isEmpty())
+        viewModel.cleanSelectedDuplicates()
+        viewModel.loadNextPage()
     }
 
     @Test
