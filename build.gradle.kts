@@ -23,18 +23,18 @@ buildscript {
         version { strictly("1.85") }
         because("GHSA-wg6q-6289-32hp")
       }
-      classpath("io.netty:netty-buffer:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-codec:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-codec-http:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-codec-http2:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-common:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-handler:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-handler-proxy:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-resolver:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-transport:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-transport-classes-epoll:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-transport-native-epoll:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("io.netty:netty-transport-native-unix-common:4.1.136.Final") { version { strictly("4.1.136.Final") } }
+      classpath("io.netty:netty-buffer:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-codec:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-codec-http:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-codec-http2:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-common:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-handler:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-handler-proxy:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-resolver:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-transport:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-transport-classes-epoll:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-transport-native-epoll:4.2.17.Final") { version { strictly("4.2.17.Final") } }
+      classpath("io.netty:netty-transport-native-unix-common:4.2.17.Final") { version { strictly("4.2.17.Final") } }
       classpath("org.apache.commons:commons-lang3:3.18.0") {
         version { strictly("3.18.0") }
         because("GHSA-j288-q9x7-2f5v")
@@ -69,18 +69,18 @@ allprojects {
       "org.jdom:jdom2:2.0.6.1",
       "org.bouncycastle:bcprov-jdk18on:1.85.2",
       "org.bouncycastle:bcpkix-jdk18on:1.85",
-      "io.netty:netty-buffer:4.1.136.Final",
-      "io.netty:netty-codec:4.1.136.Final",
-      "io.netty:netty-codec-http:4.1.136.Final",
-      "io.netty:netty-codec-http2:4.1.136.Final",
-      "io.netty:netty-common:4.1.136.Final",
-      "io.netty:netty-handler:4.1.136.Final",
-      "io.netty:netty-handler-proxy:4.1.136.Final",
-      "io.netty:netty-resolver:4.1.136.Final",
-      "io.netty:netty-transport:4.1.136.Final",
-      "io.netty:netty-transport-classes-epoll:4.1.136.Final",
-      "io.netty:netty-transport-native-epoll:4.1.136.Final",
-      "io.netty:netty-transport-native-unix-common:4.1.136.Final",
+      "io.netty:netty-buffer:4.2.17.Final",
+      "io.netty:netty-codec:4.2.17.Final",
+      "io.netty:netty-codec-http:4.2.17.Final",
+      "io.netty:netty-codec-http2:4.2.17.Final",
+      "io.netty:netty-common:4.2.17.Final",
+      "io.netty:netty-handler:4.2.17.Final",
+      "io.netty:netty-handler-proxy:4.2.17.Final",
+      "io.netty:netty-resolver:4.2.17.Final",
+      "io.netty:netty-transport:4.2.17.Final",
+      "io.netty:netty-transport-classes-epoll:4.2.17.Final",
+      "io.netty:netty-transport-native-epoll:4.2.17.Final",
+      "io.netty:netty-transport-native-unix-common:4.2.17.Final",
       "org.apache.commons:commons-lang3:3.18.0",
       "org.apache.httpcomponents:httpclient:4.5.14",
       "org.bitbucket.b_c:jose4j:0.9.6",
