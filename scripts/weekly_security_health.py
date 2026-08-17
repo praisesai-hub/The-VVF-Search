@@ -108,8 +108,22 @@ def collect_risks(
     *,
     now: datetime,
     stale_pr_days: int,
+    alert_access_error: str | None = None,
 ) -> list[Risk]:
     risks: list[Risk] = []
+
+    if alert_access_error:
+        risks.append(
+            Risk(
+                kind="dependabot_visibility_unavailable",
+                severity="high",
+                summary="Dependabot alert visibility is unavailable to the weekly workflow.",
+                details=(
+                    "Configure the DEPENDABOT_ALERTS_TOKEN repository secret with a token permitted to read "
+                    "Dependabot alerts. API detail: " + alert_access_error
+                ),
+            )
+        )
 
     for alert in alerts:
         advisory = alert.get("security_advisory", {})
@@ -177,6 +191,7 @@ def render_markdown(
     dependabot_prs: list[dict[str, Any]],
     risks: list[Risk],
     stale_pr_days: int,
+    alert_access_error: str | None = None,
 ) -> str:
     severity_counts = {severity: 0 for severity in ("critical", "high", "moderate", "low", "unknown")}
     for alert in alerts:
@@ -197,6 +212,13 @@ def render_markdown(
         "|---:|---:|---:|---:|---:|---:|",
         "| {critical} | {high} | {moderate} | {low} | {unknown} | {total} |".format(
             **severity_counts, total=len(alerts)
+        ),
+        "",
+        (
+            "- **Visibility:** unavailable. Add `DEPENDABOT_ALERTS_TOKEN` with Dependabot alert read access; "
+            "a tracked risk issue has been created or updated."
+            if alert_access_error
+            else "- **Visibility:** verified by the GitHub Dependabot Alerts API."
         ),
         "",
         "## Latest Default-Branch CI",
@@ -270,6 +292,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", default=os.getenv("GITHUB_REPOSITORY", ""))
     parser.add_argument("--token", default=os.getenv("GITHUB_TOKEN", ""))
+    parser.add_argument(
+        "--dependabot-alerts-token",
+        default=os.getenv("DEPENDABOT_ALERTS_TOKEN", ""),
+        help="Optional token with Dependabot alert read access; defaults to GITHUB_TOKEN.",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("reports/security-health"))
     parser.add_argument("--stale-pr-days", type=int, default=DEFAULT_STALE_PR_DAYS)
     parser.add_argument("--no-issue", action="store_true", help="Generate reports without creating/updating an issue.")
@@ -281,7 +308,13 @@ def main() -> int:
         parser.error("--stale-pr-days must be at least 1")
 
     client = GitHubClient(args.token, args.repository)
-    alerts = client.get_all(f"/repos/{args.repository}/dependabot/alerts", {"state": "open"})
+    alerts_client = GitHubClient(args.dependabot_alerts_token or args.token, args.repository)
+    alert_access_error = None
+    try:
+        alerts = alerts_client.get_all(f"/repos/{args.repository}/dependabot/alerts", {"state": "open"})
+    except RuntimeError as error:
+        alerts = []
+        alert_access_error = str(error)
     workflow_runs = client.get_all(
         f"/repos/{args.repository}/actions/runs",
         {"branch": "main", "event": "push"},
@@ -296,6 +329,7 @@ def main() -> int:
         dependabot_prs,
         now=now,
         stale_pr_days=args.stale_pr_days,
+        alert_access_error=alert_access_error,
     )
     report = render_markdown(
         args.repository,
@@ -305,6 +339,7 @@ def main() -> int:
         dependabot_prs,
         risks,
         args.stale_pr_days,
+        alert_access_error,
     )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -317,6 +352,7 @@ def main() -> int:
                 "repository": args.repository,
                 "generated_at": now.isoformat(),
                 "alerts": alerts,
+                "alert_access_error": alert_access_error,
                 "latest_completed_main_ci": max(
                     (run for run in workflow_runs if run.get("status") == "completed"),
                     key=lambda run: run.get("created_at", ""),

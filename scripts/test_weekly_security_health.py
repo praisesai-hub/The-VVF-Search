@@ -41,6 +41,31 @@ class WeeklySecurityHealthTest(unittest.TestCase):
         self.assertIn("HEALTHY", report)
         self.assertIn("No policy threshold was breached.", report)
 
+    def test_collects_visibility_unavailable_as_high_risk(self) -> None:
+        risks = collect_risks(
+            alerts=[],
+            workflow_runs=[SUCCESSFUL_RUN],
+            dependabot_prs=[],
+            now=NOW,
+            stale_pr_days=7,
+            alert_access_error="HTTP 403: Resource not accessible by integration",
+        )
+
+        self.assertEqual(1, len(risks))
+        self.assertEqual("dependabot_visibility_unavailable", risks[0].kind)
+        self.assertEqual("high", risks[0].severity)
+        report = render_markdown(
+            "owner/repo",
+            NOW,
+            [],
+            [SUCCESSFUL_RUN],
+            [],
+            risks,
+            7,
+            "HTTP 403: Resource not accessible by integration",
+        )
+        self.assertIn("DEPENDABOT_ALERTS_TOKEN", report)
+
     def test_collects_alert_failed_ci_and_stale_dependabot_risks(self) -> None:
         alerts = [
             {
