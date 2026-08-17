@@ -138,12 +138,19 @@ class GoogleDriveProviderAdapter(
                         isRetryable = false
                     )
 
-                    responseBody.byteStream().use { input ->
+                    val bytesTransferred = responseBody.byteStream().use { input ->
                         destinationFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
-                    CloudSyncResult.Success(bytesTransferred = destinationFile.length())
+                    if (bytesTransferred <= 0L) {
+                        destinationFile.delete()
+                        return CloudSyncResult.Error(
+                            message = "Media download response body was empty.",
+                            isRetryable = false
+                        )
+                    }
+                    CloudSyncResult.Success(bytesTransferred = bytesTransferred)
                 }
             }
         } catch (e: Exception) {

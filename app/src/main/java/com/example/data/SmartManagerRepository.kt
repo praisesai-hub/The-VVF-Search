@@ -28,7 +28,10 @@ import java.io.File
 open class SmartManagerRepository(
     private val context: Context,
     private val dao: FileDao = AppDatabase.getDatabase(context).fileDao(),
-    private val ocrEngine: OcrEngine? = null
+    private val ocrEngine: OcrEngine? = null,
+    // Production remains default-deny. Tests may inject an explicit authorized fixture
+    // without changing build provisioning or device-owner consent.
+    private val cloudTransferAllowed: (Context) -> Boolean = CloudSyncPolicy::canTransfer,
 ) {
     val keystoreVaultManager: KeystoreVaultManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { KeystoreVaultManager() }
     val storageScanner = StorageScanner(context)
@@ -329,7 +332,7 @@ open class SmartManagerRepository(
     }
 
     suspend fun enqueueCloudSyncItem(provider: String, fileName: String, size: Long, filePath: String = "", isCore: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        if (!CloudSyncPolicy.canTransfer(context) || !isProviderEnabled(provider)) return@withContext false
+        if (!cloudTransferAllowed(context) || !isProviderEnabled(provider)) return@withContext false
         val currentItems = dao.getCloudSyncItems().first()
         val keyPath = if (filePath.isNotBlank()) filePath else fileName
         val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
@@ -341,7 +344,7 @@ open class SmartManagerRepository(
 
     suspend fun retryCloudSyncItem(id: Long): Boolean = withContext(Dispatchers.IO) {
         val item = dao.getCloudSyncItems().first().find { it.id == id } ?: return@withContext false
-        if (item.status == "SYNCED" || !isProviderEnabled(item.provider)) return@withContext false
+        if (item.status == "SYNCED" || !cloudTransferAllowed(context) || !isProviderEnabled(item.provider)) return@withContext false
         withRetry { dao.insertCloudSyncItem(item.copy(status = "QUEUED", lastSyncedMs = System.currentTimeMillis())) }
         enqueueCloudSyncWork()
         true
@@ -373,7 +376,7 @@ open class SmartManagerRepository(
     }
 
     fun enqueueCloudSyncWork() {
-        if (!CloudSyncPolicy.canTransfer(context)) {
+        if (!cloudTransferAllowed(context)) {
             Log.i(
                 "SmartManagerRepository",
                 "Cloud sync enqueue blocked: explicit consent or build provisioning is missing."

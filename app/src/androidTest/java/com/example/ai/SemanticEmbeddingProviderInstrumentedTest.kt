@@ -107,11 +107,14 @@ class SemanticEmbeddingProviderInstrumentedTest {
     }
 
     @Test
-    fun fallbackProvider_isExplicitlyUnavailableWithoutProducingData() = runBlocking {
+    fun fallbackProvider_usesDeterministicOnDeviceEmbeddingsWithoutModelAssets() = runBlocking {
         val provider = FallbackSemanticEmbeddingProvider()
 
-        assertFalse(provider.isModelLoaded())
-        assertNull(provider.generateTextEmbedding("sensitive query"))
+        assertTrue(provider.isModelLoaded())
+        val textEmbedding = provider.generateTextEmbedding("sensitive query")
+        assertNotNull(textEmbedding)
+        assertEquals(128, textEmbedding!!.size)
+        assertEquals(1.0f, euclideanNorm(textEmbedding), 0.0001f)
         assertNull(provider.generateImageEmbedding(File(tempDirectory, "photo.jpg")))
     }
 

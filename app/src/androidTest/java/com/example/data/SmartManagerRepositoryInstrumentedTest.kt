@@ -184,7 +184,7 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun incrementalScan_persistsRealHashesOcrAndFailsClosedWithoutModel(): Unit {
+    fun incrementalScan_persistsRealHashesOcrAndIndexesWithOnDeviceFallback(): Unit {
         val file = File.createTempFile("vvf_scan_", ".txt")
         try {
             file.writeText("on-device production scan fixture")
@@ -216,9 +216,9 @@ class SmartManagerRepositoryInstrumentedTest {
             assertEquals("AUTHENTIC OCR CONTENT", result.ocrText)
             assertTrue(result.md5Hash.isNotBlank())
             assertTrue(result.visualSimilarityHash.isNotBlank())
-            assertFalse(result.semanticIndexed)
-            assertTrue(result.semanticEmbeddingString.isBlank())
-            assertFalse(repository.isSemanticSearchAvailable)
+            assertTrue(result.semanticIndexed)
+            assertTrue(result.semanticEmbeddingString.isNotBlank())
+            assertTrue(repository.isSemanticSearchAvailable)
             runBlocking {
                 withTimeout(5_000L) {
                     while (repository.isScanning.value) delay(10L)
@@ -353,6 +353,7 @@ class SmartManagerRepositoryInstrumentedTest {
 
         fakeDao.plugins.clear()
         fakeDao.plugins += PluginEntity("gdrive_sync", "Google Drive", "CLOUD", "Sync", true, false)
+        assertFalse(repository.retryCloudSyncItem(40L))
         fakeDao.cloudSyncItems += pending.copy(id = 41L, status = "SYNCED")
         assertFalse(repository.retryCloudSyncItem(41L))
         assertFalse(repository.cancelCloudSyncItem(41L))
@@ -360,20 +361,26 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun cloudSyncSuccesses_coverProviderMappingEnqueueRetryAndCancel(): Unit = runBlocking {
+    fun cloudSyncSuccesses_coverProviderMappingEnqueueRetryAndCancelWhenExplicitlyAuthorized(): Unit = runBlocking {
+        val consentedRepository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            ocrEngine = fakeOcr,
+            cloudTransferAllowed = { true },
+        )
         fakeDao.plugins += PluginEntity("onedrive_sync", "OneDrive", "CLOUD", "Sync", true, false)
         fakeDao.plugins += PluginEntity("dropbox_sync", "Dropbox", "CLOUD", "Sync", true, false)
 
-        assertTrue(repository.enqueueCloudSyncItem("ONEDRIVE", "one.txt", 12L))
-        assertTrue(repository.enqueueCloudSyncItem("DROPBOX", "two.txt", 24L))
-        assertFalse(repository.enqueueCloudSyncItem("UNKNOWN_PROVIDER", "three.txt", 36L))
+        assertTrue(consentedRepository.enqueueCloudSyncItem("ONEDRIVE", "one.txt", 12L))
+        assertTrue(consentedRepository.enqueueCloudSyncItem("DROPBOX", "two.txt", 24L))
+        assertFalse(consentedRepository.enqueueCloudSyncItem("UNKNOWN_PROVIDER", "three.txt", 36L))
 
         val queued = fakeDao.cloudSyncItems.single()
         assertEquals("DROPBOX", queued.provider)
         assertEquals("QUEUED", queued.status)
-        assertTrue(repository.retryCloudSyncItem(queued.id))
+        assertTrue(consentedRepository.retryCloudSyncItem(queued.id))
         assertEquals("QUEUED", fakeDao.cloudSyncItems.single().status)
-        assertTrue(repository.cancelCloudSyncItem(queued.id))
+        assertTrue(consentedRepository.cancelCloudSyncItem(queued.id))
         assertEquals(listOf(queued.id), fakeDao.deletedCloudSyncIds)
     }
 

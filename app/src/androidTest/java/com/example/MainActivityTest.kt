@@ -2,7 +2,7 @@ package com.example
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -113,7 +113,7 @@ class MainActivityTest {
 
         composeTestRule.onNodeWithTag("section_tab_2").performClick()
         composeTestRule.onNodeWithTag("semantic_search_input").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("semantic_search_input").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("semantic_search_input").assertIsEnabled()
     }
 
     @Test

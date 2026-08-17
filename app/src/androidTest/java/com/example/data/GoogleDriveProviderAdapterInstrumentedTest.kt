@@ -230,7 +230,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
             200,
             "{\"files\":[{\"id\":\"remote-id\"}]}",
         )
-        val emptyMediaResponse = response(mediaRequest, 200, null)
+        val emptyMediaResponse = response(mediaRequest, 200, "")
         every { mockedHttpClient.newCall(any()) } returns mockedCall
         every { mockedCall.execute() } returns searchResponse andThen emptyMediaResponse
         val isolatedAdapter = GoogleDriveProviderAdapter(authManager, mockedHttpClient)

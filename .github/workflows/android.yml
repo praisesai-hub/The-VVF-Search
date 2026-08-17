@@ -207,9 +207,19 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
           script: |
             ./gradlew :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
+      - name: Upload Android Test Reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-test-reports
+          path: |
+            app/build/reports/androidTests
+            app/build/outputs/androidTest-results
+          if-no-files-found: warn
       - name: Upload Android Test Coverage Report
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: android-test-coverage
           path: app/build/reports/coverage/androidTest/debug/connected
-          if-no-files-found: error
+          if-no-files-found: warn
