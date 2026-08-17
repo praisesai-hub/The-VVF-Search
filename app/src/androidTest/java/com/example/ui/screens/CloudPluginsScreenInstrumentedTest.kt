@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -12,7 +13,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
 import com.example.ui.MainViewModel
 import com.example.ui.theme.VVFSmartManagerTheme
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -37,13 +37,9 @@ class CloudPluginsScreenInstrumentedTest {
 
         composeTestRule.onNodeWithTag("vvf_login_brand_logo").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("VVF Foundation logo").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("google_drive_connect_btn").assertIsDisplayed().performClick()
-        composeTestRule.runOnIdle {
-            assertEquals(
-                "Google sign-in requires the real OAuth authorization flow; local/mock sign-in is disabled.",
-                viewModel.globalError.value,
-            )
-        }
+        composeTestRule.onNodeWithTag("google_drive_connect_btn")
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
     }
 
     @Test

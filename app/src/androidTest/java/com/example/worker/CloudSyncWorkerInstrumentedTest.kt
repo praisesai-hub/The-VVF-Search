@@ -160,7 +160,10 @@ class CloudSyncWorkerInstrumentedTest {
                 providerAdapterOverride = fakeAdapter,
                 authManagerOverride = GoogleAuthManager(
                     appContext.getSharedPreferences("cloud_sync_worker_instrumented_auth", Context.MODE_PRIVATE)
-                )
+                ),
+                // Production is default-deny; this fixture explicitly authorizes the
+                // operation paths it is designed to test.
+                transferAllowed = { true },
             )
         }
         return TestListenableWorkerBuilder<CloudSyncWorker>(context)

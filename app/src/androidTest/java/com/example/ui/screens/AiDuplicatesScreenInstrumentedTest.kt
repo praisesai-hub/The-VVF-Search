@@ -1,7 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasScrollToIndexAction
@@ -79,7 +79,7 @@ class AiDuplicatesScreenInstrumentedTest {
 
         composeTestRule.onNodeWithTag("section_tab_2").performClick()
         composeTestRule.onNodeWithText("AI Search").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("semantic_search_input").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("semantic_search_input").assertIsEnabled()
     }
 
     @Test
@@ -112,12 +112,12 @@ class AiDuplicatesScreenInstrumentedTest {
         composeTestRule.onNodeWithText("No visual duplicates matching 80% threshold.").assertExists()
         duplicateList.performScrollToNode(hasText("Step 6: AI Semantic Vector Matches (0 sets)"))
         composeTestRule.onNodeWithText("Step 6: AI Semantic Vector Matches (0 sets)").assertExists()
-        duplicateList.performScrollToNode(hasText("Semantic Search — Coming Soon (model not bundled)"))
-        composeTestRule.onNodeWithText("Semantic Search — Coming Soon (model not bundled)").assertExists()
+        duplicateList.performScrollToNode(hasText("No AI semantic vector matches detected."))
+        composeTestRule.onNodeWithText("No AI semantic vector matches detected.").assertExists()
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onNodeWithText("OCR Indexed Documents (0)").assertIsDisplayed()
         composeTestRule.onNodeWithTag("section_tab_2").performClick()
-        composeTestRule.onNodeWithTag("semantic_search_input").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("semantic_search_input").assertIsEnabled()
     }
 
     private fun realViewModel(): MainViewModel = MainViewModel(
