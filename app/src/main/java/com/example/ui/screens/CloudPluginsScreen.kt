@@ -173,31 +173,17 @@ fun CloudSyncSection(
                     
                     if (auth is GoogleAuthState.SignedIn) {
                         Text(
-                            text = stringResource(R.string.drive_session_present_sync_unavailable),
+                            text = "Cloud transfer is disabled until this release has approved " +
+                                "OAuth provisioning and the device owner explicitly opts in.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.syncCloudProvider("GOOGLE_DRIVE") },
-                                colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange),
-                                modifier = Modifier.testTag("trigger_google_drive_sync_btn")
-                            ) {
-                                Icon(
-                                    Icons.Default.Sync,
-                                    contentDescription = stringResource(R.string.sync_action),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(R.string.sync_unavailable))
-                            }
-                            TextButton(
-                                onClick = { viewModel.signOutFromGoogle() },
-                                modifier = Modifier.testTag("google_drive_disconnect_btn")
-                            ) {
-                                Text(stringResource(R.string.disconnect), color = MaterialTheme.colorScheme.error)
-                            }
+                        TextButton(
+                            onClick = { viewModel.signOutFromGoogle() },
+                            modifier = Modifier.testTag("google_drive_disconnect_btn")
+                        ) {
+                            Text(stringResource(R.string.disconnect), color = MaterialTheme.colorScheme.error)
                         }
                     } else {
                         Image(
@@ -224,11 +210,12 @@ fun CloudSyncSection(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
-                            onClick = { viewModel.signInToGoogle("user@gmail.com", "App User") },
+                            onClick = {},
+                            enabled = false,
                             colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange),
                             modifier = Modifier.testTag("google_drive_connect_btn")
                         ) {
-                            Text(stringResource(R.string.configure_google_drive_oauth))
+                            Text("Cloud sync disabled")
                         }
                     }
                 }

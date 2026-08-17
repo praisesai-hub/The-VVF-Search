@@ -2,6 +2,7 @@
 package com.example.data
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.example.ai.SemanticEmbeddingProvider
 import com.example.ai.FallbackSemanticEmbeddingProvider
@@ -59,7 +60,7 @@ open class SmartManagerRepository(
     }
 
     val isSemanticSearchAvailable: Boolean
-        get() = tfliteProvider is TFLiteSemanticEmbeddingProvider && tfliteProvider.isModelLoaded()
+        get() = tfliteProvider.isModelLoaded()
 
     private val duplicateDetectionEngine by lazy { DuplicateDetectionEngine(storageScanner, tfliteProvider) }
     private val repositoryScope = CoroutineScope(Dispatchers.IO + Job() + kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
@@ -241,6 +242,13 @@ open class SmartManagerRepository(
         }
     }
 
+    /** Imports a user-granted SAF tree in scanner-managed batches without building a full list in the UI layer. */
+    suspend fun scanSafTree(treeUri: Uri): Int = withContext(Dispatchers.IO) {
+        storageScanner.scanSafTree(treeUri, computeHashes = false) { batch ->
+            if (batch.isNotEmpty()) dao.insertFiles(batch)
+        }
+    }
+
     suspend fun cleanSelectedDuplicates(selectedIds: Set<Long>) = withContext(Dispatchers.IO) {
         DuplicateManager(dao, context).cleanSelectedDuplicates(selectedIds)
     }
@@ -321,7 +329,7 @@ open class SmartManagerRepository(
     }
 
     suspend fun enqueueCloudSyncItem(provider: String, fileName: String, size: Long, filePath: String = "", isCore: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        if (!isProviderEnabled(provider)) return@withContext false
+        if (!CloudSyncPolicy.canTransfer(context) || !isProviderEnabled(provider)) return@withContext false
         val currentItems = dao.getCloudSyncItems().first()
         val keyPath = if (filePath.isNotBlank()) filePath else fileName
         val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
@@ -365,6 +373,13 @@ open class SmartManagerRepository(
     }
 
     fun enqueueCloudSyncWork() {
+        if (!CloudSyncPolicy.canTransfer(context)) {
+            Log.i(
+                "SmartManagerRepository",
+                "Cloud sync enqueue blocked: explicit consent or build provisioning is missing."
+            )
+            return
+        }
         try {
             val constraints = androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build()
             val request = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.CloudSyncWorker>().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()

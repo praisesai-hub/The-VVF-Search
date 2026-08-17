@@ -206,15 +206,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun rescanPersistedFolders() {
         viewModelScope.launch(coroutineExceptionHandler) {
-            val context = getApplication<Application>().applicationContext
-            val entities = mutableListOf<FileItemEntity>()
+            var discovered = 0
             for (uriStr in getPersistedFolderUris()) {
                 try {
-                    val treeFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uriStr.toUri())
-                    if (treeFile != null && treeFile.isDirectory) scanDocumentFileRecursively(context, treeFile, entities)
-                } catch (e: Exception) { android.util.Log.e("MainViewModel", "Error scanning persisted SAF folder $uriStr: ${e.message}", e) }
+                    discovered += repository.scanSafTree(uriStr.toUri())
+                } catch (e: Exception) {
+                    android.util.Log.e("MainViewModel", "Error scanning persisted SAF folder: ${e.message}", e)
+                }
             }
-            if (entities.isNotEmpty()) { repository.insertFiles(entities); resetPagination(); repository.enqueueBackgroundIndexWork() }
+            if (discovered > 0) { resetPagination(); repository.enqueueBackgroundIndexWork() }
         }
     }
     fun processPickedDirectoryUri(uri: android.net.Uri) {
@@ -223,18 +223,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 context.contentResolver.takePersistableUriPermission(uri, takeFlags); savePersistedFolderUri(uri.toString())
-                val treeFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
-                if (treeFile != null && treeFile.isDirectory) {
-                    val entities = mutableListOf<FileItemEntity>(); scanDocumentFileRecursively(context, treeFile, entities)
-                    if (entities.isNotEmpty()) { repository.insertFiles(entities); resetPagination(); repository.enqueueBackgroundIndexWork() }
-                }
+                val discovered = repository.scanSafTree(uri)
+                if (discovered > 0) { resetPagination(); repository.enqueueBackgroundIndexWork() }
             } catch (e: Exception) { android.util.Log.e("MainViewModel", "Error taking persistable permission/scanning SAF tree: ${e.message}", e) }
-        }
-    }
-    private fun scanDocumentFileRecursively(context: android.content.Context, dir: androidx.documentfile.provider.DocumentFile, outList: MutableList<FileItemEntity>) {
-        for (file in dir.listFiles()) {
-            if (file.isDirectory) scanDocumentFileRecursively(context, file, outList)
-            else if (file.isFile && file.length() > 0) outList.add(FileItemEntity(name = file.name ?: "Unknown", path = file.uri.toString(), category = inferCategoryFromFilename(file.name ?: ""), sizeBytes = file.length(), dateModifiedMs = file.lastModified(), tags = "SAF_Directory_Import"))
         }
     }
 

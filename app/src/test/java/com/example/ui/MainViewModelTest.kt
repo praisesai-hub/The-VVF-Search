@@ -53,7 +53,8 @@ class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(cont
 
     override fun unlockVaultWithPin(pin: String): Boolean = unlockPinResult
 
-    override fun lockVaultSession() = Unit
+    var lockVaultSessionCalls = 0
+    override fun lockVaultSession() { lockVaultSessionCalls += 1 }
 
     override suspend fun insertFiles(files: List<com.example.data.FileItemEntity>) {
         insertedFiles.addAll(files)
@@ -126,6 +127,40 @@ class MainViewModelTest {
     }
 
     @Test
+    fun backgroundingApp_locksAuthenticatedVaultSessionImmediately() {
+        viewModel.appendPinDigit("1")
+        viewModel.appendPinDigit("2")
+        viewModel.appendPinDigit("3")
+        viewModel.appendPinDigit("4")
+        assertTrue(viewModel.isVaultUnlocked.value)
+
+        viewModel.lockVaultForBackground()
+
+        assertFalse(viewModel.isVaultUnlocked.value)
+        assertEquals(1, fakeRepository.lockVaultSessionCalls)
+    }
+
+    @Test
+    fun vaultAutoLockTimeout_isBoundedPersistedAndResetsActivityGeneration() {
+        val initialGeneration = viewModel.vaultActivityGeneration.value
+
+        viewModel.setVaultAutoLockTimeout(1L)
+
+        assertEquals(15_000L, viewModel.vaultAutoLockTimeoutMs.value)
+        assertEquals(initialGeneration, viewModel.vaultActivityGeneration.value)
+
+        viewModel.appendPinDigit("1")
+        viewModel.appendPinDigit("2")
+        viewModel.appendPinDigit("3")
+        viewModel.appendPinDigit("4")
+        val unlockedGeneration = viewModel.vaultActivityGeneration.value
+
+        viewModel.recordVaultActivity()
+
+        assertTrue(viewModel.vaultActivityGeneration.value > unlockedGeneration)
+    }
+
+    @Test
     fun changeVaultPin_success_returnsTrueAndClearsError() {
         fakeRepository.changePinResult = true
 
@@ -182,7 +217,7 @@ class MainViewModelTest {
 
         assertEquals("receipt from last month", viewModel.semanticQuery.value)
         assertEquals(92.5f, viewModel.similarityThreshold.value)
-        assertFalse(viewModel.isSemanticSearchAvailable)
+        assertTrue(viewModel.isSemanticSearchAvailable)
     }
 
     @Test

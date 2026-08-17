@@ -28,6 +28,9 @@ android {
     versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
     versionName = project.findProperty("versionName") as String? ?: "1.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    // Cloud transfer is disabled by default. A distribution that has completed OAuth
+    // provisioning must explicitly override this build config through a controlled release.
+    buildConfigField("boolean", "CLOUD_SYNC_ENABLED", "false")
     // Validation builds may intentionally omit google-services.json. The runtime auth
     // boundary rejects this empty fallback; configured builds use only plugin output.
     if (!googleServicesConfigPresent) {

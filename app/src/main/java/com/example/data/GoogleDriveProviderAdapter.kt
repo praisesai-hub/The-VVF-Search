@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.google.gson.Gson
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -19,6 +20,7 @@ class GoogleDriveProviderAdapter(
 
     override val providerId: String = "GOOGLE_DRIVE"
 
+    @Suppress("LongMethod", "NestedBlockDepth", "ReturnCount")
     override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
         if (!file.exists() || !file.isFile) {
             return CloudSyncResult.Error(
@@ -34,12 +36,12 @@ class GoogleDriveProviderAdapter(
 
         return try {
             val mimeType = determineMimeType(file)
-            val metadataJson = """
-                {
-                    "name": "$remotePath",
-                    "description": "Uploaded via Smart Vault Engine"
-                }
-            """.trimIndent()
+            val metadataJson = Gson().toJson(
+                mapOf(
+                    "name" to remotePath,
+                    "description" to "Uploaded via Smart Vault Engine"
+                )
+            )
 
             // 1. Prepare Resumable Upload
             val initRequest = Request.Builder()
@@ -51,42 +53,49 @@ class GoogleDriveProviderAdapter(
                 .post(metadataJson.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
                 .build()
 
-            val initResponse = httpClient.newCall(initRequest).execute()
-            if (!initResponse.isSuccessful) {
-                return classifyHttpError("Resumable upload preparation failed", initResponse.code, initResponse.body?.string())
-            }
+            httpClient.newCall(initRequest).execute().use { initResponse ->
+                if (!initResponse.isSuccessful) {
+                    return classifyHttpError("Resumable upload preparation failed", initResponse.code, initResponse.body?.string())
+                }
 
-            val uploadUrl = initResponse.header("Location") ?: return CloudSyncResult.Error(
-                message = "Resumable upload preparation failed: Missing 'Location' header in Google Drive response",
-                isRetryable = false
-            )
-
-            // 2. Perform upload
-            val uploadRequest = Request.Builder()
-                .url(uploadUrl)
-                .put(file.asRequestBody(mimeType.toMediaTypeOrNull()))
-                .build()
-
-            val uploadResponse = httpClient.newCall(uploadRequest).execute()
-            if (!uploadResponse.isSuccessful) {
-                return classifyHttpError("File upload failed", uploadResponse.code, uploadResponse.body?.string())
-            }
-
-            val responseBody = uploadResponse.body?.string() ?: ""
-            val fileId = extractFileIdFromJson(responseBody)
-            if (fileId != null) {
-                CloudSyncResult.Success(bytesTransferred = file.length())
-            } else {
-                CloudSyncResult.Error(
-                    message = "Failed to parse remote file ID from response: $responseBody",
+                val uploadUrl = initResponse.header("Location") ?: return CloudSyncResult.Error(
+                    message = "Resumable upload preparation failed: Missing 'Location' header in Google Drive response",
                     isRetryable = false
                 )
+
+                // 2. Perform upload
+                val uploadRequest = Request.Builder()
+                    .url(uploadUrl)
+                    .put(file.asRequestBody(mimeType.toMediaTypeOrNull()))
+                    .build()
+
+                return httpClient.newCall(uploadRequest).execute().use { uploadResponse ->
+                    if (!uploadResponse.isSuccessful) {
+                        return classifyHttpError(
+                            "File upload failed",
+                            uploadResponse.code,
+                            uploadResponse.body?.string()
+                        )
+                    }
+
+                    val responseBody = uploadResponse.body?.string() ?: ""
+                    val fileId = extractFileIdFromJson(responseBody)
+                    if (fileId != null) {
+                        CloudSyncResult.Success(bytesTransferred = file.length())
+                    } else {
+                        CloudSyncResult.Error(
+                            message = "Failed to parse remote file ID from response",
+                            isRetryable = false
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             classifyException(e)
         }
     }
 
+    @Suppress("NestedBlockDepth", "ReturnCount")
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult {
         val token = authManager.getAccessToken() ?: return CloudSyncResult.Error(
             message = "Download failed: user is not authenticated with Google Drive.",
@@ -101,41 +110,42 @@ class GoogleDriveProviderAdapter(
                 .get()
                 .build()
 
-            val searchResponse = httpClient.newCall(searchRequest).execute()
-            if (!searchResponse.isSuccessful) {
-                return classifyHttpError("File search failed", searchResponse.code, searchResponse.body?.string())
-            }
+            httpClient.newCall(searchRequest).execute().use { searchResponse ->
+                if (!searchResponse.isSuccessful) {
+                    return classifyHttpError("File search failed", searchResponse.code, searchResponse.body?.string())
+                }
 
-            val searchBody = searchResponse.body?.string() ?: ""
-            val fileId = extractFileIdFromJson(searchBody) ?: return CloudSyncResult.Error(
-                message = "File not found on Google Drive: $remotePath",
-                isRetryable = false
-            )
+                val searchBody = searchResponse.body?.string() ?: ""
+                val fileId = extractFileIdFromJson(searchBody) ?: return CloudSyncResult.Error(
+                    message = "File not found on Google Drive: $remotePath",
+                    isRetryable = false
+                )
 
-            // 2. Download media content
-            val downloadRequest = Request.Builder()
-                .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
-                .header("Authorization", "Bearer $token")
-                .get()
-                .build()
+                // 2. Download media content
+                val downloadRequest = Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
+                    .header("Authorization", "Bearer $token")
+                    .get()
+                    .build()
 
-            val downloadResponse = httpClient.newCall(downloadRequest).execute()
-            if (!downloadResponse.isSuccessful) {
-                return classifyHttpError("Media download failed", downloadResponse.code, downloadResponse.body?.string())
-            }
+                return httpClient.newCall(downloadRequest).execute().use { downloadResponse ->
+                    if (!downloadResponse.isSuccessful) {
+                        return classifyHttpError("Media download failed", downloadResponse.code, downloadResponse.body?.string())
+                    }
 
-            val responseBody = downloadResponse.body ?: return CloudSyncResult.Error(
-                message = "Media download response body was empty.",
-                isRetryable = false
-            )
+                    val responseBody = downloadResponse.body ?: return CloudSyncResult.Error(
+                        message = "Media download response body was empty.",
+                        isRetryable = false
+                    )
 
-            responseBody.byteStream().use { input ->
-                destinationFile.outputStream().use { output ->
-                    input.copyTo(output)
+                    responseBody.byteStream().use { input ->
+                        destinationFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    CloudSyncResult.Success(bytesTransferred = destinationFile.length())
                 }
             }
-
-            CloudSyncResult.Success(bytesTransferred = destinationFile.length())
         } catch (e: Exception) {
             classifyException(e)
         }

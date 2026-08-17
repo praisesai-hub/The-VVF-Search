@@ -9,6 +9,7 @@ import com.example.data.CloudSyncItemEntity
 import com.example.data.FileDao
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncResult
+import com.example.data.CloudSyncPolicy
 import com.example.data.GoogleAuthManager
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -18,10 +19,21 @@ class CloudSyncWorker @JvmOverloads constructor(
     workerParams: WorkerParameters,
     private val daoOverride: FileDao? = null,
     private val providerAdapterOverride: CloudProviderAdapter? = null,
-    private val authManagerOverride: GoogleAuthManager? = null
+    private val authManagerOverride: GoogleAuthManager? = null,
+    private val transferAllowed: (() -> Boolean)? = null
 ) : CoroutineWorker(appContext, workerParams) {
 
+    @Suppress(
+        "ReturnCount",
+        "LongMethod",
+        "CyclomaticComplexMethod",
+        "NestedBlockDepth"
+    )
     override suspend fun doWork(): Result {
+        if (!(transferAllowed?.invoke() ?: CloudSyncPolicy.canTransfer(applicationContext))) {
+            Log.i(TAG, "Cloud transfer blocked: explicit opt-in or build provisioning is missing.")
+            return Result.success()
+        }
         Log.i(TAG, "Starting background CloudSyncWorker with provider adapter contract...")
         return try {
             val dao = daoOverride ?: AppDatabase.getDatabase(applicationContext).fileDao()

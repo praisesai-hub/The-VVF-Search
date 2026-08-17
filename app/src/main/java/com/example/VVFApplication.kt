@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.data.AppDatabase
 import com.example.data.SmartManagerRepository
+import com.example.security.CrashReportingPolicy
 import com.example.worker.BackgroundIndexWorker
 import com.example.worker.CacheCleanupWorker
 import com.example.worker.CloudSyncWorker
@@ -104,19 +105,8 @@ class VVFApplication : Application(), Configuration.Provider {
                 duplicateCleanupWork
             )
 
-            // 4. Cloud Synchronization
-            val cloudConstraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .setRequiresBatteryNotLow(true)
-                .build()
-            val cloudSyncWork = PeriodicWorkRequestBuilder<CloudSyncWorker>(
-                12, TimeUnit.HOURS
-            ).setConstraints(cloudConstraints).build()
-            wm.enqueueUniquePeriodicWork(
-                CloudSyncWorker.WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                cloudSyncWork
-            )
+            // Cloud synchronization is never scheduled at startup. It may only be enqueued
+            // after a user-selected item passes the CloudSyncPolicy consent boundary.
 
             Log.i("VVFApplication", "All WorkManager background file management tasks successfully enqueued.")
         } catch (e: Exception) {
@@ -128,9 +118,10 @@ class VVFApplication : Application(), Configuration.Provider {
         try {
             com.google.firebase.FirebaseApp.initializeApp(this)
             val crashlytics = com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
-            crashlytics.setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
-            crashlytics.setCustomKey("app_version", BuildConfig.VERSION_NAME)
-            Log.i("VVFApplication", "Firebase Crashlytics initialized successfully.")
+            val consented = !BuildConfig.DEBUG && CrashReportingPolicy.hasConsent(this)
+            crashlytics.setCrashlyticsCollectionEnabled(consented)
+            if (consented) crashlytics.setCustomKey("app_version", BuildConfig.VERSION_NAME)
+            Log.i("VVFApplication", "Firebase Crashlytics initialized with explicit user consent=$consented.")
         } catch (e: Exception) {
             Log.w("VVFApplication", "Firebase Crashlytics initialization pending (app/google-services.json required from Firebase Console): ${e.message}")
         }

@@ -3,6 +3,9 @@ import com.example.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
@@ -69,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.VaultItemEntity
 import com.example.ui.MainViewModel
 import com.example.ui.appendPinDigit
@@ -80,12 +85,18 @@ import com.example.ui.onBiometricError
 import com.example.ui.onBiometricSuccess
 import com.example.ui.onBiometricEnrollmentSuccess
 import com.example.ui.hasBiometricEnrollment
+import com.example.ui.recordVaultActivity
+import com.example.ui.setVaultAutoLockTimeout
+import com.example.ui.vaultAutoLockTimeoutMs
 import com.example.ui.theme.BhagwaOrange
 import com.example.ui.theme.CosmicBlue
 import com.example.ui.theme.EmeraldGreen
 import com.example.ui.theme.SoftGold
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+
+private const val ONE_MINUTE_MS = 60_000L
+private const val FIVE_MINUTES_MS = 5 * ONE_MINUTE_MS
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @Composable
@@ -185,7 +196,8 @@ fun VaultScreen(
             showBiometricPrompt()
         }
     }
-    var autoLockTimer by rememberSaveable { mutableStateOf("1 minute") }
+    val autoLockTimeoutMs by viewModel.vaultAutoLockTimeoutMs.collectAsStateWithLifecycle()
+    val autoLockTimer = if (autoLockTimeoutMs <= ONE_MINUTE_MS) "1 minute" else "5 minutes"
     var showChangePinDialog by rememberSaveable { mutableStateOf(false) }
     var changePinOld by rememberSaveable { mutableStateOf("") }
     var changePinNew by rememberSaveable { mutableStateOf("") }
@@ -274,7 +286,19 @@ fun VaultScreen(
             }
         }
     } else {
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .pointerInput(viewModel) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        viewModel.recordVaultActivity()
+                        waitForUpOrCancellation()
+                    }
+                },
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Box(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(colors = listOf(CosmicBlue, MaterialTheme.colorScheme.surfaceVariant))).padding(16.dp)) {
@@ -312,7 +336,19 @@ fun VaultScreen(
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column { Text(text = stringResource(R.string.auto_lock_timer), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.locks_automatically_when_inact), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            Text(text = autoLockTimer, color = BhagwaOrange, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.clickable { autoLockTimer = if (autoLockTimer == "1 minute") "5 minutes" else "1 minute" })
+                            Text(
+                                text = autoLockTimer,
+                                color = BhagwaOrange,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .testTag("vault_auto_lock_timeout")
+                                    .clickable {
+                                        viewModel.setVaultAutoLockTimeout(
+                                            if (autoLockTimeoutMs <= ONE_MINUTE_MS) FIVE_MINUTES_MS else ONE_MINUTE_MS
+                                        )
+                                    }
+                            )
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

@@ -38,7 +38,7 @@ class CloudSyncQueueTest {
     }
 
     @Test
-    fun testEnqueueCloudSyncItem_persistsQueueStateAndReturnsTrue() = runBlocking {
+    fun testEnqueueCloudSyncItem_isRejectedWhenCloudBuildIsNotProvisioned() = runBlocking {
         val result = repository.enqueueCloudSyncItem(
             provider = "GOOGLE_DRIVE",
             fileName = "test_doc.pdf",
@@ -46,25 +46,21 @@ class CloudSyncQueueTest {
             filePath = "/sdcard/test_doc.pdf"
         )
 
-        assertTrue(result)
-
-        val items = repository.observeCloudSyncItems().first()
-        val item = items.find { it.fileName == "test_doc.pdf" }
-        assertEquals("test_doc.pdf", item?.fileName)
-        assertEquals("QUEUED", item?.status)
+        assertFalse(result)
+        assertNull(repository.observeCloudSyncItems().first().find { it.fileName == "test_doc.pdf" })
     }
 
     @Test
-    fun testEnqueueCloudSyncItem_duplicateRequestIgnored() = runBlocking {
+    fun testEnqueueCloudSyncItem_remainsDeniedEvenWhenProviderIsEnabled() = runBlocking {
         val firstResult = repository.enqueueCloudSyncItem(
             provider = "GOOGLE_DRIVE",
             fileName = "duplicate_doc.pdf",
             size = 2048L,
             filePath = "/sdcard/duplicate_doc.pdf"
         )
-        assertTrue(firstResult)
+        assertFalse(firstResult)
 
-        // Try to enqueue duplicate active item
+        // A second request remains denied and cannot add an active queue item.
         val secondResult = repository.enqueueCloudSyncItem(
             provider = "GOOGLE_DRIVE",
             fileName = "duplicate_doc.pdf",
@@ -75,7 +71,7 @@ class CloudSyncQueueTest {
 
         val items = repository.observeCloudSyncItems().first()
         val duplicateCount = items.count { it.fileName == "duplicate_doc.pdf" }
-        assertEquals(1, duplicateCount)
+        assertEquals(0, duplicateCount)
     }
 
     @Test

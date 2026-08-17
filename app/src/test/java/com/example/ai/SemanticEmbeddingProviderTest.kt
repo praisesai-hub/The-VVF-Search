@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,9 +52,12 @@ class SemanticEmbeddingProviderTest {
     }
 
     @Test
-    fun `test fallback provider`() {
-        assertFalse(provider.isModelLoaded())
-        assertEquals(1, provider.embeddingVersion)
+    fun `test fallback provider remains available without a bundled model`() = runBlocking {
+        assertTrue(provider.isModelLoaded())
+        assertEquals(2, provider.embeddingVersion)
+        val embedding = provider.generateTextEmbedding("local-only semantic search")
+        assertNotNull(embedding)
+        assertEquals(128, embedding!!.size)
     }
 
     @Test

@@ -161,7 +161,10 @@ class CloudSyncWorkerTest {
     fun tearDown() {
     }
 
-    private fun createWorker(runAttemptCount: Int = 0): CloudSyncWorker {
+    private fun createWorker(
+        runAttemptCount: Int = 0,
+        transferAllowed: () -> Boolean = { true }
+    ): CloudSyncWorker {
         val workerFactory = object : WorkerFactory() {
             override fun createWorker(
                 appContext: Context,
@@ -175,7 +178,8 @@ class CloudSyncWorkerTest {
                     providerAdapterOverride = fakeAdapter,
                     authManagerOverride = GoogleAuthManager(
                         appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)
-                    )
+                    ),
+                    transferAllowed = transferAllowed
                 )
             }
         }
@@ -184,6 +188,24 @@ class CloudSyncWorkerTest {
             .setWorkerFactory(workerFactory)
             .setRunAttemptCount(runAttemptCount)
             .build()
+    }
+
+    @Test
+    fun transferDenied_failsClosedWithoutTouchingQueue() = runBlocking {
+        val queued = CloudSyncItemEntity(
+            id = 99L,
+            provider = "GOOGLE_DRIVE",
+            fileName = "private.txt",
+            filePath = "/private.txt",
+            fileSize = 1L,
+            status = "QUEUED"
+        )
+        fakeDao.insertCloudSyncItem(queued)
+        val worker = createWorker(transferAllowed = { false })
+        val result = worker.doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals("QUEUED", fakeDao.getCloudSyncItems().first().single().status)
     }
 
     @Test

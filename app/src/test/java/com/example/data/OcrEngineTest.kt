@@ -352,7 +352,7 @@ class OcrEngineTest {
     }
 
     @Test
-    fun searchSemanticFiles_returnsEmptyWhenModelAssetsAreUnavailable() = runBlocking {
+    fun searchSemanticFiles_usesLocalFallbackWhenModelAssetsAreUnavailable() = runBlocking {
         fakeDao.activeFiles += FileItemEntity(
             id = 621L,
             name = "notes.txt",
@@ -361,8 +361,8 @@ class OcrEngineTest {
             sizeBytes = 1L
         )
 
-        assertFalse(repository.isSemanticSearchAvailable)
-        assertTrue(repository.searchSemanticFiles("notes").first().isEmpty())
+        assertTrue(repository.isSemanticSearchAvailable)
+        assertFalse(repository.searchSemanticFiles("notes").first().isEmpty())
     }
 
     @Test
@@ -399,7 +399,7 @@ class OcrEngineTest {
             isEnabled = true,
             isCore = false
         )
-        assertTrue(
+        assertFalse(
             repository.enqueueCloudSyncItem(
                 "GOOGLE_DRIVE",
                 "report.pdf",
@@ -408,7 +408,7 @@ class OcrEngineTest {
                 isCore = true
             )
         )
-        assertEquals("QUEUED", fakeDao.insertedCloudItems.single().status)
+        assertTrue(fakeDao.insertedCloudItems.isEmpty())
 
         val failed = CloudSyncItemEntity(
             id = 641L,

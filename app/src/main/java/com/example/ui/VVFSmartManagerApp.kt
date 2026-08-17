@@ -31,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 
@@ -44,12 +46,16 @@ import androidx.compose.animation.togetherWith
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.AiDuplicatesScreen
 import com.example.ui.screens.CloudPluginsScreen
@@ -68,6 +74,22 @@ fun VVFSmartManagerApp(viewModel: MainViewModel) {
     val recycleBinFiles by viewModel.recycleBinFiles.collectAsStateWithLifecycle()
     val vaultItems by viewModel.vaultItems.collectAsStateWithLifecycle()
     val isVaultUnlocked by viewModel.isVaultUnlocked.collectAsStateWithLifecycle()
+    val vaultAutoLockTimeoutMs by viewModel.vaultAutoLockTimeoutMs.collectAsStateWithLifecycle()
+    val vaultActivityGeneration by viewModel.vaultActivityGeneration.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.lockVaultForBackground()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(isVaultUnlocked, vaultAutoLockTimeoutMs, vaultActivityGeneration) {
+        if (isVaultUnlocked) {
+            delay(vaultAutoLockTimeoutMs)
+            if (viewModel.isVaultUnlocked.value) viewModel.lockVault()
+        }
+    }
     val enteredPin by viewModel.enteredPin.collectAsStateWithLifecycle()
     val pinError by viewModel.pinError.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()

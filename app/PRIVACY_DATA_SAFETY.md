@@ -1,64 +1,51 @@
 # Google Play Data Safety & Privacy Guidance — VVF Smart Manager
 
-This document provides complete, accurate information required to complete the **Data Safety** section in Google Play Console for **VVF Smart Manager**.
+This document is the release baseline for the Google Play **Data Safety** form and the in-app privacy notice. It must be reviewed again before enabling a new remote integration, telemetry provider, or cloud transfer build flag.
 
----
+## 1. Privacy design
 
-## 1. Executive Privacy Overview
+VVF Smart Manager is **local-first**. File metadata, duplicate hashes, OCR text, search embeddings, vault records, and recycle-bin records are processed and stored in the app sandbox on the device. The app does not send user files to a server for scanning, OCR, duplicate detection, or semantic matching.
 
-- **Core Storage Model**: **Device-First & Local-Only**. All scanned file metadata, duplicate analysis hashes, OCR text indices, and recycle bin records are strictly stored on the user's local device.
-- **Secure Vault Privacy**: Files moved to the Secure Vault are encrypted locally on the device using **AES-256-GCM** keys backed by the **Android Keystore**. Vault files are never uploaded to any cloud server.
-- **Optional Cloud Sync**: Cloud synchronization is optional and triggered only when the user configures cloud integration. Sync requests are transmitted over secure HTTPS/TLS.
+The encrypted vault uses AES-256-GCM with an authenticated in-memory session key. Key material is created only after vault authentication and is backed by Android Keystore protections. Vault container filenames are opaque identifiers and do not repeat the source filename. App backups and device-transfer extraction are disabled because vault and authentication state must not be restored outside their original key lifecycle.
 
----
+> **Storage limitation:** app-private storage and Android file-based encryption protect local records under the normal Android security model. A rooted, compromised, or physically forensically acquired device is a stronger threat model. The app does not claim that overwrite/delete operations guarantee physical erasure on flash storage.
 
-## 2. Play Console Data Safety Declarations
+## 2. Default network and telemetry posture
 
-### A. Data Collection & Sharing Summary
+| Surface | Default behavior | User action required before activation |
+|---|---|---|
+| File scanning, OCR, duplicate matching, semantic fallback | On-device only | None |
+| Firebase Crashlytics | Disabled | Explicit crash-reporting consent in a provisioned privacy setting; release build required |
+| Cloud synchronization | Disabled in every default build | Approved OAuth provisioning, release build enablement, explicit device-owner opt-in, enabled provider, and a user-selected queue item |
+| Cloud worker scheduling | Never scheduled at app startup | A user-selected item must first pass the cloud-consent policy |
 
-| Data Category | Data Type | Collected / Access | Shared | Stored On-Device | Stored Remotely | Purpose |
-|---|---|---|---|---|---|---|
-| **Files and docs** | Files & document metadata (names, sizes, paths, categories) | Yes | No | Yes (Room DB) | No | App functionality (File management, search, duplicate detection) |
-| **Files and docs** | Photos, Videos, Documents | Yes | No | Yes | No | App functionality (OCR text scanning, perceptual hash generation) |
-| **Personal Info / Credentials** | Vault PIN & Biometric hashes | Yes | No | Yes (Android Keystore / Encrypted) | No | Account management & Security (Vault authentication) |
-| **App info and performance** | Crash logs (Firebase Crashlytics) | Optional | Yes (Google/Firebase) | No | Yes | Analytics & Bug fixing (Only active when Firebase is configured) |
+A release must not enable `CLOUD_SYNC_ENABLED` until its OAuth client configuration, provider scopes, token lifecycle, account disconnect/revocation flow, transfer UX, and Play Data Safety declaration have all passed security review.
 
----
+## 3. Data categories and retention
 
-## 3. Detailed Data Breakdown
+| Data category | Examples | Local use and storage | Remote sharing in the default build |
+|---|---|---|---|
+| Files and documents | name, URI/path, size, date, category | Room database for management and search | No |
+| Derived local analysis | SHA-256, dHash, document fingerprint, local semantic embedding | Room database for duplicates/search | No |
+| OCR text | on-device ML Kit result | Room database for local search | No |
+| Vault content | user-selected sensitive files | encrypted GCM files in internal app storage | No |
+| Vault metadata | original name, size, category, encrypted file path | app-private Room database; container filename is opaque | No |
+| Authentication state | PIN verifier, PIN/biometric-wrapped vault DEK, optional OAuth tokens | Android-Keystore-protected encrypted no-backup storage | No by default |
+| Diagnostics | crash reports | no collection by default | No by default |
 
-### 1. Files & Media Metadata
-- **Data Collected**: File names, file sizes, creation/modification dates, file category (Images, Videos, PDFs, Documents, Archives).
-- **Perceptual Hashes**: Perceptual difference hashes (`dHash`), Hamming distance vectors, and document fingerprints generated locally for AI/smart duplicate detection.
-- **OCR Text**: Text extracted from scanned documents/images via on-device ML Kit.
-- **Storage Location**: Local SQLite database (`app_database.db`) in internal application storage (`/data/data/com.example/databases/`).
-- **Data Sharing**: **Not shared** with any third party.
+Users can remove indexed metadata and app-private records through app data clearing or Android system settings. Vault and recycle-bin delete operations are best effort on modern flash storage; therefore the product copy must not make absolute physical-erasure promises.
 
-### 2. Secure Vault Content
-- **Data Collected**: Files selected by the user to be encrypted into the Vault.
-- **Encryption at Rest**: AES-256-GCM encryption with keys generated and stored in the hardware-backed **Android Keystore System**.
-- **Storage Location**: Internal application storage (`/data/data/com.example/files/vault/`).
-- **Data Sharing**: **Strictly Device-Only. Never shared.**
+## 4. Required Play Console answers for the default build
 
-### 3. Optional Cloud Synchronization (`CloudSyncWorker`)
-- **Data Transmitted**: User-selected sync item records (`CloudSyncItemEntity`).
-- **Encryption in Transit**: Transmitted securely using **HTTPS / TLS 1.2+**.
-- **Destination**: User-configured or enterprise cloud service endpoint (via Retrofit API).
+The following answers apply only while cloud transfer and crash reporting remain disabled by default:
 
----
+| Play question | Default-build answer |
+|---|---|
+| Is user data collected or shared with third parties? | No remote collection or sharing by default. Local processing occurs for app functionality. |
+| Is data encrypted in transit? | No outbound user-data transfer is enabled by default. If a future approved cloud build is enabled, HTTPS/TLS is mandatory. |
+| Is data encrypted at rest? | Vault files and secure stores use authenticated encryption with Android Keystore-protected keys. General local metadata relies on Android app sandbox and device encryption. |
+| Can users request deletion? | Yes. Users can delete app data through Android system settings and can remove managed content within the app. |
 
-## 4. Encryption & Security Declarations for Play Store
+## 5. Release checklist
 
-When completing the Play Console questionnaire:
-
-1. **Is data encrypted in transit?**
-   - **Yes**. All outbound network requests (Cloud Sync, API calls) use standard HTTPS/TLS encryption.
-
-2. **Do you provide a way for users to request that their data be deleted?**
-   - **Yes**. Users can delete all app data, cleared recycle bins, and vault contents directly within the app UI or via Android System Settings (`Clear Data`). Since data is local-only, deleting the app removes all stored data permanently.
-
-3. **Does the app collect data from children?**
-   - **No**.
-
-4. **Is data collection optional or required?**
-   - Storage access is required for core file management features. Cloud sync is optional.
+Before each production release, verify that backups remain disabled, no hardcoded secrets are present, Lint and Detekt are clean, tests pass, the signed release is built, and this document matches the actual release configuration. Any enabled telemetry or cloud-transfer capability requires a separate privacy review and an updated Play Data Safety form.

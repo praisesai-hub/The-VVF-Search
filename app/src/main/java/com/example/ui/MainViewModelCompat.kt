@@ -1,5 +1,7 @@
 package com.example.ui
 
+import android.app.Application
+import android.content.Context
 import android.os.SystemClock
 import androidx.biometric.BiometricPrompt
 import androidx.lifecycle.viewModelScope
@@ -12,6 +14,9 @@ import java.util.WeakHashMap
 
 private class VmCompatState {
     val vaultUnlocked = MutableStateFlow(false)
+    val vaultAutoLockTimeoutMs = MutableStateFlow(DEFAULT_VAULT_AUTO_LOCK_TIMEOUT_MS)
+    val vaultActivityGeneration = MutableStateFlow(0L)
+    var vaultAutoLockSettingsLoaded = false
     val enteredPin = MutableStateFlow("")
     val pinError = MutableStateFlow<String?>(null)
     val setupPinFirstEntry = MutableStateFlow<String?>(null)
@@ -23,6 +28,11 @@ private class VmCompatState {
 
 private const val PIN_LOCKOUT_THRESHOLD = 5
 private const val PIN_LOCKOUT_DURATION_MS = 30_000L
+internal const val DEFAULT_VAULT_AUTO_LOCK_TIMEOUT_MS = 60_000L
+private const val MIN_VAULT_AUTO_LOCK_TIMEOUT_MS = 15_000L
+private const val MAX_VAULT_AUTO_LOCK_TIMEOUT_MS = 15 * 60_000L
+private const val VAULT_AUTO_LOCK_TIMEOUT_PREF = "vault_auto_lock_timeout_ms"
+private const val APP_SETTINGS_PREF = "vvf_app_settings"
 private val compatStates = WeakHashMap<MainViewModel, VmCompatState>()
 private fun MainViewModel.compatState(): VmCompatState = synchronized(compatStates) {
     compatStates.getOrPut(this) { VmCompatState() }
@@ -48,6 +58,10 @@ val MainViewModel.isDuplicateScanning: StateFlow<Boolean> get() = repository.isS
 val MainViewModel.duplicateScanProgress: StateFlow<Float> get() = repository.scanProgress
 val MainViewModel.isPageLoading: StateFlow<Boolean> get() = compatState().pageLoading
 val MainViewModel.isVaultUnlocked: StateFlow<Boolean> get() = compatState().vaultUnlocked
+val MainViewModel.vaultAutoLockTimeoutMs: StateFlow<Long>
+    get() = compatState().also { loadVaultAutoLockSettings(it) }.vaultAutoLockTimeoutMs
+val MainViewModel.vaultActivityGeneration: StateFlow<Long>
+    get() = compatState().vaultActivityGeneration
 val MainViewModel.enteredPin: StateFlow<String> get() = compatState().enteredPin
 val MainViewModel.pinError: StateFlow<String?> get() = compatState().pinError
 val MainViewModel.isVaultPinSetupRequired: Boolean get() = !repository.hasVaultPin()
@@ -59,6 +73,51 @@ val MainViewModel.semanticSearchResults: StateFlow<List<FileItemEntity>> get() =
         .stateInCompat(this, emptyList())
 
 fun MainViewModel.startDuplicateScan() { repository.startIncrementalDuplicateScan() }
+
+/**
+ * Changes the vault idle timeout. Values are deliberately bounded so the vault cannot be
+ * accidentally configured to remain unlocked indefinitely.
+ */
+fun MainViewModel.setVaultAutoLockTimeout(timeoutMs: Long) {
+    val state = compatState()
+    loadVaultAutoLockSettings(state)
+    val normalized = timeoutMs.coerceIn(MIN_VAULT_AUTO_LOCK_TIMEOUT_MS, MAX_VAULT_AUTO_LOCK_TIMEOUT_MS)
+    if (state.vaultAutoLockTimeoutMs.value == normalized) return
+    state.vaultAutoLockTimeoutMs.value = normalized
+    getApplication<Application>()
+        .getSharedPreferences(APP_SETTINGS_PREF, Context.MODE_PRIVATE)
+        .edit()
+        .putLong(VAULT_AUTO_LOCK_TIMEOUT_PREF, normalized)
+        .apply()
+    recordVaultActivity()
+}
+
+/** Records activity only while an authenticated vault session is active. */
+fun MainViewModel.recordVaultActivity() {
+    val state = compatState()
+    if (state.vaultUnlocked.value) state.vaultActivityGeneration.value += 1
+}
+
+/** Immediately clears an authenticated vault session when the app is no longer foregrounded. */
+fun MainViewModel.lockVaultForBackground() {
+    if (compatState().vaultUnlocked.value) lockVault()
+}
+
+private fun MainViewModel.onVaultSessionAuthenticated() {
+    compatState().vaultActivityGeneration.value += 1
+}
+
+private fun MainViewModel.loadVaultAutoLockSettings(state: VmCompatState) {
+    if (state.vaultAutoLockSettingsLoaded) return
+    val persisted = getApplication<Application>()
+        .getSharedPreferences(APP_SETTINGS_PREF, Context.MODE_PRIVATE)
+        .getLong(VAULT_AUTO_LOCK_TIMEOUT_PREF, DEFAULT_VAULT_AUTO_LOCK_TIMEOUT_MS)
+    state.vaultAutoLockTimeoutMs.value = persisted.coerceIn(
+        MIN_VAULT_AUTO_LOCK_TIMEOUT_MS,
+        MAX_VAULT_AUTO_LOCK_TIMEOUT_MS
+    )
+    state.vaultAutoLockSettingsLoaded = true
+}
 
 fun MainViewModel.toggleDuplicateSelection(id: Long) {
     val state = compatState()
@@ -146,6 +205,7 @@ private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
     state.pinLockedUntilElapsedMs = 0L
     if (repository.unlockVaultWithPin(pin)) {
         state.vaultUnlocked.value = true
+        onVaultSessionAuthenticated()
         state.enteredPin.value = ""
         state.pinError.value = null
     } else {
@@ -161,6 +221,7 @@ private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String, now
         state.failedPinAttempts = 0
         state.pinLockedUntilElapsedMs = 0L
         state.vaultUnlocked.value = true
+        onVaultSessionAuthenticated()
         state.enteredPin.value = ""
         state.pinError.value = null
         return
@@ -185,6 +246,7 @@ fun MainViewModel.lockVault() {
     val state = compatState()
     repository.lockVaultSession()
     state.vaultUnlocked.value = false
+    state.vaultActivityGeneration.value += 1
     state.enteredPin.value = ""
     state.setupPinFirstEntry.value = null
     state.pinError.value = null
@@ -200,6 +262,7 @@ fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResul
         state.failedPinAttempts = 0
         state.pinLockedUntilElapsedMs = 0L
         state.vaultUnlocked.value = true
+        onVaultSessionAuthenticated()
         state.pinError.value = null
     } catch (_: java.security.GeneralSecurityException) {
         state.vaultUnlocked.value = false

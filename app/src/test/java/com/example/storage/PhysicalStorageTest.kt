@@ -2,6 +2,7 @@ package com.example.storage
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.security.VaultCryptoSession
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -170,6 +171,69 @@ class PhysicalStorageTest {
         assertTrue(File(vaultResult.vaultFilePath).exists())
         assertEquals(encrypted.toList(), File(vaultResult.vaultFilePath).readBytes().toList())
         assertEquals(iv.toList(), vaultResult.iv.toList())
+    }
+
+    @Test
+    fun streamingVaultRoundTrip_handlesPayloadLargerThanLegacyLimitWithoutLoadingWholeFile() {
+        val source = File(testDir, "large-secret.bin")
+        val expected = ByteArray(2 * 1024 * 1024) { (it % 251).toByte() }
+        source.writeBytes(expected)
+        val session = VaultCryptoSession.fromKeyBytes(ByteArray(32) { 7 })
+
+        val encrypted = PhysicalStorageManager.encryptAndWipeSourceStreaming(context, source.absolutePath, session)
+
+        assertTrue(encrypted.isSuccess)
+        assertFalse(source.exists())
+        val vault = encrypted.getOrThrow()
+        val restoreTarget = File(testDir, "restored-large-secret.bin")
+        val restored = PhysicalStorageManager.decryptAndRestoreStreaming(
+            context = context,
+            request = VaultRestoreRequest(
+                vaultFilePath = vault.vaultFilePath,
+                originalPath = restoreTarget.absolutePath,
+                originalName = source.name,
+                iv = vault.iv
+            ),
+            session = session,
+        )
+
+        assertTrue(restored.isSuccess)
+        assertEquals(expected.toList(), restoreTarget.readBytes().toList())
+        assertFalse(File(vault.vaultFilePath).exists())
+        session.close()
+    }
+
+    @Test
+    fun streamingVaultRestore_tamperingFailsClosedAndPreservesEncryptedSource() {
+        val source = File(testDir, "secret.bin").apply {
+            writeBytes(ByteArray(128 * 1024) { 9 })
+        }
+        val session = VaultCryptoSession.fromKeyBytes(ByteArray(32) { 3 })
+        val encrypted = PhysicalStorageManager
+            .encryptAndWipeSourceStreaming(context, source.absolutePath, session)
+            .getOrThrow()
+        val vault = File(encrypted.vaultFilePath)
+        java.io.RandomAccessFile(vault, "rw").use { file ->
+            file.seek(file.length() - 1)
+            file.write(file.read().xor(0x01))
+        }
+        val restoreTarget = File(testDir, "tampered-restored.bin")
+
+        val restored = PhysicalStorageManager.decryptAndRestoreStreaming(
+            context = context,
+            request = VaultRestoreRequest(
+                vaultFilePath = vault.absolutePath,
+                originalPath = restoreTarget.absolutePath,
+                originalName = source.name,
+                iv = encrypted.iv
+            ),
+            session = session,
+        )
+
+        assertTrue(restored.isFailure)
+        assertTrue(vault.exists())
+        assertFalse(restoreTarget.exists())
+        session.close()
     }
 
     @Test

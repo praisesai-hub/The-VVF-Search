@@ -8,8 +8,13 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
+import com.example.security.VaultCryptoSession
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
+import java.util.UUID
+import javax.crypto.Cipher
 
 data class VaultStorageResult(
     val vaultFilePath: String,
@@ -17,6 +22,14 @@ data class VaultStorageResult(
     val iv: ByteArray
 )
 
+data class VaultRestoreRequest(
+    val vaultFilePath: String,
+    val originalPath: String,
+    val originalName: String,
+    val iv: ByteArray
+)
+
+@Suppress("LargeClass")
 object PhysicalStorageManager {
     private const val TAG = "PhysicalStorageManager"
 
@@ -338,6 +351,177 @@ object PhysicalStorageManager {
         catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); Result.failure(e) }
     }
 
+    /**
+     * Encrypts a source into the app-private vault using bounded buffers. The encrypted file is
+     * made visible only after GCM finalisation succeeds; the source is removed only afterwards.
+     */
+    fun encryptAndWipeSourceStreaming(
+        context: Context,
+        srcPath: String,
+        session: VaultCryptoSession
+    ): Result<VaultStorageResult> = try {
+        // Never place the original filename in the vault container name. Original metadata stays
+        // in app-private storage and is required only after authenticated vault access.
+        val vaultDir = getVaultDir(context)
+        val vaultFile = File(vaultDir, "ENC_${System.currentTimeMillis()}_${UUID.randomUUID()}.vvf")
+        val temporaryFile = File(vaultDir, ".${vaultFile.name}.${UUID.randomUUID()}.tmp")
+        val input = if (srcPath.startsWith("content://")) {
+            context.contentResolver.openInputStream(srcPath.toUri())
+                ?: return Result.failure(java.io.FileNotFoundException("Unable to open source URI"))
+        } else {
+            val source = File(srcPath)
+            if (!source.exists() || !source.canRead()) {
+                return Result.failure(java.io.FileNotFoundException("Source file not found or unreadable at $srcPath"))
+            }
+            FileInputStream(source)
+        }
+        val iv = input.use { streamEncryptToFile(it, temporaryFile, session) }
+        check(temporaryFile.isFile && temporaryFile.length() >= GCM_TAG_BYTES) {
+            "Encrypted vault temporary file was not written"
+        }
+        if (!temporaryFile.renameTo(vaultFile)) {
+            throw java.io.IOException("Unable to atomically finalize encrypted vault file")
+        }
+        val sourceRemoved = if (srcPath.startsWith("content://")) {
+            deleteFile(context, srcPath)
+        } else {
+            secureWipeFile(context, File(srcPath))
+        }
+        if (!sourceRemoved) {
+            vaultFile.delete()
+            return Result.failure(java.io.IOException("Failed to remove plaintext source after encryption"))
+        }
+        notifyMediaStoreFileDeleted(context, srcPath)
+        Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
+    } catch (e: Exception) {
+        Log.e(TAG, "Streaming vault encryption failed: ${e.message}", e)
+        Result.failure(e)
+    }
+
+    /**
+     * Restores a V2 vault item with bounded buffers and verifies the GCM tag before publishing
+     * plaintext. Content URI sources are restored to the app-controlled Restored directory,
+     * because the original URI was intentionally deleted during vault import.
+     */
+    fun decryptAndRestoreStreaming(
+        context: Context,
+        request: VaultRestoreRequest,
+        session: VaultCryptoSession
+    ): Result<String> = try {
+        val vaultFile = File(request.vaultFilePath)
+        if (!vaultFile.isFile) return Result.failure(java.io.FileNotFoundException("Vault file not found"))
+        val destination = if (request.originalPath.startsWith("content://")) {
+            val restoredName = safeTrashFileName(request.originalName)
+            File(getRestoredDir(context), "RESTORED_${System.currentTimeMillis()}_$restoredName")
+        } else {
+            File(request.originalPath)
+        }
+        destination.parentFile?.let { parent ->
+            if (!parent.exists()) check(parent.mkdirs()) { "Unable to create restore directory" }
+        }
+        val temporaryName = ".${destination.name}.${UUID.randomUUID()}.tmp"
+        val temporaryFile = File(destination.parentFile, temporaryName)
+        streamDecryptToFile(vaultFile, temporaryFile, request.iv, session)
+        check(temporaryFile.isFile) { "Vault restore temporary file was not written" }
+        if (destination.exists() && !destination.delete()) {
+            temporaryFile.delete()
+            return Result.failure(java.io.IOException("Unable to replace existing restored file"))
+        }
+        if (!temporaryFile.renameTo(destination)) {
+            temporaryFile.delete()
+            return Result.failure(java.io.IOException("Unable to atomically finalize restored file"))
+        }
+        if (!vaultFile.delete() && vaultFile.exists()) {
+            destination.delete()
+            return Result.failure(java.io.IOException("Unable to delete encrypted vault file after restoration"))
+        }
+        notifyMediaStoreFileChanged(context, "", destination.absolutePath)
+        Result.success(destination.absolutePath)
+    } catch (e: javax.crypto.AEADBadTagException) {
+        Result.failure(
+            java.security.GeneralSecurityException(
+                "Decryption failed: vault data is tampered or authentication is invalid.",
+                e
+            )
+        )
+    } catch (e: Exception) {
+        Log.e(TAG, "Streaming vault restore failed: ${e.message}", e)
+        Result.failure(e)
+    }
+
+    @Suppress("NestedBlockDepth")
+    private fun streamEncryptToFile(
+        input: InputStream,
+        destination: File,
+        session: VaultCryptoSession
+    ): ByteArray {
+        val cipher = session.getEncryptionCipher()
+        val plaintextBuffer = ByteArray(STREAM_BUFFER_BYTES)
+        try {
+            FileOutputStream(destination).use { output ->
+                var count: Int
+                do {
+                    count = input.read(plaintextBuffer)
+                    if (count > 0) {
+                        cipher.update(plaintextBuffer, 0, count)?.let { encrypted ->
+                            output.write(encrypted)
+                        }
+                    }
+                } while (count >= 0)
+                cipher.doFinal()?.let { finalBytes -> output.write(finalBytes) }
+                output.flush()
+                output.fd.sync()
+            }
+            return cipher.iv
+        } finally {
+            plaintextBuffer.fill(0)
+        }
+    }
+
+    @Suppress("NestedBlockDepth")
+    private fun streamDecryptToFile(
+        encryptedFile: File,
+        destination: File,
+        iv: ByteArray,
+        session: VaultCryptoSession
+    ) {
+        val cipher = session.getDecryptionCipher(iv)
+        val ciphertextBuffer = ByteArray(STREAM_BUFFER_BYTES)
+        try {
+            FileInputStream(encryptedFile).use { input ->
+                FileOutputStream(destination).use { output ->
+                    var count: Int
+                    do {
+                        count = input.read(ciphertextBuffer)
+                        if (count > 0) {
+                            cipher.update(ciphertextBuffer, 0, count)?.let { plaintext ->
+                                try {
+                                    output.write(plaintext)
+                                } finally {
+                                    plaintext.fill(0)
+                                }
+                            }
+                        }
+                    } while (count >= 0)
+                    cipher.doFinal()?.let { finalBytes ->
+                        try {
+                            output.write(finalBytes)
+                        } finally {
+                            finalBytes.fill(0)
+                        }
+                    }
+                    output.flush()
+                    output.fd.sync()
+                }
+            }
+        } catch (e: Exception) {
+            destination.delete()
+            throw e
+        } finally {
+            ciphertextBuffer.fill(0)
+        }
+    }
+
     fun encryptAndWipeSource(context: Context, srcPath: String, encryptAction: (ByteArray) -> Pair<ByteArray, ByteArray>): Result<VaultStorageResult> {
         if (srcPath.startsWith("content://")) {
             return try {
@@ -489,6 +673,9 @@ object PhysicalStorageManager {
             if (file.exists()) android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null) { path, uri -> Log.d(TAG, "Scanned $path -> $uri") }
         } catch (e: Exception) { Log.w(TAG, "Failed to notify media scanner: ${e.message}") }
     }
+
+    private const val STREAM_BUFFER_BYTES = 64 * 1024
+    private const val GCM_TAG_BYTES = 16
 
     private fun notifyMediaStoreFileDeleted(context: Context, path: String) { deleteFromMediaStore(context, path) }
 }

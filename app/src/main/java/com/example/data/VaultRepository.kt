@@ -6,6 +6,7 @@ import android.util.Base64
 import com.example.security.KeystoreVaultManager
 import com.example.security.VaultCryptoSession
 import com.example.storage.PhysicalStorageManager
+import com.example.storage.VaultRestoreRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -22,10 +23,11 @@ class VaultRepository(
 
     suspend fun encryptToVault(file: FileItemEntity) = withContext(Dispatchers.IO) {
         val session = requireAuthenticatedSession()
-        val vaultStorageResult = PhysicalStorageManager.encryptAndWipeSource(context, file.path) { bytes ->
-            val encrypted = session.encryptBytes(bytes)
-            encrypted.ciphertext to encrypted.iv
-        }
+        val vaultStorageResult = PhysicalStorageManager.encryptAndWipeSourceStreaming(
+            context = context,
+            srcPath = file.path,
+            session = session
+        )
 
         if (vaultStorageResult.isSuccess) {
             val result = vaultStorageResult.getOrThrow()
@@ -60,13 +62,18 @@ class VaultRepository(
             val targetFile = file ?: dao.getVaultFileByName(migratedItem.originalName)
             if (targetFile != null) {
                 val iv = Base64.decode(migratedItem.ivBase64, Base64.DEFAULT)
-                val decryptResult = PhysicalStorageManager.decryptAndRestore(
-                    context,
-                    migratedItem.encryptedFilePath,
-                    targetFile.path
-                ) { ciphertext -> session.decryptBytes(ciphertext, iv) }
+                val decryptResult = PhysicalStorageManager.decryptAndRestoreStreaming(
+                    context = context,
+                    request = VaultRestoreRequest(
+                        vaultFilePath = migratedItem.encryptedFilePath,
+                        originalPath = targetFile.path,
+                        originalName = migratedItem.originalName,
+                        iv = iv
+                    ),
+                    session = session
+                )
                 if (decryptResult.isSuccess) {
-                    dao.updateFile(targetFile.copy(isVault = false))
+                    dao.updateFile(targetFile.copy(path = decryptResult.getOrThrow(), isVault = false))
                     dao.deleteVaultItemById(migratedItem.id)
                     true
                 } else {

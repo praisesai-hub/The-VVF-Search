@@ -150,10 +150,18 @@ object LightweightEmbeddingEngine {
  * Uses lightweight on-device feature vector generation when TFLite model binary is absent.
  */
 class FallbackSemanticEmbeddingProvider : SemanticEmbeddingProvider {
-    override val embeddingVersion: Int = 1
-    override fun isModelLoaded(): Boolean = false
-    override suspend fun generateImageEmbedding(file: File): FloatArray? = null
-    override suspend fun generateTextEmbedding(text: String): FloatArray? = null
+    /**
+     * This provider is intentionally local and deterministic. It does not claim Mobile CLIP
+     * quality, but it keeps semantic search and duplicate ranking available when a separately
+     * licensed TFLite model is not bundled with the app.
+     */
+    override val embeddingVersion: Int = 2
+    override fun isModelLoaded(): Boolean = true
+    override suspend fun generateImageEmbedding(file: File): FloatArray? =
+        LightweightEmbeddingEngine.generateImageEmbedding(file)
+
+    override suspend fun generateTextEmbedding(text: String): FloatArray? =
+        LightweightEmbeddingEngine.generateTextEmbedding(text)
 }
 
 /**

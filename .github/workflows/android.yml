@@ -41,6 +41,8 @@ jobs:
         ./gradlew --version
         ./gradlew -q properties >/dev/null
         echo "Gradle wrapper resolved successfully."
+    - name: Enforce tracked-secret policy
+      run: python3 scripts/check_no_secrets.py
     - name: Write google-services.json from secret (if set)
       run: |
         if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
@@ -83,6 +85,11 @@ jobs:
       run: ./gradlew :app:testDebugUnitTest
     - name: Generate JVM Unit Test Coverage Report
       run: ./gradlew :app:createDebugUnitTestCoverageReport
+    - name: Enforce JVM Unit Test Coverage Floor
+      run: |
+        python3 scripts/check_coverage_floor.py \
+          --report app/build/reports/coverage/test/debug/report.xml \
+          --minimum-instruction-percent 5.0
     - name: Upload JVM Unit Test Coverage Report
       uses: actions/upload-artifact@v7
       with:
@@ -159,6 +166,8 @@ jobs:
           test -f gradle/wrapper/gradle-wrapper.jar
           test -f gradle/wrapper/gradle-wrapper.properties
           ./gradlew --version
+      - name: Enforce tracked-secret policy
+        run: python3 scripts/check_no_secrets.py
       - name: Write google-services.json from secret (if set)
         run: |
           if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then

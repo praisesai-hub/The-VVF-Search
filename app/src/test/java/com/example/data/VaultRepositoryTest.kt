@@ -79,10 +79,10 @@ class VaultRepositoryTest {
         )
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.encryptAndWipeSource(
+            PhysicalStorageManager.encryptAndWipeSourceStreaming(
                 context,
                 file.path,
-                any<(ByteArray) -> Pair<ByteArray, ByteArray>>()
+                any()
             )
         } returns Result.success(result)
         val updated = slot<FileItemEntity>()
@@ -111,10 +111,10 @@ class VaultRepositoryTest {
         val failure = IOException("source could not be securely wiped")
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.encryptAndWipeSource(
+            PhysicalStorageManager.encryptAndWipeSourceStreaming(
                 context,
                 file.path,
-                any<(ByteArray) -> Pair<ByteArray, ByteArray>>()
+                any()
             )
         } returns Result.failure(failure)
 
@@ -136,10 +136,9 @@ class VaultRepositoryTest {
         coEvery { dao.getVaultFileByName(target.name) } returns target
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.decryptAndRestore(
+            PhysicalStorageManager.decryptAndRestoreStreaming(
                 context,
-                vaultItem.encryptedFilePath,
-                target.path,
+                any(),
                 any()
             )
         } returns Result.success(target.path)
@@ -177,10 +176,9 @@ class VaultRepositoryTest {
         val failure = IOException("tampered vault data")
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.decryptAndRestore(
+            PhysicalStorageManager.decryptAndRestoreStreaming(
                 context,
-                vaultItem.encryptedFilePath,
-                target.path,
+                any(),
                 any()
             )
         } returns Result.failure(failure)
