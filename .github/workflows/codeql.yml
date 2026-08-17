@@ -42,6 +42,9 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
+          # Kotlin 2.4.20-Beta1 is the first patched version for GHSA-r937-wjx7-w2jp.
+          # Use the latest CodeQL nightly until the recommended stable bundle supports it.
+          tools: nightly
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
 
