@@ -19,6 +19,28 @@ defaults:
     shell: bash
 
 jobs:
+  dependency-submission:
+    name: Submit Resolved Gradle Dependency Graph
+    # The Dependency Submission API mutates only GitHub's dependency inventory.
+    # It never runs for pull requests and retains write permission only in this job.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Submit resolved Gradle dependency graph
+        uses: gradle/actions/dependency-submission@v6
+        with:
+          dependency-graph: generate-and-submit
+          dependency-graph-continue-on-failure: false
+
   build-and-test:
     name: Build & Test Android App
     runs-on: ubuntu-latest
