@@ -1,0 +1,38 @@
+name: Weekly Security Health
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: read
+  issues: write
+
+jobs:
+  weekly-security-health:
+    name: Weekly Dependabot and CI Health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Generate security health report and upsert risk issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 scripts/weekly_security_health.py \
+            --output-dir reports/security-health \
+            --stale-pr-days 7
+      - name: Upload weekly security health report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: weekly-security-health
+          path: reports/security-health
+          if-no-files-found: error

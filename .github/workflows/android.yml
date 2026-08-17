@@ -65,6 +65,8 @@ jobs:
         echo "Gradle wrapper resolved successfully."
     - name: Enforce tracked-secret policy
       run: python3 scripts/check_no_secrets.py
+    - name: Test weekly security health policy
+      run: PYTHONPATH=scripts python3 -m unittest scripts/test_weekly_security_health.py
     - name: Write google-services.json from secret (if set)
       run: |
         if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
