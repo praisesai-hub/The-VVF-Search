@@ -344,7 +344,11 @@ open class SmartManagerRepository(
 
     suspend fun retryCloudSyncItem(id: Long): Boolean = withContext(Dispatchers.IO) {
         val item = dao.getCloudSyncItems().first().find { it.id == id } ?: return@withContext false
-        if (item.status == "SYNCED" || !cloudTransferAllowed(context) || !isProviderEnabled(item.provider)) return@withContext false
+        if (
+            item.status == "SYNCED" ||
+            !cloudTransferAllowed(context) ||
+            !isProviderEnabled(item.provider)
+        ) return@withContext false
         withRetry { dao.insertCloudSyncItem(item.copy(status = "QUEUED", lastSyncedMs = System.currentTimeMillis())) }
         enqueueCloudSyncWork()
         true
