@@ -6,7 +6,7 @@ from __future__ import annotations
 import unittest
 from datetime import UTC, datetime
 
-from weekly_security_health import collect_risks, render_markdown
+from weekly_security_health import GitHubClient, collect_risks, render_markdown
 
 
 NOW = datetime(2026, 8, 18, tzinfo=UTC)
@@ -17,6 +17,24 @@ SUCCESSFUL_RUN = {
     "name": "Android CI/CD",
     "html_url": "https://example.test/run/1",
 }
+
+
+class GitHubClientPaginationTest(unittest.TestCase):
+    def test_get_all_reads_named_list_from_actions_response(self) -> None:
+        class FakeClient(GitHubClient):
+            def __init__(self) -> None:
+                super().__init__("unused", "owner/repo")
+                self.calls = 0
+
+            def request(self, method, path, *, query=None, body=None):
+                self.calls += 1
+                return {"workflow_runs": [{"id": 1}]} if self.calls == 1 else {"workflow_runs": []}
+
+        client = FakeClient()
+        runs = client.get_all("/repos/owner/repo/actions/runs", response_list_key="workflow_runs")
+
+        self.assertEqual([{"id": 1}], runs)
+        self.assertEqual(1, client.calls)
 
 
 class WeeklySecurityHealthTest(unittest.TestCase):

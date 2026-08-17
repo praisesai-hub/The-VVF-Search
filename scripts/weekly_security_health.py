@@ -44,7 +44,14 @@ class GitHubClient:
         self.token = token
         self.repository = repository
 
-    def get_all(self, path: str, query: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    def get_all(
+        self,
+        path: str,
+        query: dict[str, str] | None = None,
+        *,
+        response_list_key: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get a paginated REST list or a named list inside a REST object response."""
         query = dict(query or {})
         query.setdefault("per_page", "100")
         page = 1
@@ -52,10 +59,16 @@ class GitHubClient:
         while True:
             query["page"] = str(page)
             payload = self.request("GET", path, query=query)
-            if not isinstance(payload, list):
+            if response_list_key:
+                if not isinstance(payload, dict) or not isinstance(payload.get(response_list_key), list):
+                    raise RuntimeError(f"Expected '{response_list_key}' list response for {path}")
+                items = payload[response_list_key]
+            elif isinstance(payload, list):
+                items = payload
+            else:
                 raise RuntimeError(f"Expected list response for {path}")
-            results.extend(payload)
-            if len(payload) < int(query["per_page"]):
+            results.extend(items)
+            if len(items) < int(query["per_page"]):
                 return results
             page += 1
 
@@ -318,6 +331,7 @@ def main() -> int:
     workflow_runs = client.get_all(
         f"/repos/{args.repository}/actions/runs",
         {"branch": "main", "event": "push"},
+        response_list_key="workflow_runs",
     )
     pull_requests = client.get_all(f"/repos/{args.repository}/pulls", {"state": "open"})
     dependabot_prs = [pull_request for pull_request in pull_requests if pull_request.get("user", {}).get("login") == "dependabot[bot]"]
