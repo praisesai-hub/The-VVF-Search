@@ -35,7 +35,7 @@ buildscript {
       classpath("io.netty:netty-transport-classes-epoll:4.1.136.Final") { version { strictly("4.1.136.Final") } }
       classpath("io.netty:netty-transport-native-epoll:4.1.136.Final") { version { strictly("4.1.136.Final") } }
       classpath("io.netty:netty-transport-native-unix-common:4.1.136.Final") { version { strictly("4.1.136.Final") } }
-      classpath("org.apache.commons:commons-lang3:3.18.0") {
+      classpath("org.apache.commons:commons-lang3:3.20.0") {
         version { strictly("3.18.0") }
         because("GHSA-j288-q9x7-2f5v")
       }
@@ -81,7 +81,7 @@ allprojects {
       "io.netty:netty-transport-classes-epoll:4.1.136.Final",
       "io.netty:netty-transport-native-epoll:4.1.136.Final",
       "io.netty:netty-transport-native-unix-common:4.1.136.Final",
-      "org.apache.commons:commons-lang3:3.18.0",
+      "org.apache.commons:commons-lang3:3.20.0",
       "org.apache.httpcomponents:httpclient:4.5.14",
       "org.bitbucket.b_c:jose4j:0.9.6",
     )
