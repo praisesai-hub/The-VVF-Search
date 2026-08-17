@@ -124,7 +124,12 @@ class CloudSyncQueueTest {
             )
         )
 
-        val retryResult = repository.retryCloudSyncItem(id)
+        val authorizedRepository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            cloudTransferAllowed = { true },
+        )
+        val retryResult = authorizedRepository.retryCloudSyncItem(id)
         assertTrue(retryResult)
 
         val items = repository.observeCloudSyncItems().first()

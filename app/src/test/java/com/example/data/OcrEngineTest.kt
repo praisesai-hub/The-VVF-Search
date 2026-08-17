@@ -418,7 +418,13 @@ class OcrEngineTest {
             status = "FAILED"
         )
         fakeDao.cloudItems += failed
-        assertTrue(repository.retryCloudSyncItem(641L))
+        val authorizedRepository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            ocrEngine = fakeOcrEngine,
+            cloudTransferAllowed = { true },
+        )
+        assertTrue(authorizedRepository.retryCloudSyncItem(641L))
         assertEquals("QUEUED", fakeDao.insertedCloudItems.last().status)
 
         val synced = CloudSyncItemEntity(
