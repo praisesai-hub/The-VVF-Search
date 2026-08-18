@@ -327,23 +327,32 @@ def render_markdown(
     return "\n".join(lines) + "\n"
 
 
-def upsert_risk_issue(client: GitHubClient, report: str) -> str | None:
-    issues = client.get_all(f"/repos/{client.repository}/issues", {"state": "open"})
-    matching = [
+def managed_risk_issues(client: GitHubClient, state: str = "all") -> list[dict[str, Any]]:
+    issues = client.get_all(f"/repos/{client.repository}/issues", {"state": state})
+    return [
         issue
         for issue in issues
         if "pull_request" not in issue
         and issue.get("title") == ISSUE_TITLE
         and ISSUE_MARKER in (issue.get("body") or "")
     ]
+
+
+def upsert_risk_issue(client: GitHubClient, report: str) -> str | None:
+    matching = managed_risk_issues(client)
     body = (
         f"{ISSUE_MARKER}\n"
-        "This issue is managed by the weekly security health workflow. Do not close it while the report "
-        "still indicates a risk.\n\n" + report
+        "This is an automated **security signal**, not the remediation work item. It is updated while "
+        "a policy threshold is breached and closes automatically once the weekly check is healthy. "
+        "Track implementation ownership, due dates, and remediation evidence in a linked security issue.\n\n" + report
     )
     if matching:
-        issue = matching[0]
-        client.request("PATCH", f"/repos/{client.repository}/issues/{issue['number']}", body={"body": body})
+        issue = max(matching, key=lambda candidate: candidate.get("updated_at", ""))
+        client.request(
+            "PATCH",
+            f"/repos/{client.repository}/issues/{issue['number']}",
+            body={"body": body, "state": "open"},
+        )
         return issue.get("html_url")
 
     created = client.request(
@@ -352,6 +361,28 @@ def upsert_risk_issue(client: GitHubClient, report: str) -> str | None:
         body={"title": ISSUE_TITLE, "body": body},
     )
     return created.get("html_url")
+
+
+def close_resolved_risk_issue(client: GitHubClient, report: str) -> str | None:
+    matching = managed_risk_issues(client, state="open")
+    if not matching:
+        return None
+    issue = max(matching, key=lambda candidate: candidate.get("updated_at", ""))
+    issue_path = f"/repos/{client.repository}/issues/{issue['number']}"
+    client.request(
+        "POST",
+        f"{issue_path}/comments",
+        body={
+            "body": (
+                f"{ISSUE_MARKER}\n"
+                "Automated resolution: the latest weekly check found no breached policy threshold. "
+                "Closing this signal issue; it will reopen automatically if a future check detects risk.\n\n"
+                + report
+            )
+        },
+    )
+    client.request("PATCH", issue_path, body={"state": "closed"})
+    return issue.get("html_url")
 
 
 def main() -> int:
@@ -435,8 +466,12 @@ def main() -> int:
     )
 
     issue_url = None
-    if risks and not args.no_issue:
-        issue_url = upsert_risk_issue(client, report)
+    closed_issue_url = None
+    if not args.no_issue:
+        if risks:
+            issue_url = upsert_risk_issue(client, report)
+        else:
+            closed_issue_url = close_resolved_risk_issue(client, report)
 
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if summary_path:
@@ -444,12 +479,16 @@ def main() -> int:
             summary_file.write(report)
             if issue_url:
                 summary_file.write(f"\nRisk issue: {issue_url}\n")
+            if closed_issue_url:
+                summary_file.write(f"\nResolved risk issue closed: {closed_issue_url}\n")
 
     print(f"report={markdown_path}")
     print(f"report_json={json_path}")
     print(f"risk_count={len(risks)}")
     if issue_url:
         print(f"risk_issue={issue_url}")
+    if closed_issue_url:
+        print(f"closed_risk_issue={closed_issue_url}")
     return 0
 
 

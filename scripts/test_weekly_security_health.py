@@ -6,7 +6,13 @@ from __future__ import annotations
 import unittest
 from datetime import UTC, datetime
 
-from weekly_security_health import GitHubClient, collect_risks, render_markdown
+from weekly_security_health import (
+    GitHubClient,
+    close_resolved_risk_issue,
+    collect_risks,
+    upsert_risk_issue,
+    render_markdown,
+)
 
 
 NOW = datetime(2026, 8, 18, tzinfo=UTC)
@@ -63,6 +69,47 @@ class GitHubClientPaginationTest(unittest.TestCase):
 
 
 class WeeklySecurityHealthTest(unittest.TestCase):
+    def test_resolved_signal_issue_is_closed_and_risk_reopens_the_same_issue(self) -> None:
+        class FakeClient:
+            repository = "owner/repo"
+
+            def __init__(self) -> None:
+                self.calls = []
+
+            def get_all(self, path, query=None, **_kwargs):
+                self.calls.append(("GET", path, query))
+                return [
+                    {
+                        "number": 19,
+                        "title": "[Security Health] Weekly Dependabot and CI risks detected",
+                        "body": "<!-- vvf-weekly-security-health -->\nold report",
+                        "html_url": "https://example.test/issues/19",
+                        "updated_at": "2026-08-18T06:00:00Z",
+                    }
+                ]
+
+            def request(self, method, path, *, query=None, body=None):
+                self.calls.append((method, path, body))
+                return {}
+
+        client = FakeClient()
+        closed_url = close_resolved_risk_issue(client, "# Weekly report\nHEALTHY")
+
+        self.assertEqual("https://example.test/issues/19", closed_url)
+        self.assertIn(("PATCH", "/repos/owner/repo/issues/19", {"state": "closed"}), client.calls)
+
+        reopened_url = upsert_risk_issue(client, "# Weekly report\nRISK DETECTED")
+
+        self.assertEqual("https://example.test/issues/19", reopened_url)
+        self.assertTrue(
+            any(
+                call[0] == "PATCH"
+                and call[1] == "/repos/owner/repo/issues/19"
+                and call[2]["state"] == "open"
+                for call in client.calls
+            )
+        )
+
     def test_no_risk_for_clean_alerts_successful_ci_and_fresh_pr(self) -> None:
         risks = collect_risks(
             alerts=[],

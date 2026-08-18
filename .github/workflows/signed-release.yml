@@ -42,12 +42,16 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           validate-wrappers: true
+          # Release signing must not restore or save Gradle User Home state from other jobs.
+          # This keeps the job hermetic while the Kotlin build-cache CVE remains unresolved.
+          cache-disabled: true
+          add-job-summary: on-failure
 
       - name: Validate release inputs and required secrets
         env:
@@ -90,7 +94,10 @@ jobs:
           VERSION_CODE: ${{ inputs.version_code }}
         run: |
           set -euo pipefail
-          ./gradlew --no-daemon :app:clean :app:bundleRelease \
+          ./gradlew --no-daemon --no-build-cache --no-configuration-cache \
+            -Dkotlin.caching.enabled=false \
+            -Pkotlin.incremental=false \
+            :app:clean :app:bundleRelease \
             -PversionCode="$VERSION_CODE" \
             -PversionName="$VERSION_NAME"
 
