@@ -99,7 +99,7 @@
     <string name="drive_session_present_sync_unavailable">Drive session is present; file sync is unavailable until a real local-file upload flow is configured.</string>
     <string name="cloud_sync_oauth_required">No Google OAuth flow is configured in this build. Cloud sync remains disabled.</string>
     <string name="cloud_transfer_security_title">Cloud transfer security</string>
-    <string name="cloud_transfer_security_disclosure">Cloud transfer is not client-side end-to-end encrypted by this app. If enabled in a future approved build, files are sent over HTTPS to the selected provider and rely on that provider&apos;s storage controls. Vault encryption separately protects local vault content.</string>
+    <string name="cloud_transfer_security_disclosure">Cloud transfer is not client-side end-to-end encrypted by this app. If enabled in a future approved build, files are sent over HTTPS to the selected provider and rely on that provider\'s storage controls. Vault encryption separately protects local vault content.</string>
     <string name="configure_google_drive_oauth">Configure Google Drive OAuth</string>
     <string name="sync_unavailable">Sync unavailable</string>
     <string name="sync_action">Sync action</string>
