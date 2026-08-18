@@ -1,0 +1,126 @@
+name: Signed Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Release version name, for example 1.0.42"
+        required: true
+        type: string
+      version_code:
+        description: "Positive, monotonically increasing Android version code"
+        required: true
+        type: string
+
+# One signed release at a time. A newer release request must not cancel an active signing job.
+concurrency:
+  group: signed-android-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  signed-release-aab:
+    name: Build and sign Android App Bundle
+    # Release credentials are only made available when this committed workflow is manually run from main.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout the selected main revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: true
+
+      - name: Validate release inputs and required secrets
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION_NAME" =~ ^[0-9]+(\.[0-9]+){1,3}([+-][0-9A-Za-z.-]+)?$ ]]
+          [[ "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]
+          (( VERSION_CODE <= 2100000000 ))
+          test -n "$KEYSTORE_BASE64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+
+      - name: Decode and validate upload keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/vvf-release-upload.jks"
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+          printf 'KEYSTORE_PATH=%s\n' "$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build signed release AAB
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon :app:clean :app:bundleRelease \
+            -PversionCode="$VERSION_CODE" \
+            -PversionName="$VERSION_NAME"
+
+      - name: Verify signed AAB and write SHA-256 checksum
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          AAB_PATH="app/build/outputs/bundle/release/app-release.aab"
+          test -s "$AAB_PATH"
+          jarsigner -verify -strict -certs "$AAB_PATH" >/dev/null
+          ARTIFACT_DIR="release-artifacts"
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$AAB_PATH" "$ARTIFACT_DIR/app-release-${VERSION_NAME}-${VERSION_CODE}.aab"
+          (
+            cd "$ARTIFACT_DIR"
+            sha256sum "app-release-${VERSION_NAME}-${VERSION_CODE}.aab" > "app-release-${VERSION_NAME}-${VERSION_CODE}.aab.sha256"
+          )
+
+      - name: Upload signed release AAB
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-release-aab-${{ inputs.version_name }}-${{ inputs.version_code }}
+          path: release-artifacts
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Securely remove decoded keystore
+        if: always()
+        run: |
+          rm -f "${KEYSTORE_PATH:-$RUNNER_TEMP/vvf-release-upload.jks}"
+          rm -rf release-artifacts

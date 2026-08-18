@@ -126,31 +126,13 @@ jobs:
       run: ./gradlew :app:detekt
     - name: Build Debug APK
       run: ./gradlew :app:assembleDebug
-    - name: Decode Keystore (if configured)
-      env:
-        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+    - name: Build unsigned release AAB for validation
+      # Production signing credentials are deliberately unavailable to push and PR CI.
       run: |
-        if [ -n "$KEYSTORE_BASE64" ]; then
-          echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
-          chmod 600 release.keystore
-          echo "HAS_KEYSTORE=true" >> "$GITHUB_ENV"
-        else
-          echo "HAS_KEYSTORE=false" >> "$GITHUB_ENV"
-        fi
-    - name: Build Release AAB
-      env:
-        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      run: |
-        if [ "$HAS_KEYSTORE" = "true" ]; then
-          export KEYSTORE_PATH="$GITHUB_WORKSPACE/release.keystore"
-          ./gradlew :app:bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
-        else
-          unset KEYSTORE_PATH
-          echo "::notice::KEYSTORE_BASE64 is not configured; building an unsigned release AAB for build validation only. No release artifact will be uploaded."
-          ./gradlew :app:bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }}
-        fi
+        unset KEYSTORE_PATH STORE_PASSWORD KEY_ALIAS KEY_PASSWORD
+        ./gradlew :app:bundleRelease \
+          -PversionCode=${{ github.run_number }} \
+          -PversionName=1.0.${{ github.run_number }}
     - name: Upload Dependency Compatibility Reports
       if: always()
       uses: actions/upload-artifact@v7
@@ -163,12 +145,6 @@ jobs:
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
-    - name: Upload Release AAB Artifact
-      if: env.HAS_KEYSTORE == 'true'
-      uses: actions/upload-artifact@v7
-      with:
-        name: app-release-aab
-        path: app/build/outputs/bundle/release/app-release.aab
 
   instrumented-tests:
     name: Run Instrumented Android Tests

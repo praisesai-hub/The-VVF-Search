@@ -18,3 +18,10 @@ local.properties
 debug.keystore
 debug.keystore.base64
 .build-outputs/
+
+# Release signing material and locally generated distribution artifacts must never be tracked.
+*.jks
+*.keystore
+*.p12
+*.pfx
+/release-artifacts/
