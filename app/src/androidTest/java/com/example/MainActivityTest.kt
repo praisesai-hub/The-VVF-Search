@@ -5,12 +5,15 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -105,6 +108,8 @@ class MainActivityTest {
         composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").performClick()
         composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").assertIsOff()
 
+        val duplicateList = composeTestRule.onNode(hasScrollToIndexAction())
+        duplicateList.performScrollToNode(hasTestTag("similarity_slider"))
         composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
         composeTestRule.onNodeWithTag("start_scan_button").assertIsDisplayed()
         composeTestRule.onNodeWithTag("section_tab_1").performClick()
@@ -139,4 +144,3 @@ class MainActivityTest {
         composeTestRule.onNodeWithTag("dashboard_health_card").assertIsDisplayed()
     }
 }
-
