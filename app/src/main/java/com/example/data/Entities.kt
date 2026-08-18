@@ -67,7 +67,13 @@ data class VaultItemEntity(
 )
 
 @JsonClass(generateAdapter = true)
-@Entity(tableName = "cloud_sync")
+@Entity(
+    tableName = "cloud_sync",
+    indices = [
+        Index(value = ["idempotencyKey"]),
+        Index(value = ["provider", "localFileStableId", "contentHash"])
+    ]
+)
 data class CloudSyncItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val provider: String, // GOOGLE_DRIVE, ONEDRIVE, DROPBOX, NEXTCLOUD, S3, NAS
@@ -76,7 +82,16 @@ data class CloudSyncItemEntity(
     val fileSize: Long,
     val status: String, // SYNCED, PENDING, UPLOADING, FAILED
     val lastSyncedMs: Long = System.currentTimeMillis(),
-    val isCore: Boolean = false
+    val isCore: Boolean = false,
+    val remoteFileId: String = "",
+    val idempotencyKey: String = "",
+    val remoteRevisionId: String = "",
+    val localFileStableId: String = "",
+    val contentHash: String = "",
+    val uploadSessionUri: String = "",
+    val lastAttemptAtMs: Long = 0L,
+    val attemptCount: Int = 0,
+    val etag: String = ""
 )
 
 @JsonClass(generateAdapter = true)

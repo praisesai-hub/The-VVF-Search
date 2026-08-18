@@ -18,13 +18,33 @@ import org.robolectric.annotation.Config
 private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     override val providerId: String = "TEST_PROVIDER"
     var uploadedFile: File? = null
+    var uploadedSource: CloudUploadSource? = null
     var uploadedRemotePath: String? = null
+    var uploadedIdempotencyKey: String? = null
+    var uploadedContentHash: String? = null
+    var uploadedSessionUri: String? = null
+    var checkpointToEmit: CloudSyncCheckpoint? = null
     var result: CloudSyncResult = CloudSyncResult.Success()
     var exceptionToThrow: Exception? = null
 
-    override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
-        uploadedFile = file
+    override suspend fun uploadFile(
+        source: CloudUploadSource,
+        remotePath: String,
+        remoteFileId: String,
+        idempotencyKey: String,
+        remoteRevisionId: String,
+        contentHash: String,
+        uploadSessionUri: String,
+        etag: String,
+        onCheckpoint: suspend (CloudSyncCheckpoint) -> Unit
+    ): CloudSyncResult {
+        uploadedSource = source
+        uploadedFile = (source as? CloudUploadSource.LocalFile)?.asFile()
         uploadedRemotePath = remotePath
+        uploadedIdempotencyKey = idempotencyKey
+        uploadedContentHash = contentHash
+        uploadedSessionUri = uploadSessionUri
+        checkpointToEmit?.let { onCheckpoint(it) }
         exceptionToThrow?.let { throw it }
         return result
     }
@@ -83,7 +103,7 @@ class CloudSyncEngineTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(false, result.isRetryable)
-        assertTrue(result.message.contains("does not exist"))
+        assertTrue(result.message.contains("missing"))
         assertEquals(null, adapter.uploadedFile)
     }
 
@@ -110,9 +130,39 @@ class CloudSyncEngineTest {
 
         val result = engine.syncItem(item(provider = "DROPBOX", file = file, fileName = "remote.txt"))
 
-        assertSame(adapter.result, result)
+        assertTrue(result is CloudSyncResult.Success)
         assertEquals(file, adapter.uploadedFile)
         assertEquals("remote.txt", adapter.uploadedRemotePath)
+        assertTrue(adapter.uploadedIdempotencyKey?.matches(Regex("[0-9a-f]{64}")) == true)
+        assertTrue(adapter.uploadedContentHash?.matches(Regex("[0-9a-f]{64}")) == true)
+    }
+
+    @Test
+    fun unreadableContentUri_returnsNonRetryableErrorWithoutFileCoercion(): Unit = runBlocking {
+        val adapter = RecordingCloudProviderAdapter().apply {
+            result = CloudSyncResult.Success(
+                bytesTransferred = 12L,
+                remoteFileId = "drive-file-42",
+                idempotencyKey = "request-key"
+            )
+        }
+        val item = CloudSyncItemEntity(
+            id = 42L,
+            provider = "GOOGLE_DRIVE",
+            fileName = "saf-document.pdf",
+            filePath = "content://test.documents/saf-document.pdf",
+            fileSize = 12L,
+            status = "QUEUED"
+        )
+        val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager, adapter)
+
+        val result = engine.syncItem(item)
+
+        assertTrue(result is CloudSyncResult.Error)
+        result as CloudSyncResult.Error
+        assertEquals(false, result.isRetryable)
+        assertEquals(null, adapter.uploadedFile)
+        assertEquals(null, adapter.uploadedSource)
     }
 
     @Test
@@ -159,9 +209,40 @@ class CloudSyncEngineTest {
         assertEquals(true, result.isRetryable)
         assertEquals("Unable to resolve host storage.example", result.message)
     }
+
+    @Test
+    fun checkpoint_isPersistedBeforeProviderResultForLostResponseRecovery(): Unit = runBlocking {
+        val file = createFile()
+        val dao = FakeFileDaoForCloudSyncEngine()
+        val adapter = RecordingCloudProviderAdapter().apply {
+            checkpointToEmit = CloudSyncCheckpoint(
+                remoteFileId = "drive-42",
+                contentHash = "hash-42",
+                uploadSessionUri = "https://upload.example/resumable/42",
+                idempotencyKey = "identity-42"
+            )
+            result = CloudSyncResult.Error(
+                message = "response lost",
+                isRetryable = true,
+                remoteFileId = "drive-42",
+                contentHash = "hash-42",
+                uploadSessionUri = "https://upload.example/resumable/42",
+                idempotencyKey = "identity-42"
+            )
+        }
+        val engine = CloudSyncEngine(context, dao, authManager, adapter)
+
+        val result = engine.syncItem(item(file = file))
+
+        assertTrue(result is CloudSyncResult.Error)
+        assertEquals("https://upload.example/resumable/42", dao.lastCloudSyncItem?.uploadSessionUri)
+        assertEquals("drive-42", dao.lastCloudSyncItem?.remoteFileId)
+        assertEquals("identity-42", dao.lastCloudSyncItem?.idempotencyKey)
+    }
 }
 
 private class FakeFileDaoForCloudSyncEngine : FileDao {
+    var lastCloudSyncItem: CloudSyncItemEntity? = null
     override suspend fun getFileById(id: Long): FileItemEntity? = null
     override suspend fun getFileByName(name: String): FileItemEntity? = null
     override fun getOcrScannedFiles() = kotlinx.coroutines.flow.flowOf(emptyList<FileItemEntity>())
@@ -198,7 +279,10 @@ private class FakeFileDaoForCloudSyncEngine : FileDao {
     override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
     override suspend fun deleteVaultItemById(id: Long) = Unit
     override fun getCloudSyncItems() = kotlinx.coroutines.flow.flowOf(emptyList<CloudSyncItemEntity>())
-    override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long = 0L
+    override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
+        lastCloudSyncItem = item
+        return item.id
+    }
     override suspend fun deleteCloudSyncItem(id: Long) = Unit
     override fun getAllPlugins() = kotlinx.coroutines.flow.flowOf(emptyList<PluginEntity>())
     override suspend fun setPluginEnabled(id: String, enabled: Boolean) = Unit

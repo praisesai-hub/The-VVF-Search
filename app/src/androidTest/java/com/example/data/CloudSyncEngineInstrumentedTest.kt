@@ -108,7 +108,11 @@ class CloudSyncEngineInstrumentedTest {
 
         val result = engine.syncItem(item(provider = "DROPBOX", file = file, fileName = "remote.txt"))
 
-        assertSame(adapter.result, result)
+        assertTrue(result is CloudSyncResult.Success)
+        result as CloudSyncResult.Success
+        assertEquals(file.length(), result.bytesTransferred)
+        assertTrue(result.contentHash.isNotBlank())
+        assertTrue(result.idempotencyKey.isNotBlank())
         assertEquals(file, adapter.uploadedFile)
         assertEquals("remote.txt", adapter.uploadedRemotePath)
     }

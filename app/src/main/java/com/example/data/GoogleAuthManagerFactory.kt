@@ -37,4 +37,10 @@ object GoogleAuthManagerFactory {
             }
         }
     }
+
+    /**
+     * Cloud execution code receives only the credential capability it requires. UI code continues
+     * to obtain [GoogleAuthManager] when it must observe non-secret authentication state.
+     */
+    internal fun getTokenProvider(context: Context): OAuthTokenProvider = getInstance(context)
 }

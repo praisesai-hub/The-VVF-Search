@@ -26,7 +26,7 @@
     <string name="menu">Menu</string>
     <string name="change_master_pin">Change Master PIN</string>
     <string name="current_pin">Current PIN</string>
-    <string name="new_4_digit_pin">New 4-Digit PIN</string>
+    <string name="new_6_digit_pin">New 6-Digit PIN</string>
     <string name="confirm_new_pin">Confirm New PIN</string>
     <string name="change">Change</string>
     <string name="lock_vault">Lock Vault</string>
@@ -60,7 +60,7 @@
     <string name="use_fingerprint_or_face_id_to_">Use fingerprint or face ID to open vault</string>
     <string name="auto_lock_timer">Auto Lock Timer</string>
     <string name="locks_automatically_when_inact">Locks automatically when inactive</string>
-    <string name="update_your_4_digit_security_p">Update your 4-digit security PIN</string>
+    <string name="update_your_6_digit_security_p">Update your 6-digit security PIN</string>
     <string name="phase_3_kotlin_jetpack_compose">✓ Phase 3: Kotlin + Jetpack Compose + Room + Navigation Component</string>
     <string name="phase_4_encrypted_vault_struct">✓ Phase 4: Encrypted Vault structure &amp; PIN protection</string>
     <string name="phase_5_core_file_manager_leve">✓ Phase 5: Core File Manager &amp; Level 1–2 Exact Hash Duplicates</string>

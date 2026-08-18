@@ -42,7 +42,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         authManager = GoogleAuthManager(preferences)
         fakeInterceptor = RecordingInterceptor()
         adapter = GoogleDriveProviderAdapter(
-            authManager = authManager,
+            tokenProvider = authManager,
             httpClient = OkHttpClient.Builder().addInterceptor(fakeInterceptor).build(),
         )
     }
@@ -90,6 +90,9 @@ class GoogleDriveProviderAdapterInstrumentedTest {
             fakeInterceptor.responseProvider = { request ->
                 requestCount += 1
                 if (requestCount == 1) {
+                    assertTrue(request.url.encodedPath.endsWith("/drive/v3/files"))
+                    response(request, 200, "{\"files\":[]}")
+                } else if (requestCount == 2) {
                     assertEquals(expectedMimeType, request.header("X-Upload-Content-Type"))
                     response(request, 200, "{}", location = "https://upload.test/session/$extension")
                 } else {
@@ -124,12 +127,14 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         assertTrue(missingLocation is CloudSyncResult.Error)
         val missingLocationError = missingLocation as CloudSyncResult.Error
         assertFalse(missingLocationError.isRetryable)
-        assertTrue(missingLocationError.message.contains("Missing 'Location'"))
+        assertTrue(missingLocationError.message.contains("Location header"))
 
         var requestCount = 0
         fakeInterceptor.responseProvider = { request ->
             requestCount += 1
             if (requestCount == 1) {
+                response(request, 200, "{\"files\":[]}")
+            } else if (requestCount == 2) {
                 response(request, 200, "{}", location = "https://upload.test/session/malformed")
             } else {
                 response(request, 200, "{\"name\":\"without-id\"}")

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -176,7 +177,7 @@ class CloudSyncWorkerTest {
                     workerParameters,
                     daoOverride = fakeDao,
                     providerAdapterOverride = fakeAdapter,
-                    authManagerOverride = GoogleAuthManager(
+                    tokenProviderOverride = GoogleAuthManager(
                         appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)
                     ),
                     transferAllowed = transferAllowed
@@ -238,6 +239,14 @@ class CloudSyncWorkerTest {
 
         fakeAdapter.shouldFail = false
         fakeAdapter.exceptionToThrow = null
+        fakeAdapter.resultByRemotePath[tempFile.name] = CloudSyncResult.Success(
+            bytesTransferred = tempFile.length(),
+            remoteFileId = "drive-file-101",
+            remoteRevisionId = "revision-101",
+            contentHash = "content-hash-101",
+            etag = "etag-101",
+            idempotencyKey = "idempotency-101"
+        )
 
         val worker = createWorker(runAttemptCount = 0)
 
@@ -248,6 +257,14 @@ class CloudSyncWorkerTest {
         val itemsInDb = fakeDao.getCloudSyncItems().first()
         val updatedItem = itemsInDb.find { it.id == 101L }
         assertEquals("SYNCED", updatedItem?.status)
+        assertEquals("drive-file-101", updatedItem?.remoteFileId)
+        assertEquals("revision-101", updatedItem?.remoteRevisionId)
+        assertEquals("content-hash-101", updatedItem?.contentHash)
+        assertEquals("etag-101", updatedItem?.etag)
+        assertEquals("idempotency-101", updatedItem?.idempotencyKey)
+        assertEquals(tempFile.absolutePath, updatedItem?.localFileStableId)
+        assertEquals(1, updatedItem?.attemptCount)
+        assertTrue((updatedItem?.lastAttemptAtMs ?: 0L) > 0L)
     }
 
     @Test
@@ -279,6 +296,9 @@ class CloudSyncWorkerTest {
         val itemsInDb = fakeDao.getCloudSyncItems().first()
         val updatedItem = itemsInDb.find { it.id == 102L }
         assertEquals("FAILED", updatedItem?.status)
+        assertEquals(1, updatedItem?.attemptCount)
+        assertTrue(updatedItem?.contentHash?.matches(Regex("[0-9a-f]{64}")) == true)
+        assertTrue(updatedItem?.idempotencyKey?.matches(Regex("[0-9a-f]{64}")) == true)
     }
 
     @Test

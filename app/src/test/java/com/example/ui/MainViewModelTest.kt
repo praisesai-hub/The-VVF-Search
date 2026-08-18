@@ -10,6 +10,7 @@ import com.example.VVFApplication
 import com.example.data.FileCategory
 import com.example.ui.components.PickableLocalFile
 import com.example.data.SmartManagerRepository
+import com.example.data.VaultPinLockoutStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -51,7 +52,14 @@ class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(cont
         return changePinResult
     }
 
-    override fun unlockVaultWithPin(pin: String): Boolean = unlockPinResult
+    var lastUnlockedPin: String? = null
+    override fun unlockVaultWithPin(pin: String): Boolean {
+        lastUnlockedPin = pin
+        return unlockPinResult
+    }
+
+    override fun vaultPinLockoutStatus(): VaultPinLockoutStatus =
+        VaultPinLockoutStatus(failedAttempts = 0, lockedUntilEpochMs = 0L, remainingMs = 0L)
 
     var lockVaultSessionCalls = 0
     override fun lockVaultSession() { lockVaultSessionCalls += 1 }
@@ -101,18 +109,23 @@ class MainViewModelTest {
         viewModel.appendPinDigit("2")
         viewModel.appendPinDigit("3")
         viewModel.appendPinDigit("4")
+        viewModel.appendPinDigit("5")
+        viewModel.appendPinDigit("6")
 
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(viewModel.isVaultUnlocked.value)
         assertNull(viewModel.pinError.value)
-        assertEquals("1234", fakeRepository.lastVerifiedPin)
+        assertEquals("123456", fakeRepository.lastUnlockedPin)
     }
 
     @Test
     fun verifyPin_failure_setsPinErrorAndResetsEnteredPin() {
         fakeRepository.verifyPinResult = false
+        fakeRepository.unlockPinResult = false
 
+        viewModel.appendPinDigit("9")
+        viewModel.appendPinDigit("9")
         viewModel.appendPinDigit("9")
         viewModel.appendPinDigit("9")
         viewModel.appendPinDigit("9")
@@ -123,7 +136,7 @@ class MainViewModelTest {
         assertFalse(viewModel.isVaultUnlocked.value)
         assertEquals("Incorrect PIN. Try again.", viewModel.pinError.value)
         assertEquals("", viewModel.enteredPin.value)
-        assertEquals("9999", fakeRepository.lastVerifiedPin)
+        assertEquals("999999", fakeRepository.lastUnlockedPin)
     }
 
     @Test
@@ -132,6 +145,8 @@ class MainViewModelTest {
         viewModel.appendPinDigit("2")
         viewModel.appendPinDigit("3")
         viewModel.appendPinDigit("4")
+        viewModel.appendPinDigit("5")
+        viewModel.appendPinDigit("6")
         assertTrue(viewModel.isVaultUnlocked.value)
 
         viewModel.lockVaultForBackground()
@@ -153,6 +168,8 @@ class MainViewModelTest {
         viewModel.appendPinDigit("2")
         viewModel.appendPinDigit("3")
         viewModel.appendPinDigit("4")
+        viewModel.appendPinDigit("5")
+        viewModel.appendPinDigit("6")
         val unlockedGeneration = viewModel.vaultActivityGeneration.value
 
         viewModel.recordVaultActivity()
@@ -164,24 +181,24 @@ class MainViewModelTest {
     fun changeVaultPin_success_returnsTrueAndClearsError() {
         fakeRepository.changePinResult = true
 
-        val result = viewModel.changeVaultPin("1234", "5678")
+        val result = viewModel.changeVaultPin("123456", "567890")
 
         assertTrue(result)
         assertNull(viewModel.pinError.value)
-        assertEquals("1234", fakeRepository.lastChangedOldPin)
-        assertEquals("5678", fakeRepository.lastChangedNewPin)
+        assertEquals("123456", fakeRepository.lastChangedOldPin)
+        assertEquals("567890", fakeRepository.lastChangedNewPin)
     }
 
     @Test
     fun changeVaultPin_failure_returnsFalseAndSetsPinError() {
         fakeRepository.changePinResult = false
 
-        val result = viewModel.changeVaultPin("1234", "0000")
+        val result = viewModel.changeVaultPin("123456", "000000")
 
         assertFalse(result)
         assertEquals("Failed to update PIN. Check current PIN.", viewModel.pinError.value)
-        assertEquals("1234", fakeRepository.lastChangedOldPin)
-        assertEquals("0000", fakeRepository.lastChangedNewPin)
+        assertEquals("123456", fakeRepository.lastChangedOldPin)
+        assertEquals("000000", fakeRepository.lastChangedNewPin)
     }
 
     @Test

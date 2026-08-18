@@ -273,8 +273,8 @@ class DashboardScreenInstrumentedTest {
 
     private fun authenticatedViewModel(): MainViewModel {
         val viewModel = MainViewModel(app)
-        check(viewModel.repository.initializeVaultPin("2468"))
-        check(viewModel.repository.unlockVaultWithPin("2468"))
+        check(viewModel.repository.initializeVaultPin("246810"))
+        check(viewModel.repository.unlockVaultWithPin("246810"))
         return viewModel
     }
 }

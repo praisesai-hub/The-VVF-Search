@@ -2,10 +2,10 @@ package com.example.ui
 
 import android.app.Application
 import android.content.Context
-import android.os.SystemClock
 import androidx.biometric.BiometricPrompt
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
+import com.example.security.VaultKeyEnvelope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
@@ -22,12 +22,8 @@ private class VmCompatState {
     val setupPinFirstEntry = MutableStateFlow<String?>(null)
     val selectedIds = MutableStateFlow<Set<Long>>(emptySet())
     val pageLoading = MutableStateFlow(false)
-    var failedPinAttempts: Int = 0
-    var pinLockedUntilElapsedMs: Long = 0L
 }
 
-private const val PIN_LOCKOUT_THRESHOLD = 5
-private const val PIN_LOCKOUT_DURATION_MS = 30_000L
 internal const val DEFAULT_VAULT_AUTO_LOCK_TIMEOUT_MS = 60_000L
 private const val MIN_VAULT_AUTO_LOCK_TIMEOUT_MS = 15_000L
 private const val MAX_VAULT_AUTO_LOCK_TIMEOUT_MS = 15 * 60_000L
@@ -65,6 +61,7 @@ val MainViewModel.vaultActivityGeneration: StateFlow<Long>
 val MainViewModel.enteredPin: StateFlow<String> get() = compatState().enteredPin
 val MainViewModel.pinError: StateFlow<String?> get() = compatState().pinError
 val MainViewModel.isVaultPinSetupRequired: Boolean get() = !repository.hasVaultPin()
+val MainViewModel.isVaultPinUpgradeRequired: Boolean get() = repository.requiresVaultPinUpgrade()
 val MainViewModel.hasBiometricEnrollment: Boolean get() = repository.hasBiometricEnrollment()
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -150,41 +147,30 @@ fun MainViewModel.loadNextPage() { }
 
 fun MainViewModel.appendPinDigit(digit: String) {
     val state = compatState()
-    val now = SystemClock.elapsedRealtime()
-    if (state.isPinCooldownActive(now)) return
-    state.clearExpiredPinCooldown()
-    processPinDigit(state, digit, now)
+    val lockout = repository.vaultPinLockoutStatus()
+    if (lockout.isLocked) {
+        state.enteredPin.value = ""
+        state.pinError.value = pinLockoutMessage(lockout.remainingMs)
+        return
+    }
+    processPinDigit(state, digit)
 }
 
-private fun MainViewModel.processPinDigit(state: VmCompatState, digit: String, now: Long) {
+private fun MainViewModel.processPinDigit(state: VmCompatState, digit: String) {
     if (!state.acceptsPinDigit(digit)) return
     val pin = state.enteredPin.value + digit
     state.enteredPin.value = pin
     state.pinError.value = null
-    if (pin.length != 4) return
+    if (pin.length != VaultKeyEnvelope.PIN_LENGTH) return
     if (isVaultPinSetupRequired) {
         handlePinSetup(state, pin)
     } else {
-        handlePinUnlock(state, pin, now)
+        handlePinUnlock(state, pin)
     }
 }
 
-private fun VmCompatState.isPinCooldownActive(now: Long): Boolean {
-    if (pinLockedUntilElapsedMs <= now) return false
-    enteredPin.value = ""
-    pinError.value = "Too many incorrect attempts. Try again in 30 seconds."
-    return true
-}
-
-private fun VmCompatState.clearExpiredPinCooldown() {
-    if (pinLockedUntilElapsedMs == 0L) return
-    pinLockedUntilElapsedMs = 0L
-    failedPinAttempts = 0
-    pinError.value = null
-}
-
 private fun VmCompatState.acceptsPinDigit(digit: String): Boolean =
-    enteredPin.value.length < 4 && digit.length == 1 && digit[0].isDigit()
+    enteredPin.value.length < VaultKeyEnvelope.PIN_LENGTH && digit.length == 1 && digit[0].isDigit()
 
 private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
     val firstEntry = state.setupPinFirstEntry.value
@@ -201,8 +187,6 @@ private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
         return
     }
     state.setupPinFirstEntry.value = null
-    state.failedPinAttempts = 0
-    state.pinLockedUntilElapsedMs = 0L
     if (repository.unlockVaultWithPin(pin)) {
         state.vaultUnlocked.value = true
         onVaultSessionAuthenticated()
@@ -214,26 +198,58 @@ private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
     }
 }
 
-private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String, now: Long) {
-    val storedHash = repository.getStoredVaultPinHash()
-    val unlocked = repository.verifyVaultPin(pin, storedHash) && repository.unlockVaultWithPin(pin)
-    if (unlocked) {
-        state.failedPinAttempts = 0
-        state.pinLockedUntilElapsedMs = 0L
-        state.vaultUnlocked.value = true
-        onVaultSessionAuthenticated()
-        state.enteredPin.value = ""
-        state.pinError.value = null
-        return
+private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String) {
+    val outcome = try {
+        if (repository.unlockVaultWithPin(pin)) PinUnlockOutcome.SUCCESS else PinUnlockOutcome.INVALID
+    } catch (_: VaultPinUpgradeRequiredException) {
+        PinUnlockOutcome.UPGRADE_REQUIRED
+    } catch (_: VaultPinLockedException) {
+        PinUnlockOutcome.LOCKED
+    } catch (_: SecurityException) {
+        PinUnlockOutcome.INVALID
     }
-    state.failedPinAttempts += 1
+    when (outcome) {
+        PinUnlockOutcome.SUCCESS -> {
+            state.vaultUnlocked.value = true
+            onVaultSessionAuthenticated()
+            state.enteredPin.value = ""
+            state.pinError.value = null
+        }
+        PinUnlockOutcome.UPGRADE_REQUIRED -> {
+            state.enteredPin.value = ""
+            state.pinError.value = "Your existing PIN must be upgraded to six digits before unlocking."
+        }
+        PinUnlockOutcome.LOCKED -> {
+            state.enteredPin.value = ""
+            state.pinError.value = pinLockoutMessage(repository.vaultPinLockoutStatus().remainingMs)
+        }
+        PinUnlockOutcome.INVALID -> showInvalidPinError(state)
+    }
+}
+
+private fun MainViewModel.showInvalidPinError(state: VmCompatState) {
     state.enteredPin.value = ""
-    state.pinError.value = if (state.failedPinAttempts >= PIN_LOCKOUT_THRESHOLD) {
-        state.pinLockedUntilElapsedMs = now + PIN_LOCKOUT_DURATION_MS
-        "Too many incorrect attempts. Try again in 30 seconds."
+    val lockout = repository.vaultPinLockoutStatus()
+    state.pinError.value = if (lockout.isLocked) {
+        pinLockoutMessage(lockout.remainingMs)
     } else {
         "Incorrect PIN. Try again."
     }
+}
+
+private enum class PinUnlockOutcome {
+    SUCCESS,
+    INVALID,
+    UPGRADE_REQUIRED,
+    LOCKED
+}
+
+private const val MILLIS_PER_SECOND = 1_000L
+private const val ROUND_UP_MILLIS_OFFSET = MILLIS_PER_SECOND - 1L
+
+private fun pinLockoutMessage(remainingMs: Long): String {
+    val seconds = ((remainingMs + ROUND_UP_MILLIS_OFFSET) / MILLIS_PER_SECOND).coerceAtLeast(1L)
+    return "Too many incorrect attempts. Try again in $seconds seconds."
 }
 
 fun MainViewModel.clearPinDigit() {
@@ -259,8 +275,6 @@ fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResul
             state.pinError.value = "Authenticated vault session could not be created."
             return
         }
-        state.failedPinAttempts = 0
-        state.pinLockedUntilElapsedMs = 0L
         state.vaultUnlocked.value = true
         onVaultSessionAuthenticated()
         state.pinError.value = null

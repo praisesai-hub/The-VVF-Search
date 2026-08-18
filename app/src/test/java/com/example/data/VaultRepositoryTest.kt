@@ -58,15 +58,15 @@ class VaultRepositoryTest {
     fun pinOperations_delegateToVaultManagerEngine() {
         every { vaultEngine.hasVaultPin() } returns true
         every { vaultEngine.getStoredVaultPinHash() } returns "stored-hash"
-        every { vaultEngine.initializeVaultPin("1234") } returns true
-        every { vaultEngine.verifyVaultPin("1234", "stored-hash") } returns true
-        every { vaultEngine.changeVaultPin("1234", "5678") } returns true
+        every { vaultEngine.initializeVaultPin("123456") } returns true
+        every { vaultEngine.verifyVaultPin("123456", "stored-hash") } returns true
+        every { vaultEngine.changeVaultPin("123456", "567890") } returns true
 
         assertTrue(repository.hasVaultPin())
         assertEquals("stored-hash", repository.getStoredVaultPinHash())
-        assertTrue(repository.initializeVaultPin("1234"))
-        assertTrue(repository.verifyVaultPin("1234", "stored-hash"))
-        assertTrue(repository.changeVaultPin("1234", "5678"))
+        assertTrue(repository.initializeVaultPin("123456"))
+        assertTrue(repository.verifyVaultPin("123456", "stored-hash"))
+        assertTrue(repository.changeVaultPin("123456", "567890"))
     }
 
     @Test

@@ -64,7 +64,15 @@ class GoogleDriveProviderAdapterTest {
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
 
         fakeInterceptor.responseProvider = { request ->
-            if (request.method == "POST") {
+            if (request.method == "GET" && request.url.encodedPath.endsWith("/drive/v3/files")) {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"files\":[]}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+            } else if (request.method == "POST") {
                 Response.Builder()
                     .request(request)
                     .protocol(Protocol.HTTP_1_1)
@@ -174,6 +182,133 @@ class GoogleDriveProviderAdapterTest {
     }
 
     @Test
+    fun testDownloadFile_EscapesDriveQueryLiteralBeforeRequestConstruction() {
+        val tempFile = File.createTempFile("test_download_quote", ".txt")
+        tempFile.deleteOnExit()
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+
+        var callCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            callCount += 1
+            if (callCount == 1) {
+                assertEquals(
+                    "name='O\\'Brien.txt' and trashed=false",
+                    request.url.queryParameter("q")
+                )
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(
+                        "{\"files\":[{\"id\":\"quoted-file\"}]}".toResponseBody(
+                            "application/json".toMediaTypeOrNull()
+                        )
+                    )
+                    .build()
+            } else {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("quoted content".toResponseBody("text/plain".toMediaTypeOrNull()))
+                    .build()
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("O'Brien.txt", tempFile) }
+
+        assertTrue(result is CloudSyncResult.Success)
+        assertEquals("quoted content", tempFile.readText())
+    }
+
+    @Test
+    fun testDownloadFile_EscapesBackslashBeforeApostropheInDriveQueryValue() {
+        val tempFile = File.createTempFile("test_download_backslash_quote", ".txt")
+        tempFile.deleteOnExit()
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+
+        var callCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            callCount += 1
+            if (callCount == 1) {
+                assertEquals(
+                    "name='C:\\\\docs\\\\O\\'Brien.txt' and trashed=false",
+                    request.url.queryParameter("q")
+                )
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"files\":[{\"id\":\"escaped-file\"}]}".toResponseBody())
+                    .build()
+            } else {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("escaped content".toResponseBody())
+                    .build()
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.downloadFile("C:\\docs\\O'Brien.txt", tempFile)
+        }
+
+        assertTrue(result is CloudSyncResult.Success)
+        assertEquals("escaped content", tempFile.readText())
+    }
+
+    @Test
+    fun uploadFile_lostFinalResponse_recoversCompletedPersistedSessionWithoutNewUpload() {
+        val sourceFile = File.createTempFile("lost_final_response", ".txt").apply {
+            writeText("durable source")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var requestCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            requestCount += 1
+            assertEquals("PUT", request.method)
+            assertEquals("bytes */${sourceFile.length()}", request.header("Content-Range"))
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("ETag", "etag-recovered")
+                .body(
+                    "{\"id\":\"drive-recovered\",\"headRevisionId\":\"revision-recovered\"}"
+                        .toResponseBody("application/json".toMediaTypeOrNull())
+                )
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                source = CloudUploadSource.LocalFile(sourceFile),
+                remotePath = "durable.txt",
+                remoteFileId = "drive-recovered",
+                idempotencyKey = "provider|stable-id|sha256",
+                contentHash = "sha256",
+                uploadSessionUri = "https://upload.googleapis.com/resumable/recovered-session"
+            )
+        }
+
+        assertTrue(result is CloudSyncResult.Success)
+        result as CloudSyncResult.Success
+        assertEquals(1, requestCount)
+        assertEquals("drive-recovered", result.remoteFileId)
+        assertEquals("revision-recovered", result.remoteRevisionId)
+        assertEquals("etag-recovered", result.etag)
+        assertEquals("sha256", result.contentHash)
+    }
+
+    @Test
     fun testUploadFile_MissingLocationHeaderFailsClosed() {
         val file = File.createTempFile("upload_missing_location", ".pdf").apply {
             writeText("pdf-like content")
@@ -194,7 +329,7 @@ class GoogleDriveProviderAdapterTest {
 
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
-        assertTrue(error.message.contains("Missing 'Location'"))
+        assertTrue(error.message.contains("Location header"))
         assertFalse(error.isRetryable)
     }
 
@@ -234,6 +369,14 @@ class GoogleDriveProviderAdapterTest {
         fakeInterceptor.responseProvider = { request ->
             callCount++
             if (callCount == 1) {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"files\":[]}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+            } else if (callCount == 2) {
                 Response.Builder()
                     .request(request)
                     .protocol(Protocol.HTTP_1_1)

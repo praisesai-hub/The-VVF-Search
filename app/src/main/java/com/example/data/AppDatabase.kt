@@ -10,6 +10,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 private const val LEGACY_VAULT_FORMAT_VERSION = 1
 private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
+private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
+private const val DATABASE_VERSION_WITH_CLOUD_RECOVERY = 7
 
 @Database(
     entities = [
@@ -18,7 +20,7 @@ private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
         CloudSyncItemEntity::class,
         PluginEntity::class
     ],
-    version = DATABASE_VERSION_WITH_VAULT_FORMAT,
+    version = DATABASE_VERSION_WITH_CLOUD_RECOVERY,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -103,6 +105,39 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(
+            DATABASE_VERSION_WITH_VAULT_FORMAT,
+            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cloud_sync", "remoteFileId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "idempotencyKey", "TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_cloud_sync_idempotencyKey` " +
+                        "ON `cloud_sync` (`idempotencyKey`)"
+                )
+            }
+        }
+        val MIGRATION_6_7 = object : Migration(
+            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY,
+            DATABASE_VERSION_WITH_CLOUD_RECOVERY
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cloud_sync", "remoteRevisionId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "localFileStableId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "contentHash", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "uploadSessionUri", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "lastAttemptAtMs", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "attemptCount", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "etag", "TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_cloud_sync_provider_localFileStableId_contentHash` " +
+                        "ON `cloud_sync` (`provider`, `localFileStableId`, `contentHash`)"
+                )
+            }
+        }
+
+
         private fun addColumnIfNotExists(
             db: SupportSQLiteDatabase,
             tableName: String,
@@ -138,7 +173,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 
                 val instance = builder.build()
                 INSTANCE = instance
@@ -147,4 +182,3 @@ abstract class AppDatabase : RoomDatabase() {
         }
     }
 }
-

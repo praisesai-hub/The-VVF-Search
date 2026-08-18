@@ -95,8 +95,8 @@ class VaultRepositoryTest {
 
     @Test
     fun testEncryptToVaultSuccess(): Unit = runBlocking {
-        assertTrue(repository.initializeVaultPin("2468"))
-        assertTrue(repository.unlockWithPin("2468"))
+        assertTrue(repository.initializeVaultPin("246810"))
+        assertTrue(repository.unlockWithPin("246810"))
         val tempFile = java.io.File(context.filesDir, "secret.png")
         tempFile.writeText("sensitive secure data to encrypt")
         val file = FileItemEntity(id = 5, name = "secret.png", path = tempFile.absolutePath, category = "IMAGES", sizeBytes = tempFile.length())
@@ -115,8 +115,8 @@ class VaultRepositoryTest {
 
     @Test
     fun testUnlockFromVaultDelegation(): Unit = runBlocking {
-        assertTrue(repository.initializeVaultPin("2468"))
-        assertTrue(repository.unlockWithPin("2468"))
+        assertTrue(repository.initializeVaultPin("246810"))
+        assertTrue(repository.unlockWithPin("246810"))
         val tempFile = java.io.File(context.filesDir, "secret.png")
         if (tempFile.exists()) tempFile.delete()
         

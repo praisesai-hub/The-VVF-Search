@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 open class SmartManagerRepository(
     private val context: Context,
@@ -305,6 +307,8 @@ open class SmartManagerRepository(
     open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean = vaultRepository.verifyVaultPin(inputPin, storedHash)
     open fun changeVaultPin(oldPin: String, newPin: String): Boolean = vaultRepository.changeVaultPin(oldPin, newPin)
     open fun unlockVaultWithPin(pin: String): Boolean = vaultRepository.unlockWithPin(pin)
+    open fun vaultPinLockoutStatus(): VaultPinLockoutStatus = vaultRepository.vaultPinLockoutStatus()
+    open fun requiresVaultPinUpgrade(): Boolean = vaultRepository.requiresPinUpgrade()
     open fun hasBiometricEnrollment(): Boolean = vaultRepository.hasBiometricEnrollment()
     open fun prepareBiometricEnrollmentCipher() = vaultRepository.prepareBiometricEnrollmentCipher()
     open fun completeBiometricEnrollment(result: androidx.biometric.BiometricPrompt.AuthenticationResult): Boolean =
@@ -337,7 +341,20 @@ open class SmartManagerRepository(
         val keyPath = if (filePath.isNotBlank()) filePath else fileName
         val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
         if (duplicate != null) return@withContext false
-        withRetry { dao.insertCloudSyncItem(CloudSyncItemEntity(provider = provider, fileName = fileName, filePath = filePath, fileSize = size, status = "QUEUED", lastSyncedMs = System.currentTimeMillis(), isCore = isCore)) }
+        withRetry {
+            dao.insertCloudSyncItem(
+                CloudSyncItemEntity(
+                    provider = provider,
+                    fileName = fileName,
+                    filePath = filePath,
+                    fileSize = size,
+                    status = "QUEUED",
+                    lastSyncedMs = System.currentTimeMillis(),
+                    isCore = isCore,
+                    localFileStableId = keyPath
+                )
+            )
+        }
         enqueueCloudSyncWork()
         true
     }

@@ -10,7 +10,7 @@ import com.example.data.FileDao
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncResult
 import com.example.data.CloudSyncPolicy
-import com.example.data.GoogleAuthManager
+import com.example.data.OAuthTokenProvider
 import kotlinx.coroutines.flow.first
 import java.io.File
 
@@ -19,7 +19,7 @@ class CloudSyncWorker @JvmOverloads constructor(
     workerParams: WorkerParameters,
     private val daoOverride: FileDao? = null,
     private val providerAdapterOverride: CloudProviderAdapter? = null,
-    private val authManagerOverride: GoogleAuthManager? = null,
+    private val tokenProviderOverride: OAuthTokenProvider? = null,
     private val transferAllowed: (() -> Boolean)? = null
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -60,12 +60,12 @@ class CloudSyncWorker @JvmOverloads constructor(
                 return Result.success()
             }
 
-            val authManager = authManagerOverride
-                ?: com.example.data.GoogleAuthManagerFactory.getInstance(applicationContext)
+            val tokenProvider = tokenProviderOverride
+                ?: com.example.data.GoogleAuthManagerFactory.getTokenProvider(applicationContext)
             val syncEngine = com.example.data.CloudSyncEngine(
                 context = applicationContext,
                 dao = dao,
-                authManager = authManager,
+                tokenProvider = tokenProvider,
                 providerAdapterOverride = providerAdapterOverride
             )
 
@@ -74,24 +74,57 @@ class CloudSyncWorker @JvmOverloads constructor(
             var retryableFailedCount = 0
 
             for (item in pendingOrQueued) {
-                // Update state to UPLOADING to reflect progress
-                val uploadingItem = item.copy(status = "UPLOADING")
+                val uploadingItem = item.copy(
+                    status = "UPLOADING",
+                    lastAttemptAtMs = System.currentTimeMillis(),
+                    attemptCount = item.attemptCount + 1
+                )
                 dao.insertCloudSyncItem(uploadingItem)
 
-                val syncResult = syncEngine.syncItem(item)
+                val syncResult = syncEngine.syncItem(uploadingItem)
                 when (syncResult) {
                     is CloudSyncResult.Success -> {
-                        val updatedItem = item.copy(
+                        val updatedItem = uploadingItem.copy(
                             status = "SYNCED",
-                            lastSyncedMs = System.currentTimeMillis()
+                            lastSyncedMs = System.currentTimeMillis(),
+                            remoteFileId = syncResult.remoteFileId.ifBlank { uploadingItem.remoteFileId },
+                            remoteRevisionId = syncResult.remoteRevisionId.ifBlank {
+                                uploadingItem.remoteRevisionId
+                            },
+                            contentHash = syncResult.contentHash.ifBlank { uploadingItem.contentHash },
+                            uploadSessionUri = "",
+                            etag = syncResult.etag.ifBlank { uploadingItem.etag },
+                            localFileStableId = uploadingItem.localFileStableId.ifBlank {
+                                uploadingItem.filePath
+                            },
+                            idempotencyKey = syncResult.idempotencyKey.ifBlank {
+                                uploadingItem.idempotencyKey
+                            }
                         )
                         dao.insertCloudSyncItem(updatedItem)
                         syncedCount++
                     }
                     is CloudSyncResult.Error -> {
-                        val updatedItem = item.copy(
+                        val updatedItem = uploadingItem.copy(
                             status = "FAILED",
-                            lastSyncedMs = System.currentTimeMillis()
+                            lastSyncedMs = System.currentTimeMillis(),
+                            remoteFileId = syncResult.remoteFileId.ifBlank {
+                                uploadingItem.remoteFileId
+                            },
+                            remoteRevisionId = syncResult.remoteRevisionId.ifBlank {
+                                uploadingItem.remoteRevisionId
+                            },
+                            contentHash = syncResult.contentHash.ifBlank { uploadingItem.contentHash },
+                            uploadSessionUri = syncResult.uploadSessionUri.ifBlank {
+                                uploadingItem.uploadSessionUri
+                            },
+                            etag = syncResult.etag.ifBlank { uploadingItem.etag },
+                            localFileStableId = uploadingItem.localFileStableId.ifBlank {
+                                uploadingItem.filePath
+                            },
+                            idempotencyKey = syncResult.idempotencyKey.ifBlank {
+                                uploadingItem.idempotencyKey
+                            }
                         )
                         dao.insertCloudSyncItem(updatedItem)
                         failedCount++

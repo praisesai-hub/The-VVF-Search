@@ -21,15 +21,15 @@ class GoogleAuthManagerInstrumentedTest {
 
         assertTrue(manager.authState.value is GoogleAuthState.SignedIn)
         assertTrue(manager.isAuthorized())
-        assertEquals("access-token", manager.getAccessToken())
-        assertEquals("refresh-token", manager.getRefreshToken())
+        assertEquals("access-token", manager.accessTokenOrNull())
+        assertEquals("refresh-token", manager.refreshTokenOrNull())
 
         manager.clearSession()
 
         assertEquals(GoogleAuthState.SignedOut, manager.authState.value)
         assertFalse(manager.isAuthorized())
-        assertNull(manager.getAccessToken())
-        assertNull(manager.getRefreshToken())
+        assertNull(manager.accessTokenOrNull())
+        assertNull(manager.refreshTokenOrNull())
         assertNull(store.values[GoogleAuthManager.KEY_EMAIL])
     }
 

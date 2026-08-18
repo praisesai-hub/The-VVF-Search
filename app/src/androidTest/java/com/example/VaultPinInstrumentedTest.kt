@@ -53,14 +53,14 @@ class VaultPinInstrumentedTest {
             val repository = SmartManagerRepository(app, database.fileDao())
 
             assertFalse(repository.hasVaultPin())
-            assertFalse(repository.verifyVaultPin("1234"))
-            assertTrue(repository.initializeVaultPin("2468"))
+            assertFalse(repository.verifyVaultPin("123456"))
+            assertTrue(repository.initializeVaultPin("246810"))
             assertTrue(repository.hasVaultPin())
-            assertFalse(repository.verifyVaultPin("0000"))
+            assertFalse(repository.verifyVaultPin("000000"))
 
-            assertTrue(repository.changeVaultPin("2468", "9876"))
-            assertFalse(repository.verifyVaultPin("2468"))
-            assertTrue(repository.verifyVaultPin("9876"))
+            assertTrue(repository.changeVaultPin("246810", "987654"))
+            assertFalse(repository.verifyVaultPin("246810"))
+            assertTrue(repository.verifyVaultPin("987654"))
         } finally {
             database.close()
         }
@@ -69,12 +69,12 @@ class VaultPinInstrumentedTest {
     @Test
     fun vaultPin_productionStore_survives_manager_reopen() {
         val first = VaultManagerEngine(app, KeystoreVaultManager())
-        assertTrue(first.initializeVaultPin("1357"))
+        assertTrue(first.initializeVaultPin("135790"))
 
         val reopened = VaultManagerEngine(app, KeystoreVaultManager())
 
         assertTrue(reopened.hasVaultPin())
-        assertTrue(reopened.verifyVaultPin("1357"))
+        assertTrue(reopened.verifyVaultPin("135790"))
     }
 
     @Test
@@ -83,22 +83,22 @@ class VaultPinInstrumentedTest {
 
         assertTrue(viewModel.isVaultPinSetupRequired)
         viewModel.appendPinDigit("x")
-        "2468".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+        "246810".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertEquals("Re-enter the new PIN to confirm.", viewModel.pinError.value)
         assertEquals("", viewModel.enteredPin.value)
 
-        "1357".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+        "135790".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertEquals("PINs did not match. Try again.", viewModel.pinError.value)
         assertFalse(viewModel.isVaultUnlocked.value)
 
-        "2468".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
-        "2468".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+        "246810".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+        "246810".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertTrue(viewModel.isVaultUnlocked.value)
         assertNull(viewModel.pinError.value)
 
         viewModel.lockVault()
         assertFalse(viewModel.isVaultUnlocked.value)
-        "0000".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+        "000000".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         assertEquals("Incorrect PIN. Try again.", viewModel.pinError.value)
 
         viewModel.clearPinDigit()
@@ -113,10 +113,10 @@ class VaultPinInstrumentedTest {
     @Test
     fun mainViewModelCompat_fiveFailedPins_triggerCooldown() {
         val viewModel = MainViewModel(app)
-        assertTrue(viewModel.repository.initializeVaultPin("2468"))
+        assertTrue(viewModel.repository.initializeVaultPin("246810"))
 
         repeat(5) {
-            "0000".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
+            "000000".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         }
 
         assertEquals("Too many incorrect attempts. Try again in 30 seconds.", viewModel.pinError.value)
@@ -143,11 +143,11 @@ class VaultPinInstrumentedTest {
     fun mainViewModel_changeVaultPin_handlesUpdates() {
         val viewModel = MainViewModel(app)
 
-        assertFalse(viewModel.changeVaultPin("1111", "5555"))
+        assertFalse(viewModel.changeVaultPin("111111", "555555"))
         assertEquals("Failed to update PIN. Check current PIN.", viewModel.pinError.value)
 
-        assertTrue(viewModel.repository.initializeVaultPin("1234"))
-        assertTrue(viewModel.changeVaultPin("1234", "5555"))
+        assertTrue(viewModel.repository.initializeVaultPin("123456"))
+        assertTrue(viewModel.changeVaultPin("123456", "555555"))
         assertNull(viewModel.pinError.value)
     }
 }

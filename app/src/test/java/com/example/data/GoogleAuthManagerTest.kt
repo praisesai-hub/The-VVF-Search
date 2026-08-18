@@ -36,9 +36,13 @@ class GoogleAuthManagerTest {
         val state = authManager.authState.value
         assertTrue(state is GoogleAuthState.SignedIn)
         val signedInState = state as GoogleAuthState.SignedIn
+        assertEquals(
+            GoogleAuthState.SignedIn("test@example.com", "Test User"),
+            signedInState
+        )
         assertEquals("test@example.com", signedInState.email)
         assertEquals("Test User", signedInState.displayName)
-        assertEquals("mock_access_token", signedInState.accessToken)
+        assertEquals("mock_access_token", authManager.accessTokenOrNull())
         assertTrue(authManager.isAuthorized())
     }
 
@@ -57,7 +61,7 @@ class GoogleAuthManagerTest {
         assertTrue(state is GoogleAuthState.SignedIn)
         val signedInState = state as GoogleAuthState.SignedIn
         assertEquals("user@example.com", signedInState.email)
-        assertEquals("new_access_token", signedInState.accessToken)
+        assertEquals("new_access_token", authManager.accessTokenOrNull())
     }
 
     @Test
@@ -104,8 +108,8 @@ class GoogleAuthManagerTest {
 
         authManager.saveSession("access-token-two", null, "user@example.com", null)
 
-        assertEquals("access-token-two", authManager.getAccessToken())
-        assertNull(authManager.getRefreshToken())
+        assertEquals("access-token-two", authManager.accessTokenOrNull())
+        assertNull(authManager.refreshTokenOrNull())
         assertTrue(authManager.isAuthorized())
     }
 
@@ -122,8 +126,8 @@ class GoogleAuthManagerTest {
 
         assertEquals(GoogleAuthState.SignedOut, authManager.authState.value)
         assertFalse(authManager.isAuthorized())
-        assertNull(authManager.getAccessToken())
-        assertNull(authManager.getRefreshToken())
+        assertNull(authManager.accessTokenOrNull())
+        assertNull(authManager.refreshTokenOrNull())
         assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_EMAIL, null))
         assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_DISPLAY_NAME, null))
     }

@@ -158,7 +158,7 @@ class CloudSyncWorkerInstrumentedTest {
                 workerParameters,
                 daoOverride = fakeDao,
                 providerAdapterOverride = fakeAdapter,
-                authManagerOverride = GoogleAuthManager(
+                tokenProviderOverride = GoogleAuthManager(
                     appContext.getSharedPreferences("cloud_sync_worker_instrumented_auth", Context.MODE_PRIVATE)
                 ),
                 // Production is default-deny; this fixture explicitly authorizes the

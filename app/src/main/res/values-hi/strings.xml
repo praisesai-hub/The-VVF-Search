@@ -27,7 +27,7 @@
     <string name="menu">मेन्यू</string>
     <string name="change_master_pin">मास्टर PIN बदलें</string>
     <string name="current_pin">वर्तमान PIN</string>
-    <string name="new_4_digit_pin">नया 4-अंकीय PIN</string>
+    <string name="new_6_digit_pin">नया 6-अंकीय PIN</string>
     <string name="confirm_new_pin">नए PIN की पुष्टि करें</string>
     <string name="change">बदलें</string>
     <string name="lock_vault">वॉल्ट लॉक करें</string>
@@ -61,7 +61,7 @@
     <string name="use_fingerprint_or_face_id_to_">वॉल्ट खोलने के लिए फिंगरप्रिंट या Face ID का उपयोग करें</string>
     <string name="auto_lock_timer">ऑटो लॉक टाइमर</string>
     <string name="locks_automatically_when_inact">निष्क्रिय होने पर अपने आप लॉक हो जाता है</string>
-    <string name="update_your_4_digit_security_p">अपना 4-अंकीय सुरक्षा PIN बदलें</string>
+    <string name="update_your_6_digit_security_p">अपना 6-अंकीय सुरक्षा PIN बदलें</string>
     <string name="phase_3_kotlin_jetpack_compose">✓ चरण 3: Kotlin + Jetpack Compose + Room + Navigation Component</string>
     <string name="phase_4_encrypted_vault_struct">✓ चरण 4: एन्क्रिप्टेड वॉल्ट संरचना और PIN सुरक्षा</string>
     <string name="phase_5_core_file_manager_leve">✓ चरण 5: कोर फ़ाइल मैनेजर और लेवल 1–2 सटीक हैश डुप्लीकेट</string>
