@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.SharedPreferences
+import com.example.security.StringKeyValueStore
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -24,7 +25,7 @@ class GoogleAuthManagerTest {
     }
 
     @Test
-    fun testInitialState_SignedIn_WhenTokensExist() {
+    fun testFixtureBridge_ExposesIdentityStateWithoutToken() {
         sharedPrefs.edit()
             .putString(GoogleAuthManager.KEY_ACCESS_TOKEN, "mock_access_token")
             .putString(GoogleAuthManager.KEY_EMAIL, "test@example.com")
@@ -42,8 +43,54 @@ class GoogleAuthManagerTest {
         )
         assertEquals("test@example.com", signedInState.email)
         assertEquals("Test User", signedInState.displayName)
+        assertFalse(
+            GoogleAuthState.SignedIn::class.java.declaredFields.any { field ->
+                field.name.contains("token", ignoreCase = true)
+            }
+        )
         assertEquals("mock_access_token", authManager.accessTokenOrNull())
         assertTrue(authManager.isAuthorized())
+    }
+
+    @Suppress("DEPRECATION")
+    @Test
+    fun productionManager_rejectsOpaquePersistedTokensAndClearsThem() {
+        val store = FakeStringKeyValueStore(
+            mapOf(
+                GoogleAuthManager.KEY_ACCESS_TOKEN to "arbitrary-string",
+                GoogleAuthManager.KEY_REFRESH_TOKEN to "arbitrary-refresh",
+                GoogleAuthManager.KEY_EMAIL to "user@example.com",
+                GoogleAuthManager.KEY_DISPLAY_NAME to "User"
+            )
+        )
+
+        val productionManager = GoogleAuthManager(store)
+
+        assertEquals(GoogleAuthState.SignedOut, productionManager.authState.value)
+        assertFalse(productionManager.isAuthorized())
+        assertNull(productionManager.accessTokenOrNull())
+        assertNull(store.getString(GoogleAuthManager.KEY_ACCESS_TOKEN))
+        assertNull(store.getString(GoogleAuthManager.KEY_REFRESH_TOKEN))
+        assertNull(store.getString(GoogleAuthManager.KEY_EMAIL))
+    }
+
+    @Suppress("DEPRECATION")
+    @Test
+    fun productionManager_rejectsRawSessionInjectionAndNeverAuthorizesProvider() {
+        val store = FakeStringKeyValueStore()
+        val productionManager = GoogleAuthManager(store)
+
+        productionManager.saveSession(
+            accessToken = "arbitrary-string",
+            refreshToken = "arbitrary-refresh",
+            email = "user@example.com",
+            displayName = "User"
+        )
+
+        assertTrue(productionManager.authState.value is GoogleAuthState.Error)
+        assertFalse(productionManager.isAuthorized())
+        assertNull(productionManager.accessTokenOrNull())
+        assertNull(store.getString(GoogleAuthManager.KEY_ACCESS_TOKEN))
     }
 
     @Test
@@ -211,6 +258,21 @@ class GoogleAuthManagerTest {
                 removeKeys.forEach { map.remove(it) }
                 map.putAll(tempMap)
             }
+        }
+    }
+
+    private class FakeStringKeyValueStore(initialValues: Map<String, String> = emptyMap()) :
+        StringKeyValueStore {
+        private val values = initialValues.toMutableMap()
+
+        override fun getString(key: String, defaultValue: String?): String? =
+            values[key] ?: defaultValue
+
+        override fun commit(values: Map<String, String?>): Boolean {
+            values.forEach { (key, value) ->
+                if (value == null) this.values.remove(key) else this.values[key] = value
+            }
+            return true
         }
     }
 }

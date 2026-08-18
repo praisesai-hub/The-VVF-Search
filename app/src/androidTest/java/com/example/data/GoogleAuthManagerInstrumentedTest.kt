@@ -13,20 +13,13 @@ import org.junit.runner.RunWith
 class GoogleAuthManagerInstrumentedTest {
 
     @Test
-    fun saveAndClearSession_updatesStateAndSecureStore() {
+    fun productionManager_rejectsRawSessionAndClearsSecureStore() {
         val store = FakeStringKeyValueStore()
         val manager = GoogleAuthManager(store)
 
         manager.saveSession("access-token", "refresh-token", "user@example.com", "User")
 
-        assertTrue(manager.authState.value is GoogleAuthState.SignedIn)
-        assertTrue(manager.isAuthorized())
-        assertEquals("access-token", manager.accessTokenOrNull())
-        assertEquals("refresh-token", manager.refreshTokenOrNull())
-
-        manager.clearSession()
-
-        assertEquals(GoogleAuthState.SignedOut, manager.authState.value)
+        assertTrue(manager.authState.value is GoogleAuthState.Error)
         assertFalse(manager.isAuthorized())
         assertNull(manager.accessTokenOrNull())
         assertNull(manager.refreshTokenOrNull())
@@ -34,7 +27,7 @@ class GoogleAuthManagerInstrumentedTest {
     }
 
     @Test
-    fun restoreSession_acceptsValidStoredCredentials() {
+    fun productionManager_rejectsOpaqueStoredCredentials() {
         val store = FakeStringKeyValueStore(
             mutableMapOf(
                 GoogleAuthManager.KEY_ACCESS_TOKEN to "access-token",
@@ -45,11 +38,9 @@ class GoogleAuthManagerInstrumentedTest {
         )
 
         val manager = GoogleAuthManager(store)
-        val state = manager.authState.value
-
-        assertTrue(state is GoogleAuthState.SignedIn)
-        assertEquals("user@example.com", (state as GoogleAuthState.SignedIn).email)
-        assertEquals("User", state.displayName)
+        assertEquals(GoogleAuthState.SignedOut, manager.authState.value)
+        assertFalse(manager.isAuthorized())
+        assertTrue(store.values.isEmpty())
     }
 
     @Test
