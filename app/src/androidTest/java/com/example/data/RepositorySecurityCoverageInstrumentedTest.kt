@@ -100,7 +100,9 @@ class RepositorySecurityCoverageInstrumentedTest {
     fun smartRepository_delegatesVaultAndFailClosedSyncPaths(): Unit = runBlocking {
         val facade = SmartManagerRepository(context, dao)
 
-        assertFalse(facade.isSemanticSearchAvailable)
+        // The deterministic on-device fallback remains available when the optional
+        // Mobile CLIP assets are absent; an empty fake DAO still yields no results.
+        assertTrue(facade.isSemanticSearchAvailable)
         assertTrue(facade.searchSemanticFiles("query").first().isEmpty())
         assertTrue(facade.initializeVaultPin("2468"))
         assertTrue(facade.hasVaultPin())
