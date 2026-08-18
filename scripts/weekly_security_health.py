@@ -158,6 +158,10 @@ def parse_timestamp(value: str) -> datetime:
 
 def normalize_severity(value: str | None) -> str:
     value = (value or "unknown").lower()
+    # Dependabot REST API emits "medium" while the repository policy/report uses
+    # GitHub UI terminology ("moderate"). Normalize before scoring or rendering.
+    if value == "medium":
+        value = "moderate"
     return value if value in {"critical", "high", "moderate", "low"} else "unknown"
 
 
@@ -187,7 +191,9 @@ def collect_risks(
 
     for alert in alerts:
         advisory = alert.get("security_advisory", {})
-        dependency = alert.get("dependency", {}).get("package", {}).get("name", "unknown package")
+        dependency_data = alert.get("dependency", {})
+        dependency = dependency_data.get("package", {}).get("name", "unknown package")
+        manifest_path = dependency_data.get("manifest_path", "unknown manifest")
         patched = alert.get("security_vulnerability", {}).get("first_patched_version") or {}
         patch_text = patched.get("identifier", "no patched version published")
         risks.append(
@@ -196,7 +202,7 @@ def collect_risks(
                 severity=normalize_severity(advisory.get("severity")),
                 summary=f"{dependency}: {advisory.get('summary', 'Dependabot security alert')}",
                 details=(
-                    f"Alert #{alert.get('number', 'unknown')} in {alert.get('manifest_path', 'unknown manifest')}; "
+                    f"Alert #{alert.get('number', 'unknown')} in {manifest_path}; "
                     f"GHSA {advisory.get('ghsa_id', 'unknown')}; first patch: {patch_text}."
                 ),
             )
