@@ -13,7 +13,12 @@ import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
-/** Google Drive adapter with escaped queries and crash-resilient resumable uploads. */
+/**
+ * Google Drive adapter with escaped queries and crash-resilient resumable uploads.
+ *
+ * This adapter streams source bytes as provided. It does not apply app-managed client-side or
+ * end-to-end encryption before upload, so product copy must keep that boundary explicit.
+ */
 @Suppress(
     "LongMethod",
     "NestedBlockDepth",

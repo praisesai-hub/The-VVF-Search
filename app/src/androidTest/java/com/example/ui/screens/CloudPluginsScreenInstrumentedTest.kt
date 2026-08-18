@@ -40,6 +40,14 @@ class CloudPluginsScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("google_drive_connect_btn")
             .assertIsDisplayed()
             .assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("cloud_transfer_security_disclosure")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Cloud transfer is not client-side end-to-end encrypted by this app. If enabled in a " +
+                "future approved build, files are sent over HTTPS to the selected provider and " +
+                "rely on that provider's storage controls. Vault encryption separately protects " +
+                "local vault content."
+        ).assertIsDisplayed()
     }
 
     @Test

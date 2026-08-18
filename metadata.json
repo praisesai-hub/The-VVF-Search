@@ -1,7 +1,6 @@
 {
   "name": "VVF Smart Manager",
-  "description": "Smart File Manager, Secure Encrypted Vault, AI Duplicate Cleaner, OCR Engine, Semantic Search & Multi-Cloud Sync for Android",
+  "description": "Smart File Manager, Secure Encrypted Vault, AI Duplicate Cleaner, OCR Engine, Semantic Search and Google Drive Sync for Android",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
-

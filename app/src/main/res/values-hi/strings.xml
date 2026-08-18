@@ -94,6 +94,8 @@
     <string name="not_connected">कनेक्टेड नहीं</string>
     <string name="drive_session_present_sync_unavailable">Drive सत्र उपलब्ध है; वास्तविक स्थानीय-फ़ाइल अपलोड प्रवाह कॉन्फ़िगर होने तक फ़ाइल सिंक उपलब्ध नहीं है।</string>
     <string name="cloud_sync_oauth_required">इस बिल्ड में Google OAuth प्रवाह कॉन्फ़िगर नहीं है। क्लाउड सिंक बंद है।</string>
+    <string name="cloud_transfer_security_title">क्लाउड ट्रांसफर सुरक्षा</string>
+    <string name="cloud_transfer_security_disclosure">यह ऐप क्लाउड ट्रांसफर को client-side end-to-end encryption से सुरक्षित नहीं करती। भविष्य के किसी अनुमोदित बिल्ड में सक्षम होने पर फ़ाइलें HTTPS के माध्यम से चुने गए प्रदाता को भेजी जाएँगी और उस प्रदाता के storage controls पर निर्भर होंगी। Vault encryption स्थानीय vault सामग्री को अलग से सुरक्षित करती है।</string>
     <string name="configure_google_drive_oauth">Google Drive OAuth कॉन्फ़िगर करें</string>
     <string name="sync_unavailable">सिंक उपलब्ध नहीं</string>
     <string name="sync_action">सिंक कार्रवाई</string>

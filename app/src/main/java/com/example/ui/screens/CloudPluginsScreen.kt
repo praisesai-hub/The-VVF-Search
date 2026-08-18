@@ -173,6 +173,20 @@ fun CloudSyncSection(
                         }
                     }
                     Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.cloud_transfer_security_title),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = stringResource(R.string.cloud_transfer_security_disclosure),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .testTag("cloud_transfer_security_disclosure")
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     
                     if (auth is GoogleAuthState.SignedIn) {
                         Text(
