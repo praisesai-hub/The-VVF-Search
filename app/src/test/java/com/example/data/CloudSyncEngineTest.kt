@@ -108,16 +108,13 @@ class CloudSyncEngineTest {
     }
 
     @Test
-    fun unsupportedProvider_withoutOverride_returnsNonRetryableError(): Unit = runBlocking {
+    fun unsupportedProvider_withoutOverride_returnsNotSupported(): Unit = runBlocking {
         val file = createFile()
         val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager)
 
         val result = engine.syncItem(item(provider = "DROPBOX", file = file))
 
-        assertTrue(result is CloudSyncResult.Error)
-        result as CloudSyncResult.Error
-        assertEquals(false, result.isRetryable)
-        assertTrue(result.message.contains("No supported provider adapter"))
+        assertTrue(result is CloudSyncResult.NotSupported)
     }
 
     @Test

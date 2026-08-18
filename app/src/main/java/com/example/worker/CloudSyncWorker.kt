@@ -8,6 +8,7 @@ import com.example.data.AppDatabase
 import com.example.data.CloudSyncItemEntity
 import com.example.data.FileDao
 import com.example.data.CloudProviderAdapter
+import com.example.data.CloudProviderCapabilities
 import com.example.data.CloudSyncResult
 import com.example.data.CloudSyncPolicy
 import com.example.data.OAuthTokenProvider
@@ -43,12 +44,9 @@ class CloudSyncWorker @JvmOverloads constructor(
             val enabledProviders = plugins
                 .filter { it.isEnabled }
                 .mapNotNull { plugin ->
-                    when (plugin.pluginId) {
-                        "gdrive_sync" -> "GOOGLE_DRIVE"
-                        "onedrive_sync" -> "ONEDRIVE"
-                        "dropbox_sync" -> "DROPBOX"
-                        else -> null
-                    }
+                    CloudProviderCapabilities.forPlugin(plugin.pluginId)
+                        ?.takeIf { it.isImplemented }
+                        ?.providerId
                 }.toSet()
 
             val pendingOrQueued = syncItems

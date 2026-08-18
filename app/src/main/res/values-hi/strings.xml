@@ -68,7 +68,7 @@
     <string name="phase_8_ocr_engine_text_extrac">✓ चरण 8: OCR इंजन टेक्स्ट निष्कर्षण मॉड्यूल</string>
     <string name="phase_9_ai_semantic_search_on_">✓ चरण 9: ऑन-डिवाइस TFLite मॉडल पर AI सिमेंटिक खोज</string>
     <string name="phase_10_duplicate_level_3_4_w" formatted="false">✓ चरण 10: समानता सीमा स्लाइडर के साथ लेवल 3–4 डुप्लीकेट (70%–95%)</string>
-    <string name="phase_11_multi_cloud_sync_goog">✓ चरण 11: मल्टी-क्लाउड सिंक (Google Drive कोर + प्लगइन प्रदाता)</string>
+    <string name="phase_11_multi_cloud_sync_goog">✓ चरण 11: Google Drive सिंक (अन्य प्रदाता जल्द उपलब्ध होंगे)</string>
     <string name="phase_13_launcher_icon_golden_">✓ चरण 13: लॉन्चर आइकन Golden Leaf + ब्रांड पैलेट</string>
     <string name="phase_14_plugin_system_archite">✓ चरण 14: प्लगइन सिस्टम आर्किटेक्चर (कोर बनाम प्लगइन टॉगल)</string>
     <string name="phase_15_cold_start_target_10s">✓ चरण 15: स्टार्टअप प्रदर्शन मापन लंबित</string>

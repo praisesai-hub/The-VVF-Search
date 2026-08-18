@@ -67,7 +67,7 @@
     <string name="phase_8_ocr_engine_text_extrac">✓ Phase 8: OCR Engine text extraction module</string>
     <string name="phase_9_ai_semantic_search_on_">✓ Phase 9: AI Semantic Search on-device TFLite model</string>
     <string name="phase_10_duplicate_level_3_4_w" formatted="false">✓ Phase 10: Duplicate Level 3–4 with Similarity Threshold Slider (70%–95%)</string>
-    <string name="phase_11_multi_cloud_sync_goog">✓ Phase 11: Multi-Cloud Sync (Google Drive Core + Plugin Providers)</string>
+    <string name="phase_11_multi_cloud_sync_goog">✓ Phase 11: Google Drive Sync (other providers coming soon)</string>
     <string name="phase_13_launcher_icon_golden_">✓ Phase 13: Launcher Icon Golden Leaf + Brand Palette</string>
     <string name="phase_14_plugin_system_archite">✓ Phase 14: Plugin System Architecture (Core vs Plugin toggles)</string>
     <string name="phase_15_cold_start_target_10s">✓ Phase 15: Startup performance measurement pending</string>

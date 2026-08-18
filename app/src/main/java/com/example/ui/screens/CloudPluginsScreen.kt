@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.CloudSyncItemEntity
+import com.example.data.CloudProviderCapabilities
 import com.example.data.PluginEntity
 import com.example.ui.MainViewModel
 import androidx.compose.ui.graphics.Color
@@ -246,10 +247,10 @@ fun CloudSyncSection(
                 }
             }
         }
-        // Multi-Cloud Sync History Queue
+        // Google Drive sync history queue for the current release.
         item {
             Text(
-                text = "Cloud Sync Queue (${syncItems.size})",
+                text = "Google Drive Sync Queue (${syncItems.size})",
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
             )
@@ -368,6 +369,8 @@ fun PluginManagerSection(
             )
         }
         items(plugins, key = { it.pluginId }) { plugin ->
+            val cloudCapability = CloudProviderCapabilities.forPlugin(plugin.pluginId)
+            val comingSoon = cloudCapability?.isImplemented == false
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -398,16 +401,39 @@ fun PluginManagerSection(
                                     )
                                 }
                             }
+                            if (comingSoon) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = SoftGold.copy(alpha = 0.2f),
+                                    modifier = Modifier.testTag("provider_coming_soon_${plugin.pluginId}")
+                                ) {
+                                    Text(
+                                        text = "COMING SOON",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SoftGold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
                         Text(
-                            text = plugin.description,
+                            text = if (comingSoon) {
+                                "Not available in this release. ${plugin.description}"
+                            } else {
+                                plugin.description
+                            },
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Switch(
-                        checked = plugin.isEnabled,
-                        onCheckedChange = { viewModel.togglePlugin(plugin.pluginId, plugin.isEnabled) },
+                        checked = plugin.isEnabled && !comingSoon,
+                        onCheckedChange = if (comingSoon) null else {
+                            { viewModel.togglePlugin(plugin.pluginId, plugin.isEnabled) }
+                        },
+                        enabled = !comingSoon,
                         colors = SwitchDefaults.colors(checkedThumbColor = BhagwaOrange),
                         modifier = Modifier.testTag("plugin_switch_${plugin.pluginId}")
                     )
@@ -441,5 +467,3 @@ private fun SectionChip(
         )
     }
 }
-
-

@@ -326,13 +326,9 @@ open class SmartManagerRepository(
     fun observeCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = dao.getCloudSyncItems()
 
     private suspend fun isProviderEnabled(provider: String): Boolean {
-        val pluginId = when (provider.uppercase()) {
-            "GOOGLE_DRIVE" -> "gdrive_sync"
-            "ONEDRIVE" -> "onedrive_sync"
-            "DROPBOX" -> "dropbox_sync"
-            else -> null
-        } ?: return false
-        return dao.getAllPlugins().first().find { it.pluginId == pluginId }?.isEnabled == true
+        val capability = CloudProviderCapabilities.forProvider(provider) ?: return false
+        if (!capability.isImplemented) return false
+        return dao.getAllPlugins().first().find { it.pluginId == capability.pluginId }?.isEnabled == true
     }
 
     suspend fun enqueueCloudSyncItem(provider: String, fileName: String, size: Long, filePath: String = "", isCore: Boolean = false): Boolean = withContext(Dispatchers.IO) {

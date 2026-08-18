@@ -248,7 +248,7 @@ fun DashboardScreen(
                 ) { onNavigateTab(2) }
                 QuickActionButton(
                     title = "Cloud Sync",
-                    subtitle = "Multi-Cloud",
+                    subtitle = "Google Drive",
                     icon = Icons.Default.CloudSync,
                     color = SoftGold,
                     modifier = Modifier.weight(1f)

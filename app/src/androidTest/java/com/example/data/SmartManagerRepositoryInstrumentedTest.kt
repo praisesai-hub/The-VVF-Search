@@ -361,22 +361,24 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun cloudSyncSuccesses_coverProviderMappingEnqueueRetryAndCancelWhenExplicitlyAuthorized(): Unit = runBlocking {
+    fun cloudSyncOnlyQueuesImplementedProviderWhenExplicitlyAuthorized(): Unit = runBlocking {
         val consentedRepository = SmartManagerRepository(
             context = context,
             dao = fakeDao,
             ocrEngine = fakeOcr,
             cloudTransferAllowed = { true },
         )
+        fakeDao.plugins += PluginEntity("gdrive_sync", "Google Drive", "CLOUD", "Sync", true, false)
         fakeDao.plugins += PluginEntity("onedrive_sync", "OneDrive", "CLOUD", "Sync", true, false)
         fakeDao.plugins += PluginEntity("dropbox_sync", "Dropbox", "CLOUD", "Sync", true, false)
 
-        assertTrue(consentedRepository.enqueueCloudSyncItem("ONEDRIVE", "one.txt", 12L))
-        assertTrue(consentedRepository.enqueueCloudSyncItem("DROPBOX", "two.txt", 24L))
+        assertTrue(consentedRepository.enqueueCloudSyncItem("GOOGLE_DRIVE", "drive.txt", 8L))
+        assertFalse(consentedRepository.enqueueCloudSyncItem("ONEDRIVE", "one.txt", 12L))
+        assertFalse(consentedRepository.enqueueCloudSyncItem("DROPBOX", "two.txt", 24L))
         assertFalse(consentedRepository.enqueueCloudSyncItem("UNKNOWN_PROVIDER", "three.txt", 36L))
 
         val queued = fakeDao.cloudSyncItems.single()
-        assertEquals("DROPBOX", queued.provider)
+        assertEquals("GOOGLE_DRIVE", queued.provider)
         assertEquals("QUEUED", queued.status)
         assertTrue(consentedRepository.retryCloudSyncItem(queued.id))
         assertEquals("QUEUED", fakeDao.cloudSyncItems.single().status)

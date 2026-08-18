@@ -36,12 +36,8 @@ class CloudSyncEngine(
         } catch (error: UnsupportedOperationException) {
             return unreadableSourceError(item, error)
         }
-        val adapter = getAdapterForProvider(itemWithIdentity.provider) ?: return CloudSyncResult.Error(
-            message = "No supported provider adapter found for ${itemWithIdentity.provider}",
-            isRetryable = false,
-            contentHash = itemWithIdentity.contentHash,
-            idempotencyKey = itemWithIdentity.idempotencyKey
-        )
+        val adapter = getAdapterForProvider(itemWithIdentity.provider)
+            ?: return CloudSyncResult.NotSupported
         Log.i(TAG, "Starting streaming sync for item ${itemWithIdentity.id} with ${itemWithIdentity.provider}")
         return try {
             normalizeRecoveryMetadata(itemWithIdentity, adapter.uploadFile(
@@ -174,11 +170,18 @@ class CloudSyncEngine(
         }
     }
 
-    private fun getAdapterForProvider(provider: String): CloudProviderAdapter? =
-        providerAdapterOverride ?: when (provider.uppercase(Locale.US)) {
+    private fun getAdapterForProvider(provider: String): CloudProviderAdapter? {
+        providerAdapterOverride?.let { return it }
+        return when (
+            CloudProviderCapabilities.forProvider(provider)
+                ?.takeIf { it.isImplemented }
+                ?.providerId
+                ?.uppercase(Locale.US)
+        ) {
             "GOOGLE_DRIVE" -> GoogleDriveProviderAdapter(tokenProvider)
             else -> null
         }
+    }
 
     private fun uploadFailure(item: CloudSyncItemEntity, error: Exception): CloudSyncResult.Error {
         Log.e(TAG, "Exception during upload for item ${item.id}", error)

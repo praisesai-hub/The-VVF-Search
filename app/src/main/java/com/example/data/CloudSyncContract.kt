@@ -111,7 +111,7 @@ data class CloudSyncCheckpoint(
     val idempotencyKey: String = ""
 )
 
-/** Abstraction for cloud storage providers (REST, Drive, OneDrive, Dropbox, etc.). */
+/** Abstraction for an executable cloud storage provider adapter, currently Google Drive only. */
 @Suppress("LongParameterList")
 interface CloudProviderAdapter {
     val providerId: String

@@ -76,7 +76,8 @@ data class VaultItemEntity(
 )
 data class CloudSyncItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val provider: String, // GOOGLE_DRIVE, ONEDRIVE, DROPBOX, NEXTCLOUD, S3, NAS
+    // GOOGLE_DRIVE is the only executable adapter in this release; other identifiers are reserved.
+    val provider: String,
     val fileName: String,
     val filePath: String = "",
     val fileSize: Long,
