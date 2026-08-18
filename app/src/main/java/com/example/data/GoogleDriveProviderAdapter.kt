@@ -262,45 +262,61 @@ class GoogleDriveProviderAdapter(
         checkpoint: CloudSyncCheckpoint,
         onCheckpoint: suspend (CloudSyncCheckpoint) -> Unit
     ): CloudSyncResult {
-        val request = Request.Builder()
-            .url(sessionUri)
-            .header("Authorization", "Bearer $token")
-            .header("Content-Range", contentRange(offset, source.contentLength))
-            .put(streamingRequestBody(source, offset))
-            .build()
-        return httpClient.newCall(request).execute().use { response ->
-            when {
-                response.isSuccessful -> {
-                    val completed = completedUploadResult(response, source.contentLength, checkpoint)
-                    if (completed.remoteFileId.isBlank()) {
-                        CloudSyncResult.Error(
-                            message = "Failed to parse remote file ID from response",
-                            isRetryable = false,
-                            contentHash = checkpoint.contentHash,
-                            uploadSessionUri = sessionUri,
-                            etag = completed.etag,
-                            idempotencyKey = checkpoint.idempotencyKey
-                        )
-                    } else {
-                        completed
+        var nextOffset = offset
+        while (nextOffset < source.contentLength) {
+            val chunkLength = minOf(RESUMABLE_CHUNK_SIZE_BYTES, source.contentLength - nextOffset)
+            val request = Request.Builder()
+                .url(sessionUri)
+                .header("Authorization", "Bearer $token")
+                .header("Content-Range", contentRange(nextOffset, chunkLength, source.contentLength))
+                .put(streamingRequestBody(source, nextOffset, chunkLength))
+                .build()
+            httpClient.newCall(request).execute().use { response ->
+                when {
+                    response.isSuccessful -> {
+                        val completed = completedUploadResult(response, source.contentLength, checkpoint)
+                        return if (completed.remoteFileId.isBlank()) {
+                            CloudSyncResult.Error(
+                                message = "Failed to parse remote file ID from response",
+                                isRetryable = false,
+                                contentHash = checkpoint.contentHash,
+                                uploadSessionUri = sessionUri,
+                                etag = completed.etag,
+                                idempotencyKey = checkpoint.idempotencyKey
+                            )
+                        } else {
+                            completed
+                        }
                     }
+                    response.code == HTTP_RESUME_INCOMPLETE -> {
+                        val serverOffset = nextUploadOffset(response.header("Range"))
+                        if (serverOffset <= nextOffset || serverOffset > source.contentLength) {
+                            return checkpointedFailure(
+                                IOException("Invalid resumable upload range acknowledgement: $serverOffset"),
+                                checkpoint.remoteFileId,
+                                checkpoint.remoteRevisionId,
+                                checkpoint.contentHash,
+                                sessionUri,
+                                checkpoint.etag,
+                                checkpoint.idempotencyKey
+                            )
+                        }
+                        nextOffset = serverOffset
+                        onCheckpoint(checkpoint.copy(uploadSessionUri = sessionUri))
+                    }
+                    else -> return checkpointedHttpFailure("File upload failed", response, checkpoint)
                 }
-                response.code == HTTP_RESUME_INCOMPLETE -> {
-                    val nextOffset = nextUploadOffset(response.header("Range"))
-                    onCheckpoint(checkpoint.copy(uploadSessionUri = sessionUri))
-                    checkpointedFailure(
-                        IOException("Resumable upload remains incomplete at byte $nextOffset"),
-                        checkpoint.remoteFileId,
-                        checkpoint.remoteRevisionId,
-                        checkpoint.contentHash,
-                        sessionUri,
-                        checkpoint.etag,
-                        checkpoint.idempotencyKey
-                    )
-                }
-                else -> checkpointedHttpFailure("File upload failed", response, checkpoint)
             }
         }
+        return checkpointedFailure(
+            IOException("Resumable upload completed without final Drive response"),
+            checkpoint.remoteFileId,
+            checkpoint.remoteRevisionId,
+            checkpoint.contentHash,
+            sessionUri,
+            checkpoint.etag,
+            checkpoint.idempotencyKey
+        )
     }
 
     private fun completedUploadResult(
@@ -413,18 +429,34 @@ class GoogleDriveProviderAdapter(
         .addQueryParameter("fields", "files(id,headRevisionId),nextPageToken")
         .build()
 
-    private fun streamingRequestBody(source: CloudUploadSource, offset: Long): RequestBody =
+    private fun streamingRequestBody(
+        source: CloudUploadSource,
+        offset: Long,
+        byteCount: Long
+    ): RequestBody =
         object : RequestBody() {
             override fun contentType() = source.mimeType.toMediaTypeOrNull()
-            override fun contentLength(): Long = source.contentLength - offset
+            override fun contentLength(): Long = byteCount
 
             override fun writeTo(sink: BufferedSink) {
                 source.openStream().use { input ->
                     skipFully(input, offset)
-                    input.copyTo(sink.outputStream())
+                    copyExactly(input, sink, byteCount)
                 }
             }
         }
+
+    private fun copyExactly(input: java.io.InputStream, sink: BufferedSink, byteCount: Long) {
+        val buffer = ByteArray(STREAM_BUFFER_SIZE_BYTES)
+        var remaining = byteCount
+        while (remaining > 0L) {
+            val requested = minOf(buffer.size.toLong(), remaining).toInt()
+            val read = input.read(buffer, 0, requested)
+            if (read == -1) throw IOException("Source stream ended before resumable upload chunk completed")
+            sink.write(buffer, 0, read)
+            remaining -= read
+        }
+    }
 
     private fun skipFully(input: java.io.InputStream, offset: Long) {
         var remaining = offset
@@ -440,8 +472,8 @@ class GoogleDriveProviderAdapter(
         }
     }
 
-    private fun contentRange(offset: Long, totalLength: Long): String =
-        "bytes $offset-${totalLength - 1L}/$totalLength"
+    private fun contentRange(offset: Long, chunkLength: Long, totalLength: Long): String =
+        "bytes $offset-${offset + chunkLength - 1L}/$totalLength"
 
     private fun nextUploadOffset(rangeHeader: String?): Long {
         val endByte = rangeHeader?.substringAfter('-', "")?.toLongOrNull() ?: -1L
@@ -516,6 +548,9 @@ class GoogleDriveProviderAdapter(
     )
 
     private companion object {
+        // Drive recommends chunk sizes that are multiples of 256 KiB, except the final chunk.
+        const val RESUMABLE_CHUNK_SIZE_BYTES = 256 * 1024L
+        const val STREAM_BUFFER_SIZE_BYTES = 32 * 1024
         const val DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
         const val DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
         const val SYNC_IDENTITY_PROPERTY = "vvfSyncIdentity"

@@ -3,6 +3,7 @@ package com.example.data
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Buffer
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -101,6 +102,77 @@ class GoogleDriveProviderAdapterTest {
         }
         assertTrue(result is CloudSyncResult.Success)
         assertEquals(tempFile.length(), (result as CloudSyncResult.Success).bytesTransferred)
+    }
+
+    @Test
+    @Suppress("LongMethod")
+    fun uploadFile_308AcknowledgementImmediatelyContinuesFromServerRange() {
+        val firstChunkSize = 256 * 1024
+        val tempFile = File.createTempFile("resumable_chunk", ".bin").apply {
+            writeBytes(ByteArray(firstChunkSize + 17) { 0x5A.toByte() })
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var requestCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            requestCount += 1
+            when (requestCount) {
+                1 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"files\":[]}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+                2 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .header("Location", "https://upload.googleapis.com/resumable/chunked")
+                    .body("".toResponseBody())
+                    .build()
+                3 -> {
+                    assertEquals(
+                        "bytes 0-${firstChunkSize - 1}/${tempFile.length()}",
+                        request.header("Content-Range")
+                    )
+                    assertEquals(firstChunkSize.toLong(), request.body?.contentLength())
+                    val uploadedChunk = Buffer().also { buffer -> request.body?.writeTo(buffer) }
+                    assertEquals(firstChunkSize.toLong(), uploadedChunk.size)
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(308)
+                        .message("Resume Incomplete")
+                        .header("Range", "bytes=0-${firstChunkSize - 1}")
+                        .body("".toResponseBody())
+                        .build()
+                }
+                4 -> {
+                    assertEquals(
+                        "bytes $firstChunkSize-${tempFile.length() - 1}/${tempFile.length()}",
+                        request.header("Content-Range")
+                    )
+                    assertEquals(17L, request.body?.contentLength())
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("{\"id\":\"chunked-file\"}".toResponseBody("application/json".toMediaTypeOrNull()))
+                        .build()
+                }
+                else -> error("Unexpected request #$requestCount: ${request.method} ${request.url}")
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.uploadFile(tempFile, "chunked.bin") }
+
+        assertTrue(result is CloudSyncResult.Success)
+        result as CloudSyncResult.Success
+        assertEquals("chunked-file", result.remoteFileId)
+        assertEquals(4, requestCount)
     }
 
     @Test
