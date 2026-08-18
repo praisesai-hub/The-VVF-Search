@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.VaultItemEntity
+import com.example.data.VaultBiometricReenrollmentRequiredException
 import com.example.ui.MainViewModel
 import com.example.ui.appendPinDigit
 import com.example.ui.changeVaultPin
@@ -146,6 +147,12 @@ fun VaultScreen(
                     if (enrollment) viewModel.repository.prepareBiometricEnrollmentCipher()
                     else if (!isUnlocked && biometricKeyReady) viewModel.repository.prepareBiometricUnlockCipher()
                     else null
+                } catch (_: VaultBiometricReenrollmentRequiredException) {
+                    biometricKeyReady = false
+                    viewModel.onBiometricError(
+                        "Biometric settings changed. Unlock with your six-digit PIN, then enroll biometrics again."
+                    )
+                    null
                 } catch (_: Exception) {
                     null
                 }

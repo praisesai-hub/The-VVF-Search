@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Base64
 import androidx.biometric.BiometricPrompt
 import com.example.security.KeystoreVaultManager
@@ -40,6 +41,8 @@ data class VaultPinLockoutStatus(
 
 class VaultPinLockedException(val remainingMs: Long) : SecurityException("Vault PIN is temporarily locked")
 class VaultPinUpgradeRequiredException : SecurityException("Vault PIN must be upgraded to six digits")
+class VaultBiometricReenrollmentRequiredException(cause: Throwable) :
+    SecurityException("Vault biometrics changed and must be enrolled again after PIN unlock", cause)
 
 @Suppress(
     "TooManyFunctions",
@@ -198,9 +201,16 @@ class VaultManagerEngine(
     fun prepareBiometricUnlockCipher(): Cipher {
         if (requiresPinUpgrade()) throw VaultPinUpgradeRequiredException()
         check(hasBiometricEnrollment) { "Biometric vault enrollment is unavailable" }
-        return keystoreVaultManager.prepareBiometricDecryptionCipher(
-            decode(stored(vaultStore, BIOMETRIC_WRAP_IV_KEY))
-        )
+        return try {
+            keystoreVaultManager.prepareBiometricDecryptionCipher(
+                decode(stored(vaultStore, BIOMETRIC_WRAP_IV_KEY))
+            )
+        } catch (error: KeyPermanentlyInvalidatedException) {
+            check(disableBiometricEnrollment()) {
+                "Failed to clear invalidated biometric vault enrollment"
+            }
+            throw VaultBiometricReenrollmentRequiredException(error)
+        }
     }
 
     /** Completes unlock only from an authenticated CryptoObject result. */

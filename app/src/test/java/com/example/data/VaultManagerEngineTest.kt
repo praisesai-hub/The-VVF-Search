@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Base64
 import com.example.security.KeystoreVaultManager
 import io.mockk.every
@@ -11,6 +12,7 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -218,6 +220,26 @@ class VaultManagerEngineTest {
         assertTrue(engine.changeVaultPin(oldPin, newPin))
         assertFalse(engine.requiresPinUpgrade())
         assertEquals("v3-hash", engine.getStoredVaultPinHash())
+    }
+
+    @Test
+    fun prepareBiometricUnlockCipher_invalidatedKeyClearsEnrollmentAndRequiresReenrollment() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "v3-hash")
+            putPersistedValue("vault_envelope_version", "3")
+            putPersistedValue("vault_biometric_wrap_iv", "aXY=")
+            putPersistedValue("vault_biometric_wrap_ciphertext", "Y2lwaGVydGV4dA==")
+        }
+        every { keystore.prepareBiometricDecryptionCipher(any()) } throws
+            KeyPermanentlyInvalidatedException()
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertThrows(VaultBiometricReenrollmentRequiredException::class.java) {
+            engine.prepareBiometricUnlockCipher()
+        }
+
+        assertFalse(engine.hasBiometricEnrollment)
+        verify(exactly = 1) { keystore.deleteBiometricWrapKey() }
     }
 
     private fun assertLockedAfterInvalidAttempt(engine: VaultManagerEngine) {
