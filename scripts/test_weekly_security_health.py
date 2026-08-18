@@ -114,9 +114,12 @@ class WeeklySecurityHealthTest(unittest.TestCase):
             {
                 "number": 42,
                 "manifest_path": "settings.gradle.kts",
-                "dependency": {"package": {"name": "io.netty:netty-handler"}},
+                "dependency": {
+                    "package": {"name": "io.netty:netty-handler"},
+                    "manifest_path": "settings.gradle.kts",
+                },
                 "security_advisory": {
-                    "severity": "moderate",
+                    "severity": "medium",
                     "summary": "Netty resource exhaustion",
                     "ghsa_id": "GHSA-example",
                 },
@@ -139,7 +142,10 @@ class WeeklySecurityHealthTest(unittest.TestCase):
 
         self.assertEqual(3, len(risks))
         self.assertEqual({"dependabot_alert", "ci_failure", "stale_dependabot_pr"}, {risk.kind for risk in risks})
-        self.assertIn("4.2.17.Final", next(risk.details for risk in risks if risk.kind == "dependabot_alert"))
+        alert_risk = next(risk for risk in risks if risk.kind == "dependabot_alert")
+        self.assertEqual("moderate", alert_risk.severity)
+        self.assertIn("settings.gradle.kts", alert_risk.details)
+        self.assertIn("4.2.17.Final", alert_risk.details)
 
 
 if __name__ == "__main__":
