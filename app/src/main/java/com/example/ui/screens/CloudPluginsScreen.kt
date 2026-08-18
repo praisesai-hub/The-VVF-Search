@@ -49,6 +49,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -435,7 +437,11 @@ fun PluginManagerSection(
                         },
                         enabled = !comingSoon,
                         colors = SwitchDefaults.colors(checkedThumbColor = BhagwaOrange),
-                        modifier = Modifier.testTag("plugin_switch_${plugin.pluginId}")
+                        modifier = Modifier
+                            .then(
+                                if (comingSoon) Modifier.semantics { disabled() } else Modifier
+                            )
+                            .testTag("plugin_switch_${plugin.pluginId}")
                     )
                 }
             }
