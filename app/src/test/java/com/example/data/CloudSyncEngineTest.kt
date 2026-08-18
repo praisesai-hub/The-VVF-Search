@@ -23,6 +23,7 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     var uploadedIdempotencyKey: String? = null
     var uploadedContentHash: String? = null
     var uploadedSessionUri: String? = null
+    var downloadedRemoteFileId: String? = null
     var checkpointToEmit: CloudSyncCheckpoint? = null
     var result: CloudSyncResult = CloudSyncResult.Success()
     var exceptionToThrow: Exception? = null
@@ -49,8 +50,10 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
         return result
     }
 
-    override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult =
-        CloudSyncResult.NotSupported
+    override suspend fun downloadFile(remoteFileId: String, destinationFile: File): CloudSyncResult {
+        downloadedRemoteFileId = remoteFileId
+        return result
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -91,6 +94,26 @@ class CloudSyncEngineTest {
         fileSize = file.length(),
         status = "PENDING"
     )
+
+    @Test
+    fun downloadItem_usesPersistedRemoteIdAndRejectsBlankIds(): Unit = runBlocking {
+        val source = createFile()
+        val destination = createFile("download-target.txt")
+        val adapter = RecordingCloudProviderAdapter().apply {
+            result = CloudSyncResult.Success(remoteFileId = "drive-file-101")
+        }
+        val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager, adapter)
+
+        val missingIdResult = engine.downloadItem(item(file = source), destination)
+        assertTrue(missingIdResult is CloudSyncResult.Error)
+        assertTrue((missingIdResult as CloudSyncResult.Error).message.contains("persisted remote file ID"))
+        assertEquals(null, adapter.downloadedRemoteFileId)
+
+        val persistedItem = item(file = source).copy(remoteFileId = "drive-file-101")
+        val downloaded = engine.downloadItem(persistedItem, destination)
+        assertTrue(downloaded is CloudSyncResult.Success)
+        assertEquals("drive-file-101", adapter.downloadedRemoteFileId)
+    }
 
     @Test
     fun missingFile_returnsNonRetryableErrorWithoutAdapterCall(): Unit = runBlocking {

@@ -143,5 +143,9 @@ interface CloudProviderAdapter {
     @Deprecated("Implement the CloudUploadSource upload contract instead")
     suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult = CloudSyncResult.NotSupported
 
-    suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult
+    /**
+     * Downloads a persisted provider file identifier. A display name or remote path must never be
+     * used as a lookup key because Drive allows duplicate names across folders and drives.
+     */
+    suspend fun downloadFile(remoteFileId: String, destinationFile: File): CloudSyncResult
 }

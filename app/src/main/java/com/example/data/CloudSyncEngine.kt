@@ -152,6 +152,18 @@ class CloudSyncEngine(
         }
     }
 
+    /** Downloads only through the durable remote identifier saved by a successful upload. */
+    suspend fun downloadItem(item: CloudSyncItemEntity, destinationFile: File): CloudSyncResult {
+        if (item.remoteFileId.isBlank()) {
+            return CloudSyncResult.Error(
+                message = "Download failed: no persisted remote file ID is available for this sync item.",
+                isRetryable = false
+            )
+        }
+        val adapter = getAdapterForProvider(item.provider) ?: return CloudSyncResult.NotSupported
+        return adapter.downloadFile(item.remoteFileId, destinationFile)
+    }
+
     private fun createUploadSource(item: CloudSyncItemEntity): CloudUploadSource? = when {
         item.filePath.startsWith("content://") -> CloudUploadSource.ContentUri(
             context = context,

@@ -337,64 +337,85 @@ class GoogleDriveProviderAdapter(
         )
     }
 
-    override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult {
+    override suspend fun downloadFile(remoteFileId: String, destinationFile: File): CloudSyncResult {
+        if (remoteFileId.isBlank()) {
+            return CloudSyncResult.Error(
+                message = "Download failed: persisted Google Drive file ID is missing.",
+                isRetryable = false
+            )
+        }
         val token = tokenProvider.accessTokenOrNull() ?: return CloudSyncResult.Error(
             message = "Download failed: user is not authenticated with Google Drive.",
             isRetryable = false
         )
         return try {
-            val query = "name='${escapeDriveQueryValue(remotePath)}' and trashed=false"
-            val searchRequest = Request.Builder()
-                .url(driveFilesUrl(query))
-                .header("Authorization", "Bearer $token")
-                .get()
-                .build()
-            httpClient.newCall(searchRequest).execute().use { searchResponse ->
-                if (!searchResponse.isSuccessful) {
-                    return classifyHttpError("File search failed", searchResponse)
-                }
-                val searchBody = searchResponse.body?.string().orEmpty()
-                val fileId = extractJsonValue(searchBody, "id")
-                    ?: extractJsonValue(searchBody, "fileId")
-                    ?: return CloudSyncResult.Error(
-                        "File not found on Google Drive: $remotePath",
-                        isRetryable = false
-                    )
-                downloadMedia(token, fileId, destinationFile)
-            }
+            downloadMedia(token, remoteFileId, destinationFile)
         } catch (error: IOException) {
-            checkpointedFailure(error, "", "", "", "", "", "")
+            checkpointedFailure(error, remoteFileId, "", "", "", "", "")
         } catch (error: SecurityException) {
-            checkpointedFailure(error, "", "", "", "", "", "")
+            checkpointedFailure(error, remoteFileId, "", "", "", "", "")
         } catch (error: IllegalArgumentException) {
-            checkpointedFailure(error, "", "", "", "", "", "")
+            checkpointedFailure(error, remoteFileId, "", "", "", "", "")
         } catch (error: IllegalStateException) {
-            checkpointedFailure(error, "", "", "", "", "", "")
+            checkpointedFailure(error, remoteFileId, "", "", "", "", "")
         }
     }
 
     private fun downloadMedia(token: String, fileId: String, destinationFile: File): CloudSyncResult {
         val request = Request.Builder()
             .url(
-                "$DRIVE_FILES_URL/$fileId".toHttpUrl().newBuilder()
+                DRIVE_FILES_URL.toHttpUrl().newBuilder()
+                    .addPathSegment(fileId)
                     .addQueryParameter("alt", "media")
+                    .addQueryParameter("supportsAllDrives", "true")
                     .build()
             )
             .header("Authorization", "Bearer $token")
             .get()
             .build()
         return httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return classifyHttpError("Media download failed", response)
+            if (!response.isSuccessful) {
+                return classifyHttpError("Media download failed", response, fileId)
+            }
             val body = response.body ?: return CloudSyncResult.Error(
                 "Media download response body was empty.",
-                isRetryable = false
+                isRetryable = false,
+                remoteFileId = fileId
             )
-            val bytesTransferred = body.byteStream().use { input ->
-                destinationFile.outputStream().use { output -> input.copyTo(output) }
+            val destinationParent = destinationFile.parentFile ?: File(".")
+            if (!destinationParent.exists() && !destinationParent.mkdirs()) {
+                return CloudSyncResult.Error(
+                    "Download failed: could not create destination directory.",
+                    isRetryable = false,
+                    remoteFileId = fileId
+                )
+            }
+            val stagedDestination = File(
+                destinationParent,
+                "${destinationFile.name}.${UUID.randomUUID()}.part"
+            )
+            val bytesTransferred = try {
+                body.byteStream().use { input ->
+                    stagedDestination.outputStream().use { output -> input.copyTo(output) }
+                }
+            } catch (error: IOException) {
+                stagedDestination.delete()
+                throw error
             }
             if (bytesTransferred <= 0L) {
-                destinationFile.delete()
-                CloudSyncResult.Error("Media download response body was empty.", isRetryable = false)
+                stagedDestination.delete()
+                CloudSyncResult.Error(
+                    "Media download response body was empty.",
+                    isRetryable = false,
+                    remoteFileId = fileId
+                )
+            } else if (!replaceDestination(stagedDestination, destinationFile)) {
+                stagedDestination.delete()
+                CloudSyncResult.Error(
+                    "Download failed: could not finalize destination file.",
+                    isRetryable = true,
+                    remoteFileId = fileId
+                )
             } else {
                 CloudSyncResult.Success(
                     bytesTransferred = bytesTransferred,
@@ -403,6 +424,20 @@ class GoogleDriveProviderAdapter(
                 )
             }
         }
+    }
+
+    private fun replaceDestination(stagedFile: File, destinationFile: File): Boolean {
+        val parent = destinationFile.parentFile ?: File(".")
+        if (!parent.exists() && !parent.mkdirs()) return false
+        val backup = File(parent, "${destinationFile.name}.${UUID.randomUUID()}.backup")
+        val hadExistingDestination = destinationFile.exists()
+        if (hadExistingDestination && !destinationFile.renameTo(backup)) return false
+        if (stagedFile.renameTo(destinationFile)) {
+            if (hadExistingDestination) backup.delete()
+            return true
+        }
+        if (hadExistingDestination) backup.renameTo(destinationFile)
+        return false
     }
 
     private fun findRemoteIdForSyncIdentity(token: String, syncIdentity: String): String? {
@@ -502,11 +537,16 @@ class GoogleDriveProviderAdapter(
         idempotencyKey = checkpoint.idempotencyKey
     )
 
-    private fun classifyHttpError(context: String, response: okhttp3.Response): CloudSyncResult.Error =
+    private fun classifyHttpError(
+        context: String,
+        response: okhttp3.Response,
+        remoteFileId: String = ""
+    ): CloudSyncResult.Error =
         CloudSyncResult.Error(
             message = "$context: HTTP ${response.code} - ${response.body?.string() ?: "No details provided"}",
             isRetryable = response.code == HTTP_REQUEST_TIMEOUT ||
-                response.code == HTTP_TOO_MANY_REQUESTS || response.code >= HTTP_SERVER_ERROR_START
+                response.code == HTTP_TOO_MANY_REQUESTS || response.code >= HTTP_SERVER_ERROR_START,
+            remoteFileId = remoteFileId
         )
 
     private fun checkpointedFailure(

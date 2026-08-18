@@ -213,126 +213,51 @@ class GoogleDriveProviderAdapterTest {
 
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
 
-        var callCount = 0
         fakeInterceptor.responseProvider = { request ->
-            callCount++
-            if (callCount == 1) {
-                val searchResponseJson = """
-                    {
-                        "files": [
-                            {
-                                "id": "gdrive_file_id_456",
-                                "name": "remote.txt"
-                            }
-                        ]
-                    }
-                """.trimIndent()
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(searchResponseJson.toResponseBody("application/json".toMediaTypeOrNull()))
-                    .build()
-            } else {
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body("downloaded content".toResponseBody("text/plain".toMediaTypeOrNull()))
-                    .build()
-            }
+            assertEquals("/drive/v3/files/gdrive_file_id_456", request.url.encodedPath)
+            assertEquals("media", request.url.queryParameter("alt"))
+            assertEquals("true", request.url.queryParameter("supportsAllDrives"))
+            assertEquals(null, request.url.queryParameter("q"))
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("downloaded content".toResponseBody("text/plain".toMediaTypeOrNull()))
+                .build()
         }
 
         val result = kotlinx.coroutines.runBlocking {
-            adapter.downloadFile("remote.txt", tempFile)
+            adapter.downloadFile("gdrive_file_id_456", tempFile)
         }
 
         assertTrue(result is CloudSyncResult.Success)
         assertEquals("downloaded content", tempFile.readText())
+        assertEquals("gdrive_file_id_456", (result as CloudSyncResult.Success).remoteFileId)
     }
 
     @Test
-    fun testDownloadFile_EscapesDriveQueryLiteralBeforeRequestConstruction() {
-        val tempFile = File.createTempFile("test_download_quote", ".txt")
+    fun testDownloadFile_UsesPersistedIdWithoutFilenameQuery() {
+        val tempFile = File.createTempFile("test_download_id_only", ".txt")
         tempFile.deleteOnExit()
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
 
-        var callCount = 0
         fakeInterceptor.responseProvider = { request ->
-            callCount += 1
-            if (callCount == 1) {
-                assertEquals(
-                    "name='O\\'Brien.txt' and trashed=false",
-                    request.url.queryParameter("q")
-                )
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(
-                        "{\"files\":[{\"id\":\"quoted-file\"}]}".toResponseBody(
-                            "application/json".toMediaTypeOrNull()
-                        )
-                    )
-                    .build()
-            } else {
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body("quoted content".toResponseBody("text/plain".toMediaTypeOrNull()))
-                    .build()
-            }
+            assertEquals("/drive/v3/files/persisted-file-id", request.url.encodedPath)
+            assertEquals(null, request.url.queryParameter("q"))
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("id-only content".toResponseBody("text/plain".toMediaTypeOrNull()))
+                .build()
         }
 
-        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("O'Brien.txt", tempFile) }
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("persisted-file-id", tempFile) }
 
         assertTrue(result is CloudSyncResult.Success)
-        assertEquals("quoted content", tempFile.readText())
-    }
-
-    @Test
-    fun testDownloadFile_EscapesBackslashBeforeApostropheInDriveQueryValue() {
-        val tempFile = File.createTempFile("test_download_backslash_quote", ".txt")
-        tempFile.deleteOnExit()
-        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
-
-        var callCount = 0
-        fakeInterceptor.responseProvider = { request ->
-            callCount += 1
-            if (callCount == 1) {
-                assertEquals(
-                    "name='C:\\\\docs\\\\O\\'Brien.txt' and trashed=false",
-                    request.url.queryParameter("q")
-                )
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body("{\"files\":[{\"id\":\"escaped-file\"}]}".toResponseBody())
-                    .build()
-            } else {
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body("escaped content".toResponseBody())
-                    .build()
-            }
-        }
-
-        val result = kotlinx.coroutines.runBlocking {
-            adapter.downloadFile("C:\\docs\\O'Brien.txt", tempFile)
-        }
-
-        assertTrue(result is CloudSyncResult.Success)
-        assertEquals("escaped content", tempFile.readText())
+        assertEquals("id-only content", tempFile.readText())
     }
 
     @Test
@@ -499,7 +424,7 @@ class GoogleDriveProviderAdapterTest {
         destination.deleteOnExit()
 
         val result = kotlinx.coroutines.runBlocking {
-            adapter.downloadFile("remote.txt", destination)
+            adapter.downloadFile("remote-file-id", destination)
         }
 
         assertTrue(result is CloudSyncResult.Error)
@@ -508,7 +433,7 @@ class GoogleDriveProviderAdapterTest {
     }
 
     @Test
-    fun testDownloadFile_SearchHttpErrorIsNotRetryableForNotFound() {
+    fun testDownloadFile_MediaHttpErrorIsNotRetryableForNotFound() {
         val destination = File.createTempFile("download_search_error", ".txt")
         destination.deleteOnExit()
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
@@ -522,33 +447,26 @@ class GoogleDriveProviderAdapterTest {
                 .build()
         }
 
-        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote-file-id", destination) }
 
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
-        assertTrue(error.message.contains("File search failed: HTTP 404"))
+        assertTrue(error.message.contains("Media download failed: HTTP 404"))
         assertFalse(error.isRetryable)
+        assertEquals("remote-file-id", error.remoteFileId)
     }
 
     @Test
-    fun testDownloadFile_WhenSearchReturnsNoMatchingFile() {
+    fun testDownloadFile_RejectsMissingPersistedRemoteIdWithoutNetworkCall() {
         val destination = File.createTempFile("download_not_found", ".txt")
         destination.deleteOnExit()
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
-        fakeInterceptor.responseProvider = { request ->
-            Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body("{\"files\":[]}".toResponseBody("application/json".toMediaTypeOrNull()))
-                .build()
-        }
+        fakeInterceptor.responseProvider = { error("Download should not issue a network request") }
 
-        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("", destination) }
 
         assertTrue(result is CloudSyncResult.Error)
-        assertTrue((result as CloudSyncResult.Error).message.contains("File not found"))
+        assertTrue((result as CloudSyncResult.Error).message.contains("file ID is missing"))
     }
 
     @Test
@@ -556,32 +474,17 @@ class GoogleDriveProviderAdapterTest {
         val destination = File.createTempFile("download_media_error", ".txt")
         destination.deleteOnExit()
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
-        var callCount = 0
         fakeInterceptor.responseProvider = { request ->
-            callCount++
-            if (callCount == 1) {
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(
-                        "{\"files\":[{\"fileId\":\"id-789\"}]}"
-                            .toResponseBody("application/json".toMediaTypeOrNull()),
-                    )
-                    .build()
-            } else {
-                Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(503)
-                    .message("Unavailable")
-                    .body("try later".toResponseBody("text/plain".toMediaTypeOrNull()))
-                    .build()
-            }
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(503)
+                .message("Unavailable")
+                .body("try later".toResponseBody("text/plain".toMediaTypeOrNull()))
+                .build()
         }
 
-        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("id-789", destination) }
 
         assertTrue(result is CloudSyncResult.Error)
         assertTrue((result as CloudSyncResult.Error).message.contains("HTTP 503"))
@@ -595,7 +498,7 @@ class GoogleDriveProviderAdapterTest {
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
         fakeInterceptor.responseProvider = { throw java.net.UnknownHostException("no network") }
 
-        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote-file-id", destination) }
 
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
