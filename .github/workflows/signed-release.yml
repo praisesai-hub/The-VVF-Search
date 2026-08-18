@@ -102,7 +102,13 @@ jobs:
           set -euo pipefail
           AAB_PATH="app/build/outputs/bundle/release/app-release.aab"
           test -s "$AAB_PATH"
-          jarsigner -verify -strict -certs "$AAB_PATH" >/dev/null
+          # Upload certificates are self-signed until Google Play enrolls the app in
+          # App Signing. `-strict` treats that trust-chain warning as exit code 4,
+          # even when the AAB signature itself is valid. Require jarsigner's positive
+          # signature result instead; invalid or unsigned bundles still fail this step.
+          VERIFY_OUTPUT="$(jarsigner -verify -certs "$AAB_PATH")"
+          printf '%s\n' "$VERIFY_OUTPUT"
+          grep -Fqx 'jar verified.' <<< "$VERIFY_OUTPUT"
           ARTIFACT_DIR="release-artifacts"
           mkdir -p "$ARTIFACT_DIR"
           cp "$AAB_PATH" "$ARTIFACT_DIR/app-release-${VERSION_NAME}-${VERSION_CODE}.aab"
