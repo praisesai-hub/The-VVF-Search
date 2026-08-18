@@ -36,6 +36,31 @@ class GitHubClientPaginationTest(unittest.TestCase):
         self.assertEqual([{"id": 1}], runs)
         self.assertEqual(1, client.calls)
 
+    def test_get_all_cursor_uses_after_without_deprecated_page_parameter(self) -> None:
+        class FakeClient(GitHubClient):
+            def __init__(self) -> None:
+                super().__init__("unused", "owner/repo")
+                self.queries = []
+
+            def request_with_headers(self, method, path, *, query=None, body=None):
+                self.queries.append(query)
+                if len(self.queries) == 1:
+                    return (
+                        [{"id": 1}],
+                        {"link": '<https://api.github.com/repos/owner/repo/dependabot/alerts?after=cursor-2&per_page=100>; rel="next"'},
+                    )
+                return [{"id": 2}], {}
+
+        client = FakeClient()
+        alerts = client.get_all_cursor("/repos/owner/repo/dependabot/alerts", {"state": "open"})
+
+        self.assertEqual([{"id": 1}, {"id": 2}], alerts)
+        self.assertEqual(
+            [{"state": "open", "per_page": "100"}, {"state": "open", "per_page": "100", "after": "cursor-2"}],
+            client.queries,
+        )
+        self.assertTrue(all("page" not in query for query in client.queries))
+
 
 class WeeklySecurityHealthTest(unittest.TestCase):
     def test_no_risk_for_clean_alerts_successful_ci_and_fresh_pr(self) -> None:

@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 API_ROOT = "https://api.github.com"
@@ -72,6 +72,42 @@ class GitHubClient:
                 return results
             page += 1
 
+    def get_all_cursor(
+        self,
+        path: str,
+        query: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get a cursor-paginated REST list without deprecated offset parameters."""
+        base_query = dict(query or {})
+        base_query.setdefault("per_page", "100")
+        after: str | None = None
+        results: list[dict[str, Any]] = []
+        while True:
+            request_query = dict(base_query)
+            if after:
+                request_query["after"] = after
+            payload, headers = self.request_with_headers("GET", path, query=request_query)
+            if not isinstance(payload, list):
+                raise RuntimeError(f"Expected list response for {path}")
+            results.extend(payload)
+            after = self.next_cursor(headers.get("link", ""))
+            if not after:
+                return results
+
+    @staticmethod
+    def next_cursor(link_header: str) -> str | None:
+        """Extract the opaque `after` cursor from the REST Link header's next relation."""
+        for link in link_header.split(","):
+            if 'rel="next"' not in link:
+                continue
+            start, end = link.find("<"), link.find(">")
+            if start < 0 or end <= start:
+                continue
+            cursor = parse_qs(urlparse(link[start + 1 : end]).query).get("after", [])
+            if cursor:
+                return cursor[0]
+        return None
+
     def request(
         self,
         method: str,
@@ -80,6 +116,17 @@ class GitHubClient:
         query: dict[str, str] | None = None,
         body: dict[str, Any] | None = None,
     ) -> Any:
+        payload, _ = self.request_with_headers(method, path, query=query, body=body)
+        return payload
+
+    def request_with_headers(
+        self,
+        method: str,
+        path: str,
+        *,
+        query: dict[str, str] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> tuple[Any, dict[str, str]]:
         url = f"{API_ROOT}{path}"
         if query:
             url = f"{url}?{urlencode(query)}"
@@ -99,7 +146,7 @@ class GitHubClient:
         try:
             with urlopen(request, timeout=30) as response:  # nosec B310: fixed GitHub API host
                 raw = response.read().decode("utf-8")
-                return json.loads(raw) if raw else {}
+                return (json.loads(raw) if raw else {}), dict(response.headers.items())
         except HTTPError as error:
             details = error.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"GitHub API {method} {path} failed: HTTP {error.code}: {details}") from error
@@ -324,7 +371,7 @@ def main() -> int:
     alerts_client = GitHubClient(args.dependabot_alerts_token or args.token, args.repository)
     alert_access_error = None
     try:
-        alerts = alerts_client.get_all(f"/repos/{args.repository}/dependabot/alerts", {"state": "open"})
+        alerts = alerts_client.get_all_cursor(f"/repos/{args.repository}/dependabot/alerts", {"state": "open"})
     except RuntimeError as error:
         alerts = []
         alert_access_error = str(error)
