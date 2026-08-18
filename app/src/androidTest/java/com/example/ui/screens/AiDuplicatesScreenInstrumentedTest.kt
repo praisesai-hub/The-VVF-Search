@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -55,10 +56,11 @@ class AiDuplicatesScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").performClick()
         composeTestRule.onNodeWithTag("auto_clean_duplicates_switch").assertIsOff()
         composeTestRule.onNodeWithTag("start_scan_button").assertIsDisplayed()
+        val duplicateList = composeTestRule.onNode(hasScrollToIndexAction())
+        duplicateList.performScrollToNode(hasTestTag("similarity_slider"))
         composeTestRule.onNodeWithTag("similarity_slider").assertIsDisplayed()
         composeTestRule.onNodeWithText("1 files selected for deletion").assertIsDisplayed()
 
-        val duplicateList = composeTestRule.onNode(hasScrollToIndexAction())
         duplicateList.performScrollToNode(hasText("Level 1-2: Exact Hash Duplicates (1 sets)"))
         composeTestRule.onNodeWithText("Level 1-2: Exact Hash Duplicates (1 sets)").assertExists()
         duplicateList.performScrollToNode(hasText("Exact hashes"))
