@@ -1,6 +1,9 @@
 package com.example.data
 
 import android.content.Context
+import android.content.ContentValues
+import android.net.Uri
+import android.provider.MediaStore
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.net.UnknownHostException
@@ -9,6 +12,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -18,12 +22,26 @@ import org.junit.Test
 private class InstrumentedCloudProviderAdapter : CloudProviderAdapter {
     override val providerId: String = "TEST_PROVIDER"
     var uploadedFile: File? = null
+    var uploadedSource: CloudUploadSource? = null
+    var uploadedPayload: ByteArray? = null
     var uploadedRemotePath: String? = null
     var result: CloudSyncResult = CloudSyncResult.Success()
     var exceptionToThrow: Exception? = null
 
-    override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
-        uploadedFile = file
+    override suspend fun uploadFile(
+        source: CloudUploadSource,
+        remotePath: String,
+        remoteFileId: String,
+        idempotencyKey: String,
+        remoteRevisionId: String,
+        contentHash: String,
+        uploadSessionUri: String,
+        etag: String,
+        onCheckpoint: suspend (CloudSyncCheckpoint) -> Unit
+    ): CloudSyncResult {
+        uploadedSource = source
+        uploadedFile = (source as? CloudUploadSource.LocalFile)?.asFile()
+        uploadedPayload = source.openStream().use { it.readBytes() }
         uploadedRemotePath = remotePath
         exceptionToThrow?.let { throw it }
         return result
@@ -37,6 +55,7 @@ class CloudSyncEngineInstrumentedTest {
     private lateinit var context: Context
     private lateinit var authManager: GoogleAuthManager
     private val temporaryFiles = mutableListOf<File>()
+    private val temporaryContentUris = mutableListOf<Uri>()
 
     @Before
     fun setUp(): Unit {
@@ -49,6 +68,7 @@ class CloudSyncEngineInstrumentedTest {
     @After
     fun tearDown(): Unit {
         temporaryFiles.forEach(File::delete)
+        temporaryContentUris.forEach { uri -> context.contentResolver.delete(uri, null, null) }
     }
 
     private fun createFile(name: String = "sync-engine-test.txt"): File =
@@ -69,6 +89,27 @@ class CloudSyncEngineInstrumentedTest {
         fileSize = file.length(),
         status = "PENDING"
     )
+
+    private fun createContentUri(payload: ByteArray): Uri {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "saf-sync-${System.nanoTime()}.txt")
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = requireNotNull(
+            context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        ) { "Unable to create app-owned MediaStore source" }
+        context.contentResolver.openOutputStream(uri)?.use { output -> output.write(payload) }
+            ?: error("Unable to open MediaStore source for writing")
+        context.contentResolver.update(
+            uri,
+            ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) },
+            null,
+            null
+        )
+        temporaryContentUris += uri
+        return uri
+    }
 
     @Test
     fun missingFile_returnsNonRetryableErrorWithoutAdapterCall(): Unit = runBlocking {
@@ -115,6 +156,34 @@ class CloudSyncEngineInstrumentedTest {
         assertTrue(result.idempotencyKey.isNotBlank())
         assertEquals(file, adapter.uploadedFile)
         assertEquals("remote.txt", adapter.uploadedRemotePath)
+    }
+
+    @Test
+    fun contentUri_uploadsByStreamingWithoutFileCoercion(): Unit = runBlocking {
+        val payload = "SAF streaming payload".encodeToByteArray()
+        val contentUri = createContentUri(payload)
+        val adapter = InstrumentedCloudProviderAdapter().apply {
+            result = CloudSyncResult.Success(bytesTransferred = payload.size.toLong())
+        }
+        val sourceItem = CloudSyncItemEntity(
+            id = 52L,
+            provider = "GOOGLE_DRIVE",
+            fileName = "saf-document.txt",
+            filePath = contentUri.toString(),
+            fileSize = payload.size.toLong(),
+            status = "PENDING"
+        )
+        val engine = CloudSyncEngine(context, InstrumentedCloudSyncDao(), authManager, adapter)
+
+        val result = engine.syncItem(sourceItem)
+
+        assertTrue(result is CloudSyncResult.Success)
+        assertTrue(adapter.uploadedSource is CloudUploadSource.ContentUri)
+        assertNull(adapter.uploadedFile)
+        assertEquals(payload.toList(), adapter.uploadedPayload?.toList())
+        result as CloudSyncResult.Success
+        assertFalse(result.contentHash.isBlank())
+        assertFalse(result.idempotencyKey.isBlank())
     }
 
     @Test
