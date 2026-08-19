@@ -25,8 +25,11 @@ class DatabasePassphraseProvider private constructor(
         constructionMarker = Unit
     )
 
-    internal constructor(store: StringKeyValueStore, random: SecureRandom = SecureRandom()) :
-        this(store, random, JvmPassphraseBase64Codec, Unit)
+    internal constructor(
+        store: StringKeyValueStore,
+        codec: PassphraseBase64Codec,
+        random: SecureRandom = SecureRandom()
+    ) : this(store, random, codec, Unit)
     @Synchronized
     fun getOrCreate(): ByteArray {
         val existing = store.getString(PASSPHRASE_KEY)
@@ -64,7 +67,7 @@ class DatabasePassphraseProvider private constructor(
     }
 }
 
-private interface PassphraseBase64Codec {
+internal interface PassphraseBase64Codec {
     fun encode(value: ByteArray): String
     fun decode(value: String): ByteArray
 }
@@ -73,10 +76,4 @@ private object AndroidPassphraseBase64Codec : PassphraseBase64Codec {
     override fun encode(value: ByteArray): String = Base64.encodeToString(value, Base64.NO_WRAP)
 
     override fun decode(value: String): ByteArray = Base64.decode(value, Base64.NO_WRAP)
-}
-
-private object JvmPassphraseBase64Codec : PassphraseBase64Codec {
-    override fun encode(value: ByteArray): String = java.util.Base64.getEncoder().encodeToString(value)
-
-    override fun decode(value: String): ByteArray = java.util.Base64.getDecoder().decode(value)
 }

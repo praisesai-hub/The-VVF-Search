@@ -3,12 +3,13 @@ package com.example.security
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.util.Base64
 
 class DatabasePassphraseProviderTest {
     @Test
     fun getOrCreate_persistsOneThirtyTwoBytePassphrase() {
         val store = InMemoryStore()
-        val provider = DatabasePassphraseProvider(store)
+        val provider = DatabasePassphraseProvider(store, JvmPassphraseBase64Codec)
 
         val first = provider.getOrCreate()
         val second = provider.getOrCreate()
@@ -30,5 +31,11 @@ class DatabasePassphraseProviderTest {
             }
             return true
         }
+    }
+
+    private object JvmPassphraseBase64Codec : PassphraseBase64Codec {
+        override fun encode(value: ByteArray): String = Base64.getEncoder().encodeToString(value)
+
+        override fun decode(value: String): ByteArray = Base64.getDecoder().decode(value)
     }
 }
