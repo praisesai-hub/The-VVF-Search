@@ -6,6 +6,7 @@ import java.net.UnknownHostException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -83,7 +84,8 @@ class CloudSyncEngineTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(false, result.isRetryable)
-        assertTrue(result.message.contains("does not exist"))
+        assertEquals("The file operation could not be completed.", result.message)
+        assertFalse(result.message.contains(missing.absolutePath))
         assertEquals(null, adapter.uploadedFile)
     }
 
@@ -97,7 +99,8 @@ class CloudSyncEngineTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(false, result.isRetryable)
-        assertTrue(result.message.contains("No supported provider adapter"))
+        assertEquals("The operation could not be completed.", result.message)
+        assertFalse(result.message.contains("DROPBOX"))
     }
 
     @Test
