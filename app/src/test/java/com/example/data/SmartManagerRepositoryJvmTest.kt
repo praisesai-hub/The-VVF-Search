@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import com.example.ai.SemanticEmbeddingProvider
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -104,7 +105,7 @@ class SmartManagerRepositoryJvmTest {
         assertFalse(queued)
         verify(exactly = 0) { dao.getAllPlugins() }
         verify(exactly = 0) { dao.getCloudSyncItems() }
-        verify(exactly = 0) { dao.insertCloudSyncItem(any()) }
+        coVerify(exactly = 0) { dao.insertCloudSyncItem(any()) }
     }
 
     private fun repository(
