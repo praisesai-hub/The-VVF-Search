@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import com.example.storage.VaultStorageResult
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
