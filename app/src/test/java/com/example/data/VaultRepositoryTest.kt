@@ -154,6 +154,71 @@ class VaultRepositoryTest {
     }
 
     @Test
+    fun encryptToVault_verificationFailureRemovesUncommittedCiphertextAndPreservesMetadata() = runBlocking {
+        val file = fileItem(id = 10L, name = "verify.pdf", path = "/source/verify.pdf")
+        val result = VaultStorageResult("/vault/verify.vvf", "verify.vvf", byteArrayOf(1, 2, 3))
+        val failure = IOException("ciphertext verification failed")
+        val operations = mutableListOf<VaultOperationEntity>()
+        repository.unlockWithPin("123456")
+        every {
+            PhysicalStorageManager.encryptSourceStreaming(context, file.path, any())
+        } returns Result.success(result)
+        every {
+            PhysicalStorageManager.verifyEncryptedVaultFile(result.vaultFilePath, result.iv, any())
+        } returns Result.failure(failure)
+        every { PhysicalStorageManager.removeEncryptedVaultFile(result.vaultFilePath) } returns true
+        coEvery { dao.upsertVaultOperation(capture(operations)) } just Runs
+
+        try {
+            repository.encryptToVault(file)
+            fail("Expected encrypted vault verification failure")
+        } catch (error: IOException) {
+            assertEquals(failure.message, error.message)
+        }
+
+        assertEquals(
+            listOf(VaultOperationState.PREPARED, VaultOperationState.ENCRYPTED, VaultOperationState.COMPLETED),
+            operations.map { it.state }
+        )
+        verify { PhysicalStorageManager.removeEncryptedVaultFile(result.vaultFilePath) }
+        coVerify(exactly = 0) { dao.commitVaultEncryptionMetadata(any(), any(), any()) }
+    }
+
+    @Test
+    fun encryptToVault_sourceRemovalFailureLeavesDurableRecoveryIntent() = runBlocking {
+        val file = fileItem(id = 11L, name = "retain.pdf", path = "/source/retain.pdf")
+        val result = VaultStorageResult("/vault/retain.vvf", "retain.vvf", byteArrayOf(1, 2, 3))
+        val operations = mutableListOf<VaultOperationEntity>()
+        repository.unlockWithPin("123456")
+        every {
+            PhysicalStorageManager.encryptSourceStreaming(context, file.path, any())
+        } returns Result.success(result)
+        every {
+            PhysicalStorageManager.verifyEncryptedVaultFile(result.vaultFilePath, result.iv, any())
+        } returns Result.success(Unit)
+        every { PhysicalStorageManager.removeSourceAfterVaultEncryption(context, file.path) } returns false
+        coEvery { dao.upsertVaultOperation(capture(operations)) } just Runs
+
+        try {
+            repository.encryptToVault(file)
+            fail("Expected plaintext removal failure")
+        } catch (error: IOException) {
+            assertEquals("Failed to remove plaintext source after encryption", error.message)
+        }
+
+        assertEquals(
+            listOf(
+                VaultOperationState.PREPARED,
+                VaultOperationState.ENCRYPTED,
+                VaultOperationState.VERIFIED,
+                VaultOperationState.SOURCE_REMOVAL_PENDING
+            ),
+            operations.map { it.state }
+        )
+        coVerify(exactly = 0) { dao.commitVaultEncryptionMetadata(any(), any(), any()) }
+    }
+
+    @Test
     fun unlockFromVault_persistsRestoreIntentBeforeVaultFileRemovalAndMetadataCommit() = runBlocking {
         val target = fileItem(id = 12L, name = "photo.jpg", path = "/source/photo.jpg")
         val vaultItem = vaultItem(id = 31L, originalName = target.name)
@@ -240,6 +305,37 @@ class VaultRepositoryTest {
         coVerify(exactly = 0) { dao.getVaultFileByName(any()) }
         coVerify(exactly = 0) { dao.updateFile(any()) }
         coVerify(exactly = 0) { dao.deleteVaultItemById(any()) }
+    }
+
+    @Test
+    fun unlockFromVault_vaultRemovalFailureLeavesDurableRecoveryIntent() = runBlocking {
+        val target = fileItem(id = 18L, name = "recover.txt", path = "/source/recover.txt")
+        val vaultItem = vaultItem(id = 54L, originalName = target.name)
+        val operations = mutableListOf<VaultOperationEntity>()
+        repository.unlockWithPin("123456")
+        every {
+            PhysicalStorageManager.decryptToRestoreDestinationStreaming(context, any(), any())
+        } returns Result.success(target.path)
+        every { PhysicalStorageManager.removeEncryptedVaultFile(vaultItem.encryptedFilePath) } returns false
+        coEvery { dao.upsertVaultOperation(capture(operations)) } just Runs
+
+        try {
+            repository.unlockFromVault(vaultItem, target)
+            fail("Expected encrypted vault removal failure")
+        } catch (error: IOException) {
+            assertEquals("Unable to delete encrypted vault file after restoration", error.message)
+        }
+
+        assertEquals(
+            listOf(
+                VaultOperationState.PREPARED,
+                VaultOperationState.RESTORE_WRITE_PENDING,
+                VaultOperationState.RESTORED,
+                VaultOperationState.VAULT_REMOVAL_PENDING
+            ),
+            operations.map { it.state }
+        )
+        coVerify(exactly = 0) { dao.commitVaultRestoreMetadata(any(), vaultItem.id, any()) }
     }
 
     private fun fileItem(
