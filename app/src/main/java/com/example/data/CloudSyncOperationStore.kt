@@ -72,6 +72,23 @@ interface CloudSyncOperationStore {
     @Query(
         """
         UPDATE cloud_sync
+        SET remoteFileId = COALESCE(NULLIF(:remoteFileId, ''), remoteFileId),
+            resumableSessionUri = COALESCE(NULLIF(:resumableSessionUri, ''), resumableSessionUri),
+            resumableBytesCommitted = CASE WHEN :bytesCommitted >= 0 THEN :bytesCommitted ELSE resumableBytesCommitted END
+        WHERE operationId = :operationId AND status = 'UPLOADING' AND leaseOwner = :leaseOwner
+        """
+    )
+    suspend fun updateTransferState(
+        operationId: String,
+        leaseOwner: String,
+        remoteFileId: String,
+        resumableSessionUri: String,
+        bytesCommitted: Long
+    ): Int
+
+    @Query(
+        """
+        UPDATE cloud_sync
         SET status = :status,
             heartbeatAtMs = :nowMs,
             completedAtMs = CASE WHEN :status = 'FAILED' THEN :nowMs ELSE 0 END,

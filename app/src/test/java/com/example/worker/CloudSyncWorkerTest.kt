@@ -195,6 +195,23 @@ private class FakeCloudSyncOperationStore(
         return 1
     }
 
+    override suspend fun updateTransferState(
+        operationId: String,
+        leaseOwner: String,
+        remoteFileId: String,
+        resumableSessionUri: String,
+        bytesCommitted: Long
+    ): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(
+            remoteFileId = remoteFileId.ifBlank { items[index].remoteFileId },
+            resumableSessionUri = resumableSessionUri.ifBlank { items[index].resumableSessionUri },
+            resumableBytesCommitted = bytesCommitted
+        )
+        return 1
+    }
+
     override suspend fun markFailed(
         operationId: String,
         leaseOwner: String,
@@ -323,6 +340,12 @@ class CloudSyncWorkerTest {
 
         fakeAdapter.shouldFail = false
         fakeAdapter.exceptionToThrow = null
+        fakeAdapter.resultByRemotePath[tempFile.name] = CloudSyncResult.Success(
+            bytesTransferred = tempFile.length(),
+            remoteFileId = "remote-101",
+            resumableSessionUri = "session-101",
+            bytesCommitted = tempFile.length()
+        )
 
         val worker = createWorker(runAttemptCount = 0)
 
@@ -339,6 +362,9 @@ class CloudSyncWorkerTest {
         assertTrue((updatedItem?.startedAtMs ?: 0L) > 0L)
         assertTrue((updatedItem?.heartbeatAtMs ?: 0L) > 0L)
         assertTrue((updatedItem?.completedAtMs ?: 0L) > 0L)
+        assertEquals("remote-101", updatedItem?.remoteFileId)
+        assertEquals("session-101", updatedItem?.resumableSessionUri)
+        assertEquals(tempFile.length(), updatedItem?.resumableBytesCommitted)
     }
 
     @Test

@@ -96,7 +96,10 @@ data class CloudSyncItemEntity(
     val startedAtMs: Long = 0L,
     val heartbeatAtMs: Long = 0L,
     val completedAtMs: Long = 0L,
-    val lastErrorCode: String? = null
+    val lastErrorCode: String? = null,
+    val remoteFileId: String = "",
+    val resumableSessionUri: String = "",
+    val resumableBytesCommitted: Long = 0L
 )
 
 @JsonClass(generateAdapter = true)

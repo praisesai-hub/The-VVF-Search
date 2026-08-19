@@ -390,6 +390,78 @@ class GoogleDriveProviderAdapterTest {
         assertEquals("no network", error.message)
     }
 
+    @Test
+    fun uploadOperationLookup_escapesApostrophesAndBackslashesInQueryValues() {
+        val file = File.createTempFile("upload_escape", ".txt").apply {
+            writeText("content")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var capturedQuery: String? = null
+        fakeInterceptor.responseProvider = { request ->
+            capturedQuery = request.url.queryParameter("q")
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("{\"files\":[{\"id\":\"existing-id\"}]}".toResponseBody("application/json".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(file, "remote.txt", "op'\\test")
+        }
+
+        assertEquals("existing-id", (result as CloudSyncResult.Success).remoteFileId)
+        assertTrue(capturedQuery.orEmpty().contains("op\\'\\\\test"))
+    }
+
+    @Test
+    fun uploadFile_reusesPersistedSessionAndResumesFromServerOffset() {
+        val file = File.createTempFile("upload_resume", ".txt").apply {
+            writeText("0123456789")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        val ranges = mutableListOf<String>()
+        val progress = mutableListOf<CloudTransferProgress>()
+        fakeInterceptor.responseProvider = { request ->
+            val range = request.header("Content-Range").orEmpty()
+            ranges += range
+            if (range.startsWith("bytes */")) {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(308)
+                    .message("Resume Incomplete")
+                    .header("Range", "bytes=0-2")
+                    .build()
+            } else {
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"id\":\"remote-resumed\"}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                file,
+                "remote.txt",
+                "",
+                CloudTransferState("", "https://upload.googleapis.com/session-1", 0L)
+            ) { progress += it }
+        }
+
+        assertEquals("remote-resumed", (result as CloudSyncResult.Success).remoteFileId)
+        assertEquals(listOf("bytes */10", "bytes 3-9/10"), ranges)
+        assertEquals(10L, progress.last().bytesCommitted)
+    }
+
     private class FakeInterceptor : Interceptor {
         lateinit var responseProvider: (Request) -> Response
 

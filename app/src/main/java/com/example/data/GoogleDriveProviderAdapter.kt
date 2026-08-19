@@ -1,66 +1,54 @@
 package com.example.data
 
+import com.example.context.drive.DriveAuthorizationPort
+import com.example.domain.error.DiagnosticLogger
+import com.example.domain.error.DomainErrorMapper
 import com.google.gson.Gson
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.BufferedSink
 import java.io.File
-import com.example.context.drive.DriveAuthorizationPort
 import java.io.IOException
+import java.io.RandomAccessFile
 
-/**
- * Google Drive implementation of [CloudProviderAdapter] supporting authenticated access,
- * metadata creation, resumable upload preparation, secure upload, and remote file ID handling.
- */
+/** Google Drive adapter with operation-ID deduplication and resumable upload recovery. */
 class GoogleDriveProviderAdapter(
     private val driveAuthorization: DriveAuthorizationPort,
     private val httpClient: OkHttpClient = OkHttpClient()
 ) : CloudProviderAdapter {
-
     override val providerId: String = "GOOGLE_DRIVE"
 
-    @Suppress("LongMethod", "NestedBlockDepth", "ReturnCount")
     override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult =
-        uploadFileWithOperationId(file, remotePath, null)
+        uploadFile(file, remotePath, "", CloudTransferState()) {}
 
-    @Suppress("LongMethod", "NestedBlockDepth", "ReturnCount")
     override suspend fun uploadFile(file: File, remotePath: String, operationId: String): CloudSyncResult =
-        uploadFileWithOperationId(file, remotePath, operationId)
+        uploadFile(file, remotePath, operationId, CloudTransferState()) {}
 
     @Suppress("LongMethod", "NestedBlockDepth", "ReturnCount")
-    private suspend fun uploadFileWithOperationId(
+    override suspend fun uploadFile(
         file: File,
         remotePath: String,
-        operationId: String?
+        operationId: String,
+        transferState: CloudTransferState,
+        onProgress: suspend (CloudTransferProgress) -> Unit
     ): CloudSyncResult {
         if (!file.exists() || !file.isFile) {
-            return CloudSyncResult.Error(
-                message = "The selected file is unavailable.",
-                isRetryable = false
-            )
+            return CloudSyncResult.Error("The selected file is unavailable.", false)
         }
-
         val authorization = driveAuthorization.authorizationHeader() ?: return CloudSyncResult.Error(
-            message = "Upload failed: user is not authenticated with Google Drive.",
-            isRetryable = false
+            "Upload failed: user is not authenticated with Google Drive.", false
         )
-
         return try {
-            if (!operationId.isNullOrBlank()) {
-                val lookupRequest = Request.Builder()
-                    .url("https://www.googleapis.com/drive/v3/files?q=appProperties%20has%20%7B%20key='vvf_operation_id'%20and%20value='$operationId'%20%7D%20and%20trashed=false")
-                    .header("Authorization", authorization)
-                    .get()
-                    .build()
-                httpClient.newCall(lookupRequest).execute().use { lookupResponse ->
-                    val lookupBody = lookupResponse.body?.string().orEmpty()
-                    if (!lookupResponse.isSuccessful) {
-                        return classifyHttpError("Cloud idempotency lookup failed", lookupResponse.code, lookupBody)
-                    }
-                    if (hasExistingOperation(lookupBody)) return CloudSyncResult.Success()
-                }
+            if (operationId.isNotBlank()) {
+                val existing = findFileIds(
+                    authorization,
+                    "appProperties has { key='vvf_operation_id' and value='${escapeDriveQueryValue(operationId)}' } and trashed = false"
+                ).firstOrNull()
+                if (existing != null) return CloudSyncResult.Success(file.length(), existing)
             }
 
             val mimeType = determineMimeType(file)
@@ -68,178 +56,292 @@ class GoogleDriveProviderAdapter(
                 "name" to remotePath,
                 "description" to "Uploaded via Smart Vault Engine"
             )
-            if (!operationId.isNullOrBlank()) {
-                metadata["appProperties"] = mapOf("vvf_operation_id" to operationId)
-            }
+            if (operationId.isNotBlank()) metadata["appProperties"] = mapOf("vvf_operation_id" to operationId)
             val metadataJson = Gson().toJson(metadata)
+            val sessionUri = if (transferState.resumableSessionUri.isNotBlank()) {
+                transferState.resumableSessionUri
+            } else {
+                initiateResumableUpload(authorization, mimeType, file.length(), metadataJson)
+                    ?: return CloudSyncResult.Error("Cloud upload could not be initialized: Missing 'Location' header.", false)
+            }
 
-            // 1. Prepare Resumable Upload
-            val initRequest = Request.Builder()
-                .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable")
-                .header("Authorization", authorization)
-                .header("Content-Type", "application/json; charset=UTF-8")
-                .header("X-Upload-Content-Type", mimeType)
-                .header("X-Upload-Content-Length", file.length().toString())
-                .post(metadataJson.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
-                .build()
-
-            httpClient.newCall(initRequest).execute().use { initResponse ->
-                if (!initResponse.isSuccessful) {
-                    return classifyHttpError("Resumable upload preparation failed", initResponse.code, initResponse.body?.string())
-                }
-
-                val uploadUrl = initResponse.header("Location") ?: return CloudSyncResult.Error(
-                    message = "Cloud upload could not be initialized.",
-                    isRetryable = false
+            onProgress(
+                CloudTransferProgress(
+                    resumableSessionUri = sessionUri,
+                    bytesCommitted = transferState.bytesCommitted
                 )
+            )
+            var offset = transferState.bytesCommitted.coerceIn(0L, file.length())
+            if (transferState.resumableSessionUri.isNotBlank()) {
+                when (val probe = queryUploadOffset(authorization, sessionUri, file.length())) {
+                    is UploadProbe.Completed -> return CloudSyncResult.Success(
+                        file.length(), probe.fileId, sessionUri, file.length()
+                    )
+                    is UploadProbe.Offset -> offset = probe.offset
+                    UploadProbe.Unknown -> Unit
+                }
+            }
 
-                // 2. Perform upload
-                val uploadRequest = Request.Builder()
-                    .url(uploadUrl)
-                    .put(file.asRequestBody(mimeType.toMediaTypeOrNull()))
+            while (offset < file.length()) {
+                val endExclusive = minOf(offset + UPLOAD_CHUNK_BYTES, file.length())
+                val request = Request.Builder()
+                    .url(sessionUri)
+                    .header("Authorization", authorization)
+                    .header("Content-Length", (endExclusive - offset).toString())
+                    .header("Content-Range", "bytes $offset-${endExclusive - 1}/${file.length()}")
+                    .put(FileSliceRequestBody(file, offset, endExclusive - offset, mimeType.toMediaTypeOrNull()))
                     .build()
-
-                return httpClient.newCall(uploadRequest).execute().use { uploadResponse ->
-                    if (!uploadResponse.isSuccessful) {
-                        return classifyHttpError(
+                httpClient.newCall(request).execute().use { response ->
+                    when {
+                        response.code == 308 -> {
+                            offset = parseCommittedOffset(response.header("Range"), offset, endExclusive)
+                            onProgress(CloudTransferProgress(resumableSessionUri = sessionUri, bytesCommitted = offset))
+                        }
+                        response.isSuccessful -> {
+                            val remoteId = extractFileIdFromJson(response.body?.string().orEmpty())
+                                ?: return CloudSyncResult.Error(
+                                    "Failed to parse remote file ID from response",
+                                    false,
+                                    resumableSessionUri = sessionUri,
+                                    bytesCommitted = endExclusive
+                                )
+                            onProgress(CloudTransferProgress(remoteId, sessionUri, file.length()))
+                            return CloudSyncResult.Success(file.length(), remoteId, sessionUri, file.length())
+                        }
+                        else -> return classifyHttpError(
                             "File upload failed",
-                            uploadResponse.code,
-                            uploadResponse.body?.string()
-                        )
-                    }
-
-                    val responseBody = uploadResponse.body?.string() ?: ""
-                    val fileId = extractFileIdFromJson(responseBody)
-                    if (fileId != null) {
-                        CloudSyncResult.Success(bytesTransferred = file.length())
-                    } else {
-                        CloudSyncResult.Error(
-                            message = "Failed to parse remote file ID from response",
-                            isRetryable = false
+                            response.code,
+                            response.body?.string(),
+                            sessionUri,
+                            offset
                         )
                     }
                 }
             }
+            CloudSyncResult.Error(
+                "Cloud upload ended without a completion response.",
+                true,
+                resumableSessionUri = sessionUri,
+                bytesCommitted = offset
+            )
+        } catch (e: DriveHttpException) {
+            classifyHttpError("Resumable upload preparation failed", e.code, null, transferState.resumableSessionUri, transferState.bytesCommitted)
+        } catch (_: MissingUploadLocationException) {
+            CloudSyncResult.Error("Cloud upload could not be initialized: Missing 'Location' header.", false)
         } catch (e: Exception) {
-            classifyException(e)
+            classifyException(e, transferState.resumableSessionUri, transferState.bytesCommitted)
         }
     }
-
-    private fun hasExistingOperation(body: String): Boolean = runCatching {
-        val files = Gson().fromJson(body, Map::class.java)["files"] as? List<*>
-        !files.isNullOrEmpty()
-    }.getOrDefault(false)
 
     @Suppress("NestedBlockDepth", "ReturnCount")
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult {
         val authorization = driveAuthorization.authorizationHeader() ?: return CloudSyncResult.Error(
-            message = "Download failed: user is not authenticated with Google Drive.",
-            isRetryable = false
+            "Download failed: user is not authenticated with Google Drive.", false
         )
-
         return try {
-            // 1. Search for file ID matching remotePath name
-            val searchRequest = Request.Builder()
-                .url("https://www.googleapis.com/drive/v3/files?q=name='$remotePath' and trashed=false")
+            val fileId = findFileIds(
+                authorization,
+                "name = '${escapeDriveQueryValue(remotePath)}' and trashed = false"
+            ).firstOrNull() ?: return CloudSyncResult.Error(
+                "The requested cloud file was not found.", false
+            )
+            val request = Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
                 .header("Authorization", authorization)
                 .get()
                 .build()
-
-            httpClient.newCall(searchRequest).execute().use { searchResponse ->
-                if (!searchResponse.isSuccessful) {
-                    return classifyHttpError("File search failed", searchResponse.code, searchResponse.body?.string())
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return classifyHttpError("Media download failed", response.code, response.body?.string())
                 }
-
-                val searchBody = searchResponse.body?.string() ?: ""
-                val fileId = extractFileIdFromJson(searchBody) ?: return CloudSyncResult.Error(
-                    message = "The requested cloud file was not found.",
-                    isRetryable = false
+                val body = response.body ?: return CloudSyncResult.Error(
+                    "Media download response body was empty.", false
                 )
-
-                // 2. Download media content
-                val downloadRequest = Request.Builder()
-                    .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
-                    .header("Authorization", authorization)
-                    .get()
-                    .build()
-
-                return httpClient.newCall(downloadRequest).execute().use { downloadResponse ->
-                    if (!downloadResponse.isSuccessful) {
-                        return classifyHttpError("Media download failed", downloadResponse.code, downloadResponse.body?.string())
-                    }
-
-                    val responseBody = downloadResponse.body ?: return CloudSyncResult.Error(
-                        message = "Media download response body was empty.",
-                        isRetryable = false
-                    )
-
-                    val bytesTransferred = responseBody.byteStream().use { input ->
-                        destinationFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    if (bytesTransferred <= 0L) {
-                        destinationFile.delete()
-                        return CloudSyncResult.Error(
-                            message = "Media download response body was empty.",
-                            isRetryable = false
-                        )
-                    }
-                    CloudSyncResult.Success(bytesTransferred = bytesTransferred)
+                val bytes = body.byteStream().use { input ->
+                    destinationFile.outputStream().use { output -> input.copyTo(output) }
                 }
+                if (bytes <= 0L) {
+                    destinationFile.delete()
+                    return CloudSyncResult.Error("Media download response body was empty.", false)
+                }
+                CloudSyncResult.Success(bytes, fileId, bytesCommitted = bytes)
             }
+        } catch (e: DriveHttpException) {
+            classifyHttpError("File search failed", e.code, null)
         } catch (e: Exception) {
             classifyException(e)
         }
     }
 
-    private fun determineMimeType(file: File): String {
-        return when (file.extension.lowercase()) {
-            "pdf" -> "application/pdf"
-            "png" -> "image/png"
-            "jpg", "jpeg" -> "image/jpeg"
-            "txt" -> "text/plain"
-            "json" -> "application/json"
-            else -> "application/octet-stream"
+    private fun initiateResumableUpload(
+        authorization: String,
+        mimeType: String,
+        size: Long,
+        metadataJson: String
+    ): String? {
+        val request = Request.Builder()
+            .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable")
+            .header("Authorization", authorization)
+            .header("Content-Type", "application/json; charset=UTF-8")
+            .header("X-Upload-Content-Type", mimeType)
+            .header("X-Upload-Content-Length", size.toString())
+            .post(metadataJson.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
+            .build()
+        return httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw DriveHttpException(response.code)
+            response.header("Location") ?: throw MissingUploadLocationException()
         }
     }
 
-    private fun extractFileIdFromJson(json: String): String? {
-        val regex = """"(?:id|fileId)"\s*:\s*"([^"]+)"""".toRegex()
-        val matchResult = regex.find(json)
-        return matchResult?.groupValues?.get(1)
+    private fun queryUploadOffset(authorization: String, sessionUri: String, size: Long): UploadProbe {
+        val request = Request.Builder()
+            .url(sessionUri)
+            .header("Authorization", authorization)
+            .header("Content-Length", "0")
+            .header("Content-Range", "bytes */$size")
+            .put(ByteArray(0).toRequestBody(null))
+            .build()
+        return runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                when {
+                    response.code == 308 -> UploadProbe.Offset(parseCommittedOffset(response.header("Range"), 0L, 0L))
+                    response.isSuccessful -> extractFileIdFromJson(response.body?.string().orEmpty())
+                        ?.let(UploadProbe::Completed) ?: UploadProbe.Unknown
+                    else -> UploadProbe.Unknown
+                }
+            }
+        }.getOrDefault(UploadProbe.Unknown)
     }
 
-    private fun classifyHttpError(context: String, code: Int, errorBody: String?): CloudSyncResult.Error {
-        val safeMessage = "$context: HTTP $code"
-        val isRetryable = code == 408 || code == 429 || code >= 500
+    private fun findFileIds(authorization: String, query: String): List<String> {
+        val ids = mutableListOf<String>()
+        var pageToken: String? = null
+        do {
+            val urlBuilder = "https://www.googleapis.com/drive/v3/files".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("spaces", "drive")
+                .addQueryParameter("fields", "nextPageToken,incompleteSearch,files(id)")
+                .addQueryParameter("pageSize", "1000")
+            pageToken?.let { urlBuilder.addQueryParameter("pageToken", it) }
+            val request = Request.Builder()
+                .url(urlBuilder.build())
+                .header("Authorization", authorization)
+                .get()
+                .build()
+            val body = httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw DriveHttpException(response.code)
+                response.body?.string().orEmpty()
+            }
+            val root = Gson().fromJson(body, Map::class.java)
+            val files = root["files"] as? List<*> ?: emptyList<Any>()
+            files.mapNotNullTo(ids) {
+                val file = it as? Map<*, *>
+                (file?.get("id") ?: file?.get("fileId"))?.toString()
+            }
+            pageToken = root["nextPageToken"]?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+        } while (pageToken != null)
+        return ids
+    }
+
+    private fun determineMimeType(file: File): String = when (file.extension.lowercase()) {
+        "pdf" -> "application/pdf"
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "txt" -> "text/plain"
+        "json" -> "application/json"
+        else -> "application/octet-stream"
+    }
+
+    private fun extractFileIdFromJson(json: String): String? =
+        """"(?:id|fileId)"\s*:\s*"([^"]+)""".toRegex().find(json)?.groupValues?.get(1)
+
+    private fun escapeDriveQueryValue(value: String): String =
+        value.replace("\\", "\\\\").replace("'", "\\'")
+
+    private fun parseCommittedOffset(range: String?, currentOffset: Long, endExclusive: Long): Long {
+        val end = range?.substringAfterLast('-')?.toLongOrNull()
+        return if (end != null) maxOf(currentOffset, end + 1L) else endExclusive.coerceAtLeast(currentOffset)
+    }
+
+    private fun classifyHttpError(
+        context: String,
+        code: Int,
+        errorBody: String?,
+        sessionUri: String? = null,
+        bytesCommitted: Long = 0L
+    ): CloudSyncResult.Error {
+        val retryable = code == 408 || code == 429 || code >= 500 || (code == 404 && sessionUri != null)
         return CloudSyncResult.Error(
-            message = safeMessage,
-            isRetryable = isRetryable,
-            domainError = com.example.domain.error.DomainErrorMapper.fromThrowable(
+            message = "$context: HTTP $code",
+            isRetryable = retryable,
+            domainError = DomainErrorMapper.fromThrowable(
                 operation = "DRIVE_HTTP_REQUEST",
                 cause = IOException("HTTP $code"),
                 provider = providerId
-            )
+            ),
+            resumableSessionUri = sessionUri,
+            bytesCommitted = bytesCommitted
         )
     }
 
-    private fun classifyException(e: Exception): CloudSyncResult.Error {
-        val isRetryable = e is java.net.UnknownHostException ||
-                e is java.net.ConnectException ||
-                e is IOException ||
-                e.message?.contains("Unable to resolve host") == true
-        val domainError = com.example.domain.error.DomainErrorMapper.fromThrowable(
+    private fun classifyException(
+        exception: Exception,
+        sessionUri: String? = null,
+        bytesCommitted: Long = 0L
+    ): CloudSyncResult.Error {
+        val retryable = exception is java.net.UnknownHostException ||
+            exception is java.net.ConnectException ||
+            exception is IOException ||
+            exception.message?.contains("Unable to resolve host") == true
+        val domainError = DomainErrorMapper.fromThrowable(
             operation = "DRIVE_TRANSFER",
-            cause = e,
+            cause = exception,
             provider = providerId
         )
-        com.example.domain.error.DiagnosticLogger.log("GoogleDriveProviderAdapter", domainError)
+        DiagnosticLogger.log("GoogleDriveProviderAdapter", domainError)
         return CloudSyncResult.Error(
             message = domainError.userMessage.value,
-            isRetryable = isRetryable,
-            cause = e,
-            domainError = domainError
+            isRetryable = retryable,
+            cause = exception,
+            domainError = domainError,
+            resumableSessionUri = sessionUri,
+            bytesCommitted = bytesCommitted
         )
+    }
+
+    private class DriveHttpException(val code: Int) : IOException("HTTP $code")
+    private class MissingUploadLocationException : IOException("Missing Location header")
+
+    private sealed class UploadProbe {
+        data class Offset(val offset: Long) : UploadProbe()
+        data class Completed(val fileId: String) : UploadProbe()
+        data object Unknown : UploadProbe()
+    }
+
+    private class FileSliceRequestBody(
+        private val file: File,
+        private val offset: Long,
+        private val length: Long,
+        private val mediaType: MediaType?
+    ) : RequestBody() {
+        override fun contentType(): MediaType? = mediaType
+        override fun contentLength(): Long = length
+        override fun writeTo(sink: BufferedSink) {
+            RandomAccessFile(file, "r").use { input ->
+                input.seek(offset)
+                val buffer = ByteArray(64 * 1024)
+                var remaining = length
+                while (remaining > 0L) {
+                    val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                    if (read <= 0) throw IOException("Unexpected end of upload source")
+                    sink.write(buffer, 0, read)
+                    remaining -= read
+                }
+            }
+        }
+    }
+
+    companion object {
+        private const val UPLOAD_CHUNK_BYTES = 256L * 1024L
     }
 }

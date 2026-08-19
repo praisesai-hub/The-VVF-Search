@@ -13,6 +13,7 @@ private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
 private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
 private const val DATABASE_VERSION_WITH_VIDEO_EVIDENCE = 7
 private const val DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT = 8
+private const val DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE = 9
 
 @Database(
     entities = [
@@ -22,7 +23,7 @@ private const val DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT = 8
         PluginEntity::class,
         WorkOperationEntity::class
     ],
-    version = DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT,
+    version = DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -153,6 +154,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(
+            DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT,
+            DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cloud_sync", "remoteFileId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "resumableSessionUri", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "resumableBytesCommitted", "INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATION_4_5 = object : Migration(
             DATABASE_VERSION_BEFORE_VAULT_FORMAT,
             DATABASE_VERSION_WITH_VAULT_FORMAT
@@ -202,7 +214,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
 
                 val instance = builder.build()
                 INSTANCE = instance

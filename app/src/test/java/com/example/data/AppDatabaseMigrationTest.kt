@@ -372,6 +372,31 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun testMigrationFrom8To9AddsCloudTransferStateColumns() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(8) {
+                override fun onCreate(db: SupportSQLiteDatabase) {}
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+        db.execSQL("CREATE TABLE cloud_sync (id INTEGER PRIMARY KEY NOT NULL, operationId TEXT NOT NULL, status TEXT NOT NULL)")
+        db.execSQL("INSERT INTO cloud_sync (id, operationId, status) VALUES (901, 'op-901', 'QUEUED')")
+
+        AppDatabase.MIGRATION_8_9.migrate(db)
+
+        val cursor = db.query("SELECT remoteFileId, resumableSessionUri, resumableBytesCommitted FROM cloud_sync WHERE id = 901")
+        assertTrue(cursor.moveToFirst())
+        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("remoteFileId")))
+        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("resumableSessionUri")))
+        assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("resumableBytesCommitted")))
+        cursor.close()
+        db.close()
+    }
+
+    @Test
     fun testFullMigrationPathFrom1To4PreservesData() {
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
             .name("test_migration_db")

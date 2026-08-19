@@ -143,6 +143,17 @@ private class InstrumentedWorkerOperationStore(
         return 1
     }
 
+    override suspend fun updateTransferState(operationId: String, leaseOwner: String, remoteFileId: String, resumableSessionUri: String, bytesCommitted: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(
+            remoteFileId = remoteFileId.ifBlank { items[index].remoteFileId },
+            resumableSessionUri = resumableSessionUri.ifBlank { items[index].resumableSessionUri },
+            resumableBytesCommitted = bytesCommitted
+        )
+        return 1
+    }
+
     override suspend fun markFailed(operationId: String, leaseOwner: String, status: String, errorCode: String?, nowMs: Long): Int {
         val index = indexFor(operationId)
         if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0

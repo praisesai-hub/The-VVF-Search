@@ -17,7 +17,8 @@ class CloudSyncEngine(
     private val context: Context,
     private val dao: FileDao,
     private val authManager: DriveAuthorizationPort,
-    private val providerAdapterOverride: CloudProviderAdapter? = null
+    private val providerAdapterOverride: CloudProviderAdapter? = null,
+    private val operationStore: CloudSyncOperationStore? = null
 ) {
     private val providerRegistry = CloudProviderRegistry(authManager, providerAdapterOverride)
     companion object {
@@ -61,7 +62,27 @@ class CloudSyncEngine(
 
         Log.i(TAG, "Starting sync for item ${item.id} (${item.fileName}) with provider ${item.provider}...")
         return try {
-            adapter.uploadFile(file, item.fileName, item.operationId)
+            adapter.uploadFile(
+                file = file,
+                remotePath = item.fileName,
+                operationId = item.operationId,
+                transferState = CloudTransferState(
+                    remoteFileId = item.remoteFileId,
+                    resumableSessionUri = item.resumableSessionUri,
+                    bytesCommitted = item.resumableBytesCommitted
+                )
+            ) { progress ->
+                val leaseOwner = item.leaseOwner.orEmpty()
+                if (leaseOwner.isNotBlank()) {
+                    operationStore?.updateTransferState(
+                        operationId = item.operationId,
+                        leaseOwner = leaseOwner,
+                        remoteFileId = progress.remoteFileId.orEmpty(),
+                        resumableSessionUri = progress.resumableSessionUri.orEmpty(),
+                        bytesCommitted = progress.bytesCommitted
+                    )
+                }
+            }
         } catch (e: Exception) {
             val error = DomainErrorMapper.fromThrowable(
                 operation = "CLOUD_TRANSFER",

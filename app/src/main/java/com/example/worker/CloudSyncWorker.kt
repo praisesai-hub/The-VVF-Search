@@ -88,7 +88,8 @@ class CloudSyncWorker @JvmOverloads constructor(
                 context = applicationContext,
                 dao = dao,
                 authManager = driveAuthorization,
-                providerAdapterOverride = providerAdapterOverride
+                providerAdapterOverride = providerAdapterOverride,
+                operationStore = leaseStore
             )
 
             var syncedCount = 0
@@ -128,6 +129,13 @@ class CloudSyncWorker @JvmOverloads constructor(
                     )
                     when (val syncResult = syncEngine.syncItem(claimedItem)) {
                         is CloudSyncResult.Success -> {
+                            leaseStore.updateTransferState(
+                                operationId = operationId,
+                                leaseOwner = leaseOwner,
+                                remoteFileId = syncResult.remoteFileId.orEmpty(),
+                                resumableSessionUri = syncResult.resumableSessionUri.orEmpty(),
+                                bytesCommitted = syncResult.bytesCommitted
+                            )
                             if (leaseStore.markCompleted(operationId, leaseOwner, System.currentTimeMillis()) > 0) {
                                 syncedCount++
                             } else {
@@ -135,6 +143,13 @@ class CloudSyncWorker @JvmOverloads constructor(
                             }
                         }
                         is CloudSyncResult.Error -> {
+                            leaseStore.updateTransferState(
+                                operationId = operationId,
+                                leaseOwner = leaseOwner,
+                                remoteFileId = syncResult.remoteFileId.orEmpty(),
+                                resumableSessionUri = syncResult.resumableSessionUri.orEmpty(),
+                                bytesCommitted = syncResult.bytesCommitted
+                            )
                             val canRetry = syncResult.isRetryable &&
                                 runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS
                             val errorCode = syncResult.domainError?.diagnostics?.reasonCode
