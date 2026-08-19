@@ -35,6 +35,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import com.example.data.OcrTextBlock
 import java.io.File
 
@@ -84,7 +86,7 @@ fun OcrOverlayImage(
                 ) {
                     Image(
                         bitmap = imageBitmap,
-                        contentDescription = "OCR Image Preview",
+                        contentDescription = stringResource(R.string.ocr_image_preview),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit
                     )
@@ -141,7 +143,8 @@ fun OcrOverlayImage(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Image Preview Unavailable",
+                                            text = stringResource(R.string.image_preview_unavailable),
+
                     color = Color.White,
                     fontSize = 14.sp
                 )
@@ -159,7 +162,7 @@ fun OcrOverlayImage(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "Selected Block Text:",
+                        text = stringResource(R.string.selected_block_text),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer

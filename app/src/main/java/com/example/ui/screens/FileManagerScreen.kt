@@ -173,7 +173,7 @@ fun FileManagerScreen(
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Pick", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.pick), fontWeight = FontWeight.Bold)
             }
         }
 
@@ -209,7 +209,7 @@ fun FileManagerScreen(
                 FilterChip(
                     selected = selectedCategory == category,
                     onClick = { viewModel.selectCategory(category) },
-                    label = { Text(category.name.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }) },
+                    label = { Text(localizedFileCategoryLabel(category)) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = BhagwaOrange,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -241,13 +241,13 @@ fun FileManagerScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Recycle Bin (${recycleBinFiles.size} files)",
+                        text = stringResource(R.string.recycle_bin_count, recycleBinFiles.size),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
                 }
                 Text(
-                    text = if (showRecycleBin) "Hide Trash" else "View Trash",
+                    text = if (showRecycleBin) stringResource(R.string.hide_trash) else stringResource(R.string.view_trash),
                     color = BhagwaOrange,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp
@@ -268,7 +268,7 @@ fun FileManagerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Deleted Files (Auto-purge after 30 days)",
+                        text = stringResource(R.string.deleted_files_auto_purge),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.error
@@ -281,7 +281,7 @@ fun FileManagerScreen(
                 }
                 if (recycleBinFiles.isEmpty()) {
                     Text(
-                        text = "Recycle Bin is empty.",
+                        text = stringResource(R.string.recycle_bin_empty),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -303,7 +303,7 @@ fun FileManagerScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(text = file.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                    Text(text = formatFileSize(file.sizeBytes), fontSize = 11.sp)
+                                    Text(text = formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size)), fontSize = 11.sp)
                                 }
                                 Row {
                                     IconButton(onClick = { viewModel.restoreFromRecycleBin(file) }) {
@@ -333,7 +333,7 @@ fun FileManagerScreen(
         )
         // Active Files List
         Text(
-            text = "Active Storage Files (${files.size})",
+            text = stringResource(R.string.active_storage_files, files.size),
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
@@ -355,7 +355,7 @@ fun FileManagerScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "No files found in this category.",
+                        text = stringResource(R.string.no_files_category),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -442,12 +442,11 @@ fun FileManagerScreen(
     if (encryptTargetFile != null) {
         AlertDialog(
             onDismissRequest = { encryptTargetFile = null },
-            title = { Text("Encrypt & Best-Effort Wipe") },
+            title = { Text(stringResource(R.string.encrypt_best_effort_wipe)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "This will encrypt \"${encryptTargetFile?.name}\" using AES-256 (Android Keystore) and store it in the secure Vault.\n\n" +
-                               "The original source file will be overwritten with random and zero data (3-pass Best-Effort Wipe) and then deleted.",
+                        text = stringResource(R.string.encrypt_to_vault_description, encryptTargetFile?.name.orEmpty()),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -458,7 +457,7 @@ fun FileManagerScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Disclaimer: Modern flash/SSD storage utilizes Wear-Leveling. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure.",
+                            text = stringResource(R.string.best_effort_wipe_disclaimer),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(10.dp),
@@ -477,7 +476,7 @@ fun FileManagerScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange)
                 ) {
-                    Text("Encrypt & Wipe")
+                    Text(stringResource(R.string.encrypt_wipe))
                 }
             },
             dismissButton = {
@@ -497,7 +496,7 @@ fun FileManagerScreen(
             },
             title = {
                 Text(
-                    text = "OCR Overlay: ${ocrOverlayFile?.name}",
+                    text = stringResource(R.string.ocr_overlay, ocrOverlayFile?.name.orEmpty()),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -515,7 +514,7 @@ fun FileManagerScreen(
                 } else {
                     Column {
                         Text(
-                            text = "Detected ${ocrOverlayBlocks.size} text blocks with bounding boxes:",
+                            text = stringResource(R.string.detected_text_blocks, ocrOverlayBlocks.size),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -535,12 +534,24 @@ fun FileManagerScreen(
                         ocrOverlayBlocks = emptyList()
                     }
                 ) {
-                    Text("Close")
+                    Text(stringResource(R.string.close))
                 }
             }
         )
     }
 }
+@Composable
+private fun localizedFileCategoryLabel(category: FileCategory): String = when (category) {
+    FileCategory.IMAGES -> stringResource(R.string.category_label_images)
+    FileCategory.DOCUMENTS -> stringResource(R.string.category_label_documents)
+    FileCategory.AUDIO -> stringResource(R.string.category_label_audio)
+    FileCategory.VIDEO -> stringResource(R.string.category_label_video)
+    FileCategory.DOWNLOADS -> stringResource(R.string.category_label_downloads)
+    FileCategory.ARCHIVES -> stringResource(R.string.category_label_archives)
+    FileCategory.APKS -> stringResource(R.string.category_label_apks)
+    FileCategory.OTHER -> stringResource(R.string.category_label_other)
+}
+
 @Composable
 fun FileManagerItemRow(modifier: Modifier = Modifier, 
     file: FileItemEntity,
@@ -597,7 +608,11 @@ fun FileManagerItemRow(modifier: Modifier = Modifier,
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "${formatFileSize(file.sizeBytes)} • ${formatDate(file.dateModifiedMs)}",
+                                text = stringResource(
+                                    R.string.format_file_size_category,
+                                    formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size)),
+                                    formatDate(file.dateModifiedMs)
+                                ),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -626,7 +641,7 @@ fun FileManagerItemRow(modifier: Modifier = Modifier,
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("OCR Overlay Preview") },
+                            text = { Text(stringResource(R.string.ocr_overlay_preview)) },
                             leadingIcon = { Icon(Icons.Default.Image, contentDescription = null, tint = SkyCyan) },
                             onClick = {
                                 showMenu = false
@@ -665,7 +680,7 @@ fun FileManagerItemRow(modifier: Modifier = Modifier,
                             color = BhagwaOrange.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                text = "Tags: ${file.tags}",
+                                text = stringResource(R.string.tags, file.tags),
                                 fontSize = 11.sp,
                                 color = BhagwaOrange,
                                 fontWeight = FontWeight.SemiBold,
@@ -679,7 +694,7 @@ fun FileManagerItemRow(modifier: Modifier = Modifier,
                             color = SkyCyan.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                text = "OCR Scanned",
+                                text = stringResource(R.string.ocr_scanned),
                                 fontSize = 11.sp,
                                 color = SkyCyan,
                                 fontWeight = FontWeight.SemiBold,
@@ -764,13 +779,13 @@ fun LocalFilePickerCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "Pick Local Storage Files",
+                        text = stringResource(R.string.pick_local_storage_files),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Select documents, photos, audio & videos",
+                        text = stringResource(R.string.select_documents_media),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -828,13 +843,13 @@ fun SafDirectoryPickerCard(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Link SAF Directory Tree",
+                            text = stringResource(R.string.link_saf_directory_tree),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Grant persistable full access to folders",
+                            text = stringResource(R.string.grant_persistable_access),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -851,7 +866,7 @@ fun SafDirectoryPickerCard(
         if (persistedFolders.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Linked Directories (${persistedFolders.size})",
+                text = stringResource(R.string.linked_directories, persistedFolders.size),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -904,7 +919,7 @@ fun SafDirectoryPickerCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "Unlink folder",
+                                contentDescription = stringResource(R.string.unlink_folder),
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(16.dp)
                             )

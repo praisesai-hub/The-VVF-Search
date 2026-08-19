@@ -72,8 +72,7 @@ object LightweightEmbeddingEngine {
     fun generateTextEmbedding(text: String): FloatArray? {
         if (text.isBlank()) return null
         val vector = FloatArray(DIMENSION)
-        val cleanText = text.lowercase().trim()
-        val words = cleanText.split(Regex("[^a-z0-9_]+")).filter { it.isNotBlank() }
+        val words = SearchTextTokenizer.tokenize(text)
         if (words.isEmpty()) return null
 
         for (word in words) {
@@ -81,9 +80,10 @@ object LightweightEmbeddingEngine {
             vector[wordHash] += 2.0f
 
             // Character trigrams for subword / fuzzy semantic similarity
-            if (word.length >= 3) {
-                for (i in 0..word.length - 3) {
-                    val tri = word.substring(i, i + 3)
+            val codePoints = word.codePoints().toArray()
+            if (codePoints.size >= 3) {
+                for (i in 0..codePoints.size - 3) {
+                    val tri = String(codePoints, i, 3)
                     val triHash = (tri.hashCode() and 0x7FFFFFFF) % DIMENSION
                     vector[triHash] += 1.0f
                 }
@@ -401,7 +401,7 @@ class TFLiteSemanticEmbeddingProvider(
         val maxTokens = 128
         val byteBuffer = ByteBuffer.allocateDirect(4 * maxTokens)
         byteBuffer.order(ByteOrder.nativeOrder())
-        val words = text.take(maxTokens * 10).lowercase().split(Regex("\\s+"))
+        val words = SearchTextTokenizer.tokenize(text).take(maxTokens)
         for (i in 0 until maxTokens) {
             val tokenVal = if (i < words.size) map[words[i]] ?: 0 else 0
             byteBuffer.putFloat(tokenVal.toFloat())

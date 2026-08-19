@@ -64,7 +64,7 @@ fun AboutScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "About VVF Foundation",
+                        text = stringResource(R.string.about_vvf_foundation),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
                     )
@@ -130,7 +130,7 @@ fun AboutScreen(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.vvf_foundation_logo),
-                            contentDescription = "VVF Foundation Logo",
+                            contentDescription = stringResource(R.string.vvf_foundation_logo),
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(CircleShape)
@@ -151,7 +151,7 @@ fun AboutScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "VISHVA VIJAYAA FOUNDATION",
+                        text = stringResource(R.string.foundation_full_name),
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp,
                         color = Color.White.copy(alpha = 0.85f),
@@ -167,7 +167,7 @@ fun AboutScreen(
                         color = BhagwaOrange.copy(alpha = 0.2f)
                     ) {
                         Text(
-                            text = "Version ${BuildConfig.VERSION_NAME}",
+                            text = stringResource(R.string.version, BuildConfig.VERSION_NAME),
                             fontWeight = FontWeight.Medium,
                             fontSize = 13.sp,
                             color = BhagwaOrange,
@@ -201,7 +201,7 @@ fun AboutScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Mission & Vision",
+                            text = stringResource(R.string.mission_vision),
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -211,10 +211,7 @@ fun AboutScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "Vishva Vijayaa Foundation is committed to bringing smart, " +
-                            "AI-driven digital management and semantic search capabilities " +
-                            "to empower organizations and individuals with seamless data organization, " +
-                            "secure vault storage, and intelligent search.",
+                        text = stringResource(R.string.mission_statement),
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
@@ -238,7 +235,7 @@ fun AboutScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
-                        text = "Key Features",
+                        text = stringResource(R.string.key_features),
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
                         color = MaterialTheme.colorScheme.onSurface
@@ -246,20 +243,20 @@ fun AboutScreen(
 
                     FeatureRow(
                         icon = Icons.Default.Speed,
-                        title = "Semantic AI Search",
-                        subtitle = "Instant vector embedding match across your documents"
+                        title = stringResource(R.string.semantic_ai_search),
+                        subtitle = stringResource(R.string.semantic_ai_search_subtitle)
                     )
 
                     FeatureRow(
                         icon = Icons.Default.Security,
-                        title = "Encrypted Vault",
-                        subtitle = "Keystore-protected secure local file storage"
+                        title = stringResource(R.string.encrypted_vault),
+                        subtitle = stringResource(R.string.encrypted_vault_subtitle)
                     )
 
                     FeatureRow(
                         icon = Icons.Default.CheckCircle,
-                        title = "Smart Duplicate Cleanup",
-                        subtitle = "Level 1-3 intelligent perceptual deduplication"
+                        title = stringResource(R.string.smart_duplicate_cleanup),
+                        subtitle = stringResource(R.string.smart_duplicate_cleanup_subtitle)
                     )
                 }
             }
@@ -267,7 +264,7 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "© 2026 Vishva Vijayaa Foundation. All rights reserved.",
+                text = stringResource(R.string.copyright_notice),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center

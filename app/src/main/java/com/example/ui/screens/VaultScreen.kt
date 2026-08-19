@@ -147,7 +147,7 @@ fun VaultScreen(
                     null
                 }
                 if (cipher == null) {
-                    viewModel.onBiometricError("Biometric vault authentication is unavailable.")
+                    viewModel.onBiometricError(context.getString(R.string.biometric_auth_unavailable))
                 } else {
                     val biometricPrompt = BiometricPrompt(
                         activity,
@@ -173,15 +173,15 @@ fun VaultScreen(
 
                             override fun onAuthenticationFailed() {
                                 super.onAuthenticationFailed()
-                                viewModel.onBiometricError("Authentication failed")
+                                viewModel.onBiometricError(context.getString(R.string.authentication_failed))
                             }
                         }
                     )
 
                     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                        .setTitle(if (enrollment) "Protect Vault with Biometrics" else "Unlock Vault")
-                        .setSubtitle("Authenticate using your strong biometric credential")
-                        .setNegativeButtonText("Use PIN")
+                        .setTitle(context.getString(if (enrollment) R.string.protect_vault_biometrics else R.string.unlock_vault))
+                        .setSubtitle(context.getString(R.string.authenticate_strong_biometric))
+                        .setNegativeButtonText(context.getString(R.string.use_pin))
                         .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                         .build()
 
@@ -197,7 +197,9 @@ fun VaultScreen(
         }
     }
     val autoLockTimeoutMs by viewModel.vaultAutoLockTimeoutMs.collectAsStateWithLifecycle()
-    val autoLockTimer = if (autoLockTimeoutMs <= ONE_MINUTE_MS) "1 minute" else "5 minutes"
+    val autoLockTimer = stringResource(
+        if (autoLockTimeoutMs <= ONE_MINUTE_MS) R.string.one_minute else R.string.five_minutes
+    )
     var showChangePinDialog by rememberSaveable { mutableStateOf(false) }
     var changePinOld by rememberSaveable { mutableStateOf("") }
     var changePinNew by rememberSaveable { mutableStateOf("") }
@@ -223,14 +225,14 @@ fun VaultScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    if (changePinNew != changePinConfirm) changePinError = "New PIN and confirmation do not match."
-                    else if (changePinNew.length != 4 || !changePinNew.all { it.isDigit() }) changePinError = "New PIN must be exactly 4 digits."
+                    if (changePinNew != changePinConfirm) changePinError = context.getString(R.string.pin_mismatch)
+                    else if (changePinNew.length != 4 || !changePinNew.all { it.isDigit() }) changePinError = context.getString(R.string.pin_exactly_digits)
                     else {
                         val success = viewModel.changeVaultPin(changePinOld, changePinNew)
                         if (success) {
                             showChangePinDialog = false
                             changePinOld = ""; changePinNew = ""; changePinConfirm = ""; changePinError = null
-                        } else changePinError = "Failed to update PIN. Check current PIN."
+                        } else changePinError = context.getString(R.string.pin_update_failed)
                     }
                 }, colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange)) { Text(stringResource(R.string.change)) }
             },
@@ -245,9 +247,9 @@ fun VaultScreen(
                 Icon(imageVector = Icons.Default.Lock, contentDescription = stringResource(R.string.vault_locked), tint = BhagwaOrange, modifier = Modifier.size(40.dp))
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Secure Encrypted Vault", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+            Text(text = stringResource(R.string.secure_encrypted_vault), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             Text(
-                text = if (viewModel.isVaultPinSetupRequired) "Create a 4-Digit Master PIN" else "Enter 4-Digit Master PIN",
+                text = stringResource(if (viewModel.isVaultPinSetupRequired) R.string.create_master_pin else R.string.enter_master_pin),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -304,8 +306,8 @@ fun VaultScreen(
                     Box(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(colors = listOf(CosmicBlue, MaterialTheme.colorScheme.surfaceVariant))).padding(16.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LockOpen, contentDescription = stringResource(R.string.unlocked), tint = EmeraldGreen); Spacer(modifier = Modifier.width(8.dp)); Text(text = "Encrypted Vault Unlocked", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White) }
-                                Text(text = "AES-256 Android Keystore Cipher Active", fontSize = 12.sp, color = SoftGold)
+                                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LockOpen, contentDescription = stringResource(R.string.unlocked), tint = EmeraldGreen); Spacer(modifier = Modifier.width(8.dp)); Text(text = stringResource(R.string.encrypted_vault_unlocked), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+                                Text(text = stringResource(R.string.aes_cipher_active), fontSize = 12.sp, color = SoftGold)
                             }
                             Button(onClick = { viewModel.lockVault() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.lock_vault)) }
                         }
@@ -315,7 +317,7 @@ fun VaultScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = "Vault Security Options", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = BhagwaOrange)
+                        Text(text = stringResource(R.string.vault_security_options), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = BhagwaOrange)
                         Spacer(modifier = Modifier.height(12.dp))
                         if (isBiometricAvailable) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -361,23 +363,23 @@ fun VaultScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f))) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(imageVector = Icons.Default.Shield, contentDescription = "Best-Effort Overwrite Disclaimer", tint = BhagwaOrange, modifier = Modifier.size(24.dp))
+                        Icon(imageVector = Icons.Default.Shield, contentDescription = stringResource(R.string.best_effort_wipe_disclaimer), tint = BhagwaOrange, modifier = Modifier.size(24.dp))
                         Column {
-                            Text(text = "Best-Effort Source Overwrite", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(text = stringResource(R.string.best_effort_source_overwrite), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = "When encrypting a file to the Vault, the original source is overwritten matching its exact file size (3-pass random/zeros data) before deletion.\n\nDisclaimer: Modern flash/SSD storage utilizes physical Wear-Leveling controllers. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                            Text(text = stringResource(R.string.overwrite_details), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
                         }
                     }
                 }
             }
-            item { Text(text = "Encrypted Files (${vaultItems.size})", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) }
+            item { Text(text = stringResource(R.string.encrypted_files, vaultItems.size), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) }
             if (vaultItems.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(imageVector = Icons.Default.Shield, contentDescription = stringResource(R.string.vault_empty), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = "No encrypted files in vault.\nUse File Manager menu to encrypt sensitive files.", textAlign = TextAlign.Center, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = stringResource(R.string.no_encrypted_files), textAlign = TextAlign.Center, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -388,7 +390,18 @@ fun VaultScreen(
                             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(EmeraldGreen.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(Icons.Default.Security, contentDescription = stringResource(R.string.encrypted), tint = EmeraldGreen) }
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Column { Text(text = item.originalName, fontWeight = FontWeight.Bold, fontSize = 14.sp); Text(text = "${item.encryptedName} • ${formatFileSize(item.sizeBytes)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                Column {
+                                    Text(text = item.originalName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(
+                                        text = stringResource(
+                                            R.string.format_file_size_category,
+                                            item.encryptedName,
+                                            formatFileSize(item.sizeBytes, stringResource(R.string.unknown_size))
+                                        ),
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             OutlinedButton(onClick = { viewModel.unlockFromVault(item) }) { Text(stringResource(R.string.decrypt), fontSize = 12.sp, color = EmeraldGreen) }
                         }

@@ -34,7 +34,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearGlobalError() { _globalError.value = null }
     private val coroutineExceptionHandler = CoroutineExceptionHandler { _, throwable ->
         android.util.Log.e("MainViewModel", "Unhandled coroutine exception", throwable)
-        _globalError.value = throwable.localizedMessage ?: "A background operation failed. Please try again."
+        _globalError.value = throwable.localizedMessage
+            ?: getApplication<Application>().getString(R.string.background_operation_failed)
     }
 
     private val _selectedTabIndex = MutableStateFlow(0)
@@ -104,7 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun signInToGoogle(email: String, displayName: String?) {
-        _globalError.value = "Google sign-in requires the real OAuth authorization flow; local/mock sign-in is disabled."
+        _globalError.value = getApplication<Application>().getString(R.string.google_sign_in_oauth_required)
     }
 
     fun signOutFromGoogle() {
@@ -112,10 +113,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncCloudProvider(provider: String) {
-        val providerLabel = provider.ifBlank { "requested provider" }
-        _globalError.value =
-            "Cloud sync for $providerLabel requires a real OAuth session and a selected " +
-                "local file; no placeholder sync was queued."
+        val providerLabel = provider.ifBlank { getApplication<Application>().getString(R.string.cloud) }
+        _globalError.value = getApplication<Application>().getString(
+            R.string.cloud_sync_requires_oauth,
+            providerLabel
+        )
     }
 
     fun retryCloudSyncItem(id: Long) { viewModelScope.launch(coroutineExceptionHandler) { repository.retryCloudSyncItem(id) } }

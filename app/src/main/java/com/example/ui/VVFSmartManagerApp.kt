@@ -109,7 +109,7 @@ fun VVFSmartManagerApp(viewModel: MainViewModel) {
         globalError?.let { errorMsg ->
             val result = snackbarHostState.showSnackbar(
                 message = errorMsg,
-                actionLabel = "Retry",
+                actionLabel = stringResource(R.string.retry),
                 duration = androidx.compose.material3.SnackbarDuration.Long
             )
             if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
@@ -140,7 +140,7 @@ fun VVFSmartManagerApp(viewModel: MainViewModel) {
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "VVF Smart Manager",
+                            text = stringResource(R.string.app_name),
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
@@ -226,7 +226,7 @@ fun VVFSmartManagerApp(viewModel: MainViewModel) {
                         (slideInHorizontally(animationSpec = tween(300)) { width -> -width } + fadeIn(animationSpec = tween(300))).togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> width } + fadeOut(animationSpec = tween(300)))
                     }
                 },
-                label = "Tab Transition"
+                label = stringResource(R.string.tab_transition)
             ) { targetTab ->
                 when (targetTab) {
                 0 -> DashboardScreen(

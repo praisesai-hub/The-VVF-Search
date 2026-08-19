@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.ai.SearchTextTokenizer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -11,12 +12,13 @@ fun SmartManagerRepository.searchFiles(
     query: String,
     category: String?
 ): Flow<List<FileItemEntity>> = activeFiles.map { files ->
+    val normalizedQuery = SearchTextTokenizer.normalize(query)
     files.filter { file ->
         (category == null || file.category == category) &&
-            (query.isBlank() ||
-                file.name.contains(query, ignoreCase = true) ||
-                file.ocrText.contains(query, ignoreCase = true) ||
-                file.tags.contains(query, ignoreCase = true))
+            (normalizedQuery.isBlank() ||
+                SearchTextTokenizer.containsQuery(file.name, normalizedQuery) ||
+                SearchTextTokenizer.containsQuery(file.ocrText, normalizedQuery) ||
+                SearchTextTokenizer.containsQuery(file.tags, normalizedQuery))
     }
 }
 

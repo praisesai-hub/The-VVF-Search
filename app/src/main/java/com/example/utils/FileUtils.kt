@@ -4,8 +4,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-fun formatFileSize(size: Long): String {
-    if (size <= 0L) return "अज्ञात साइज़"
+fun formatFileSize(size: Long, unknownLabel: String): String {
+    if (size <= 0L) return unknownLabel
     val units = arrayOf("B", "KB", "MB", "GB")
     var s = size.toDouble()
     var i = 0

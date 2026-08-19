@@ -99,7 +99,8 @@ fun DashboardScreen(
     var showRoadmapModal by rememberSaveable { mutableStateOf(false) }
     var showFilePickerSheet by remember { mutableStateOf(false) }
     val totalSize = remember(categoryStats) { categoryStats.sumOf { it.totalSize } }
-    val formattedTotalSize = remember(totalSize) { formatFileSize(totalSize) }
+    val unknownSizeLabel = stringResource(R.string.unknown_size)
+    val formattedTotalSize = remember(totalSize, unknownSizeLabel) { formatFileSize(totalSize, unknownSizeLabel) }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -141,14 +142,14 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "VVF Smart Manager v2.0",
+                                        text = stringResource(R.string.dashboard_title, stringResource(R.string.app_name)),
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
                                 }
                                 Text(
-                                    text = "System Health: 94% Excellent",
+                                    text = stringResource(R.string.system_health),
                                     fontSize = 13.sp,
                                     color = EmeraldGreen,
                                     fontWeight = FontWeight.Medium
@@ -172,7 +173,7 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Start <10s",
+                                        text = stringResource(R.string.start_benchmark),
                                         fontSize = 11.sp,
                                         color = SoftGold,
                                         fontWeight = FontWeight.Bold
@@ -187,13 +188,13 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Storage Used: $formattedTotalSize",
+                                text = stringResource(R.string.storage_used, formattedTotalSize),
                                 fontSize = 14.sp,
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "18.5 GB Free of 128 GB",
+                                text = stringResource(R.string.free_storage),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -215,7 +216,7 @@ fun DashboardScreen(
         // Quick Actions Grid
         item {
             Text(
-                text = "Quick Actions",
+                text = stringResource(R.string.quick_actions),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -226,29 +227,29 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 QuickActionButton(
-                    title = "Pick Files",
-                    subtitle = "Import Storage",
+                    title = stringResource(R.string.pick_files),
+                    subtitle = stringResource(R.string.import_storage),
                     icon = Icons.Default.FolderOpen,
                     color = BhagwaOrange,
                     modifier = Modifier.weight(1f)
                 ) { showFilePickerSheet = true }
                 QuickActionButton(
-                    title = "Clean Dupes",
-                    subtitle = "Level 1-4 AI",
+                    title = stringResource(R.string.clean_dupes),
+                    subtitle = stringResource(R.string.level_1_4_ai),
                     icon = Icons.Default.CleaningServices,
                     color = EmeraldGreen,
                     modifier = Modifier.weight(1f)
                 ) { onNavigateTab(3) }
                 QuickActionButton(
-                    title = "Secure Vault",
-                    subtitle = "Encrypted",
+                    title = stringResource(R.string.secure_vault),
+                    subtitle = stringResource(R.string.encrypted),
                     icon = Icons.Default.Lock,
                     color = SkyCyan,
                     modifier = Modifier.weight(1f)
                 ) { onNavigateTab(2) }
                 QuickActionButton(
-                    title = "Cloud Sync",
-                    subtitle = "Multi-Cloud",
+                    title = stringResource(R.string.cloud_sync),
+                    subtitle = stringResource(R.string.multi_cloud),
                     icon = Icons.Default.CloudSync,
                     color = SoftGold,
                     modifier = Modifier.weight(1f)
@@ -292,19 +293,19 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Master Roadmap v2.0 Compliance",
+                                text = stringResource(R.string.master_roadmap_compliance),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Phases 1-19 Architecture & Stack Audited",
+                                text = stringResource(R.string.roadmap_audited),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                     Text(
-                        text = if (showRoadmapModal) "Hide" else "View Report",
+                        text = if (showRoadmapModal) stringResource(R.string.hide) else stringResource(R.string.view_report),
                         fontSize = 12.sp,
                         color = BhagwaOrange,
                         fontWeight = FontWeight.Bold
@@ -322,7 +323,7 @@ fun DashboardScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Golden Rule Audit Report",
+                            text = stringResource(R.string.golden_rule_audit_report),
                             fontWeight = FontWeight.Bold,
                             color = BhagwaOrange,
                             fontSize = 15.sp
@@ -345,30 +346,30 @@ fun DashboardScreen(
         // Storage Breakdown Categories
         item {
             Text(
-                text = "Storage Categories",
+                text = stringResource(R.string.storage_categories),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CategoryRow("Images", FileCategory.IMAGES, categoryStats, Icons.Default.Image, BhagwaOrange) {
+                CategoryRow(stringResource(R.string.category_images), FileCategory.IMAGES, categoryStats, Icons.Default.Image, BhagwaOrange) {
                     viewModel.selectCategory(FileCategory.IMAGES)
                     onNavigateTab(1)
                 }
-                CategoryRow("Documents", FileCategory.DOCUMENTS, categoryStats, Icons.Default.Description, SkyCyan) {
+                CategoryRow(stringResource(R.string.category_documents), FileCategory.DOCUMENTS, categoryStats, Icons.Default.Description, SkyCyan) {
                     viewModel.selectCategory(FileCategory.DOCUMENTS)
                     onNavigateTab(1)
                 }
-                CategoryRow("Audio Files", FileCategory.AUDIO, categoryStats, Icons.Default.MusicNote, EmeraldGreen) {
+                CategoryRow(stringResource(R.string.category_audio_files), FileCategory.AUDIO, categoryStats, Icons.Default.MusicNote, EmeraldGreen) {
                     viewModel.selectCategory(FileCategory.AUDIO)
                     onNavigateTab(1)
                 }
-                CategoryRow("Videos", FileCategory.VIDEO, categoryStats, Icons.Default.Movie, SoftGold) {
+                CategoryRow(stringResource(R.string.category_videos), FileCategory.VIDEO, categoryStats, Icons.Default.Movie, SoftGold) {
                     viewModel.selectCategory(FileCategory.VIDEO)
                     onNavigateTab(1)
                 }
-                CategoryRow("Archives & Downloads", FileCategory.ARCHIVES, categoryStats, Icons.Default.Folder, CosmicBlue) {
+                CategoryRow(stringResource(R.string.category_archives_downloads), FileCategory.ARCHIVES, categoryStats, Icons.Default.Folder, CosmicBlue) {
                     viewModel.selectCategory(FileCategory.ARCHIVES)
                     onNavigateTab(1)
                 }
@@ -382,7 +383,7 @@ fun DashboardScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Recent Storage Files",
+                    text = stringResource(R.string.recent_storage_files),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
@@ -484,7 +485,7 @@ fun CategoryRow(
                 }
             }
             Text(
-                text = formatFileSize(size),
+                text = formatFileSize(size, stringResource(R.string.unknown_size)),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = BhagwaOrange
@@ -547,13 +548,13 @@ fun DashboardFileCard(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = formatFileSize(file.sizeBytes),
+                            text = formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size)),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (file.tags.isNotBlank()) {
                             Text(
-                                text = " • ${file.tags}",
+                                text = stringResource(R.string.tag_prefix, file.tags),
                                 fontSize = 11.sp,
                                 color = SkyCyan,
                                 fontWeight = FontWeight.Medium
@@ -624,8 +625,8 @@ fun DashboardFileCard(
         )
     }
 }
-fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0L) return "अज्ञात साइज़"
+fun formatFileSize(bytes: Long, unknownLabel: String): String {
+    if (bytes <= 0L) return unknownLabel
     if (bytes < 1024) return "$bytes B"
     val exp = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt()
     val pre = "KMGTPE"[exp - 1]

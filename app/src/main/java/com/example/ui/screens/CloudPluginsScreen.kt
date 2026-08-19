@@ -74,7 +74,9 @@ fun CloudPluginsScreen(
     cloudSyncItems: List<CloudSyncItemEntity>,
     plugins: List<PluginEntity>
 ) {
-    var conflictResolutionMode by rememberSaveable { mutableStateOf("Keep Local") }
+    val keepLocalLabel = stringResource(R.string.keep_local)
+    val keepCloudLabel = stringResource(R.string.keep_cloud)
+    var conflictResolutionMode by rememberSaveable(keepLocalLabel) { mutableStateOf(keepLocalLabel) }
     var selectedSection by rememberSaveable { mutableIntStateOf(0) } // 0: Cloud Sync, 1: Plugin Manager
     Column(
         modifier = Modifier
@@ -85,8 +87,8 @@ fun CloudPluginsScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SectionChip("Cloud Providers", 0, selectedSection, SoftGold) { selectedSection = 0 }
-            SectionChip("Plugin Manager", 1, selectedSection, SkyCyan) { selectedSection = 1 }
+            SectionChip(stringResource(R.string.cloud_providers), 0, selectedSection, SoftGold) { selectedSection = 0 }
+            SectionChip(stringResource(R.string.plugin_manager), 1, selectedSection, SkyCyan) { selectedSection = 1 }
         }
         Spacer(modifier = Modifier.height(16.dp))
         if (selectedSection == 0) {
@@ -173,8 +175,7 @@ fun CloudSyncSection(
                     
                     if (auth is GoogleAuthState.SignedIn) {
                         Text(
-                            text = "Cloud transfer is disabled until this release has approved " +
-                                "OAuth provisioning and the device owner explicitly opts in.",
+                            text = stringResource(R.string.cloud_transfer_disabled),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -188,7 +189,7 @@ fun CloudSyncSection(
                     } else {
                         Image(
                             painter = painterResource(R.drawable.vvf_foundation_logo),
-                            contentDescription = "VVF Foundation logo",
+                            contentDescription = stringResource(R.string.vvf_foundation_logo),
                             modifier = Modifier
                                 .size(72.dp)
                                 .clip(CircleShape)
@@ -203,7 +204,7 @@ fun CloudSyncSection(
                         if (auth is GoogleAuthState.Error) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Error: ${auth.message}",
+                                text = stringResource(R.string.error_prefix, auth.message),
                                 color = MaterialTheme.colorScheme.error,
                                 fontSize = 11.sp
                             )
@@ -215,7 +216,7 @@ fun CloudSyncSection(
                             colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange),
                             modifier = Modifier.testTag("google_drive_connect_btn")
                         ) {
-                            Text("Cloud sync disabled")
+                            Text(stringResource(R.string.cloud_sync_disabled))
                         }
                     }
                 }
@@ -238,7 +239,9 @@ fun CloudSyncSection(
                     ) {
                         Text(text = stringResource(R.string.strategy_mode), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = {
-                            onConflictModeChange(if (conflictMode == "Keep Local") "Keep Cloud" else "Keep Local")
+                            onConflictModeChange(
+                                if (conflictMode == keepLocalLabel) keepCloudLabel else keepLocalLabel
+                            )
                         }) {
                             Text(text = conflictMode, color = BhagwaOrange, fontWeight = FontWeight.Bold)
                         }
@@ -249,7 +252,7 @@ fun CloudSyncSection(
         // Multi-Cloud Sync History Queue
         item {
             Text(
-                text = "Cloud Sync Queue (${syncItems.size})",
+                text = stringResource(R.string.cloud_sync_queue, syncItems.size),
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
             )
@@ -272,7 +275,11 @@ fun CloudSyncSection(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = item.fileName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text(
-                            text = "Provider: ${item.provider} • ${formatFileSize(item.fileSize)}",
+                            text = stringResource(
+                                R.string.provider_file_size,
+                                item.provider,
+                                formatFileSize(item.fileSize, stringResource(R.string.unknown_size))
+                            ),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -282,12 +289,12 @@ fun CloudSyncSection(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val statusLabel = when (item.status) {
-                            "PENDING" -> "Waiting"
-                            "QUEUED" -> "Queued"
-                            "UPLOADING" -> "Uploading"
-                            "SYNCED" -> "Synced"
-                            "FAILED" -> "Failed"
-                            "NOT_SUPPORTED" -> "Not Supported"
+                            "PENDING" -> stringResource(R.string.waiting)
+                            "QUEUED" -> stringResource(R.string.queued)
+                            "UPLOADING" -> stringResource(R.string.uploading)
+                            "SYNCED" -> stringResource(R.string.synced)
+                            "FAILED" -> stringResource(R.string.failed)
+                            "NOT_SUPPORTED" -> stringResource(R.string.not_supported)
                             else -> item.status
                         }
                         Surface(
@@ -317,14 +324,14 @@ fun CloudSyncSection(
                                 onClick = { viewModel.retryCloudSyncItem(item.id) },
                                 modifier = Modifier.testTag("retry_sync_${item.id}")
                             ) {
-                                Text("Retry", fontSize = 12.sp, color = BhagwaOrange, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.retry), fontSize = 12.sp, color = BhagwaOrange, fontWeight = FontWeight.Bold)
                             }
                         } else if (item.status == "PENDING" || item.status == "QUEUED") {
                             TextButton(
                                 onClick = { viewModel.cancelCloudSyncItem(item.id) },
                                 modifier = Modifier.testTag("cancel_sync_${item.id}")
                             ) {
-                                Text("Cancel", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.cancel), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -353,7 +360,7 @@ fun PluginManagerSection(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Master Spec Section 4 Core/Plugin split. Download or toggle optional extensions on demand.",
+                        text = stringResource(R.string.plugin_architecture_description),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -362,7 +369,7 @@ fun PluginManagerSection(
         }
         item {
             Text(
-                text = "Registered Extensions (${plugins.size})",
+                text = stringResource(R.string.registered_extensions, plugins.size),
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
             )
@@ -390,7 +397,7 @@ fun PluginManagerSection(
                                     color = BhagwaOrange.copy(alpha = 0.2f)
                                 ) {
                                     Text(
-                                        text = "CORE",
+                                        text = stringResource(R.string.core),
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = BhagwaOrange,

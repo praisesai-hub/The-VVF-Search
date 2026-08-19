@@ -1,6 +1,8 @@
 // SmartManagerRepository - Production baseline
 package com.example.data
 
+import com.example.ai.SearchTextTokenizer
+
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -84,13 +86,16 @@ open class SmartManagerRepository(
     suspend fun getFileByName(name: String) = dao.getFileByName(name)
 
     fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> {
+        val normalizedQuery = SearchTextTokenizer.normalize(query)
         if (!isSemanticSearchAvailable) return kotlinx.coroutines.flow.flowOf(emptyList())
-        if (query.isBlank()) return dao.getAllActiveFiles()
+        if (normalizedQuery.isBlank()) return dao.getAllActiveFiles()
         return dao.getAllActiveFiles().map { files ->
-            val queryVec = tfliteProvider.generateTextEmbedding(query)
+            val queryVec = tfliteProvider.generateTextEmbedding(normalizedQuery)
             if (queryVec == null) {
                 files.filter { file ->
-                    file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
+                    SearchTextTokenizer.containsQuery(file.name, normalizedQuery) ||
+                        SearchTextTokenizer.containsQuery(file.ocrText, normalizedQuery) ||
+                        SearchTextTokenizer.containsQuery(file.tags, normalizedQuery)
                 }
             } else {
                 files.mapNotNull { file ->
@@ -98,7 +103,9 @@ open class SmartManagerRepository(
                         ?: tfliteProvider.generateTextEmbedding("${file.name} ${file.ocrText} ${file.tags}")
                     if (fileVec != null) {
                         val sim = tfliteProvider.calculateCosineSimilarity(queryVec, fileVec)
-                        val isTextMatch = file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
+                        val isTextMatch = SearchTextTokenizer.containsQuery(file.name, normalizedQuery) ||
+                            SearchTextTokenizer.containsQuery(file.ocrText, normalizedQuery) ||
+                            SearchTextTokenizer.containsQuery(file.tags, normalizedQuery)
                         if (sim > 0.10f || isTextMatch) file to sim else null
                     } else null
                 }.sortedByDescending { it.second }.map { it.first }

@@ -62,10 +62,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.data.FileCategory
 import com.example.ui.theme.BhagwaOrange
 import com.example.ui.theme.EmeraldGreen
@@ -146,7 +148,7 @@ fun FilePickerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FolderOpen,
-                            contentDescription = "Select Files",
+                            contentDescription = stringResource(R.string.select_files),
                             tint = BhagwaOrange,
                             modifier = Modifier.size(24.dp)
                         )
@@ -154,13 +156,13 @@ fun FilePickerSheet(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Select Files from Storage",
+                            text = stringResource(R.string.select_files_from_storage),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Choose local files to process & index",
+                            text = stringResource(R.string.choose_local_files_to_process),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -171,7 +173,7 @@ fun FilePickerSheet(
                     onClick = onDismiss,
                     modifier = Modifier.testTag("file_picker_close_btn")
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close Picker")
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close_picker))
                 }
             }
 
@@ -206,13 +208,13 @@ fun FilePickerSheet(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Open System Document Picker",
+                                text = stringResource(R.string.open_system_document_picker),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Browse Google Drive, Downloads, SD Card & SAF",
+                                text = stringResource(R.string.browse_storage_providers),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -234,8 +236,8 @@ fun FilePickerSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("picker_search_input"),
-                placeholder = { Text("Search local files by name...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                placeholder = { Text(stringResource(R.string.search_local_files_by_name)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search)) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
@@ -250,7 +252,7 @@ fun FilePickerSheet(
                     FilterChip(
                         selected = selectedCategoryFilter == null,
                         onClick = { selectedCategoryFilter = null },
-                        label = { Text("All") },
+                        label = { Text(stringResource(R.string.all)) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = BhagwaOrange,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -261,7 +263,7 @@ fun FilePickerSheet(
                     FilterChip(
                         selected = selectedCategoryFilter == cat,
                         onClick = { selectedCategoryFilter = cat },
-                        label = { Text(cat.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                        label = { Text(localizedFileCategory(cat)) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = BhagwaOrange,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -295,7 +297,7 @@ fun FilePickerSheet(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "No local files found matching filter",
+                                    text = stringResource(R.string.no_local_files_matching_filter),
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -336,14 +338,14 @@ fun FilePickerSheet(
                 ) {
                     Column {
                         Text(
-                            text = "${selectedFiles.size} Files Selected",
+                            text = stringResource(R.string.files_selected, selectedFiles.size),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         val totalBytes = selectedFiles.sumOf { it.sizeBytes }
                         Text(
-                            text = formatFileSize(totalBytes),
+                            text = formatFileSize(totalBytes, stringResource(R.string.unknown_size)),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
@@ -354,7 +356,7 @@ fun FilePickerSheet(
                             TextButton(
                                 onClick = { selectedFiles.clear() }
                             ) {
-                                Text("Clear")
+                                Text(stringResource(R.string.clear))
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                         }
@@ -375,7 +377,7 @@ fun FilePickerSheet(
                             modifier = Modifier.testTag("process_selected_files_btn")
                         ) {
                             Text(
-                                text = "Process Files (${selectedFiles.size})",
+                                text = stringResource(R.string.process_files, selectedFiles.size),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -445,7 +447,11 @@ fun PickableFileRowItem(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "${formatFileSize(file.sizeBytes)} • ${file.category.name}",
+                    text = stringResource(
+                        R.string.format_file_size_category,
+                        formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size)),
+                        localizedFileCategory(file.category)
+                    ),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -476,8 +482,20 @@ private fun getCategoryBgColor(category: FileCategory): androidx.compose.ui.grap
     }
 }
 
-private fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0L) return "अज्ञात साइज़"
+@Composable
+private fun localizedFileCategory(category: FileCategory): String = when (category) {
+    FileCategory.IMAGES -> stringResource(R.string.category_label_images)
+    FileCategory.DOCUMENTS -> stringResource(R.string.category_label_documents)
+    FileCategory.AUDIO -> stringResource(R.string.category_label_audio)
+    FileCategory.VIDEO -> stringResource(R.string.category_label_video)
+    FileCategory.DOWNLOADS -> stringResource(R.string.category_label_downloads)
+    FileCategory.ARCHIVES -> stringResource(R.string.category_label_archives)
+    FileCategory.APKS -> stringResource(R.string.category_label_apks)
+    FileCategory.OTHER -> stringResource(R.string.category_label_other)
+}
+
+private fun formatFileSize(bytes: Long, unknownLabel: String): String {
+    if (bytes <= 0L) return unknownLabel
     if (bytes < 1024) return "$bytes B"
     val kb = bytes / 1024.0
     if (kb < 1024) return String.format(Locale.getDefault(), "%.1f KB", kb)

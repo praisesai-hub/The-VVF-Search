@@ -22,22 +22,22 @@ class FileUtilsTest {
 
     @Test
     fun `non-positive sizes return unknown label`() {
-        assertEquals("अज्ञात साइज़", formatFileSize(0))
-        assertEquals("अज्ञात साइज़", formatFileSize(-1))
+        assertEquals("अज्ञात साइज़", formatFileSize(0, "अज्ञात साइज़"))
+        assertEquals("अज्ञात साइज़", formatFileSize(-1, "अज्ञात साइज़"))
     }
 
     @Test
     fun `sizes use expected binary units and precision`() {
-        assertEquals("1.00 B", formatFileSize(1))
-        assertEquals("1023.00 B", formatFileSize(1023))
-        assertEquals("1.00 KB", formatFileSize(1024))
-        assertEquals("1.00 MB", formatFileSize(1024 * 1024))
-        assertEquals("1.00 GB", formatFileSize(1024L * 1024L * 1024L))
+        assertEquals("1.00 B", formatFileSize(1, "अज्ञात साइज़"))
+        assertEquals("1023.00 B", formatFileSize(1023, "अज्ञात साइज़"))
+        assertEquals("1.00 KB", formatFileSize(1024, "अज्ञात साइज़"))
+        assertEquals("1.00 MB", formatFileSize(1024 * 1024, "अज्ञात साइज़"))
+        assertEquals("1.00 GB", formatFileSize(1024L * 1024L * 1024L, "अज्ञात साइज़"))
     }
 
     @Test
     fun `values beyond supported units remain in gigabytes`() {
-        assertEquals("2.00 GB", formatFileSize(2L * 1024L * 1024L * 1024L))
+        assertEquals("2.00 GB", formatFileSize(2L * 1024L * 1024L * 1024L, "अज्ञात साइज़"))
     }
 
     @Test

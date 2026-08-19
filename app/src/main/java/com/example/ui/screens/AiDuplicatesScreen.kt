@@ -179,13 +179,13 @@ fun DuplicateCleanerSection(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Auto-clean duplicates in background",
+                            text = stringResource(R.string.auto_clean_background),
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Automatically move exact duplicate files to Recycle Bin and send notifications",
+                            text = stringResource(R.string.auto_clean_description),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -242,7 +242,7 @@ fun DuplicateCleanerSection(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Background batch indexing: ${(scanProgress * 100).toInt()}% completed",
+                            text = stringResource(R.string.background_indexing_progress, (scanProgress * 100).toInt()),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -267,13 +267,13 @@ fun DuplicateCleanerSection(
                             Icon(Icons.Default.Description, contentDescription = stringResource(R.string.pdf_engine), tint = SkyCyan)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Document Fingerprint Engine",
+                                text = stringResource(R.string.document_fingerprint_engine),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
                         }
                         Text(
-                            text = "${(documentStats.third * 100).toInt()}% Indexed",
+                            text = stringResource(R.string.indexed_percent, (documentStats.third * 100).toInt()),
                             fontWeight = FontWeight.Bold,
                             color = SkyCyan,
                             fontSize = 13.sp
@@ -285,13 +285,13 @@ fun DuplicateCleanerSection(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Indexed: ${documentStats.first}",
+                            text = stringResource(R.string.indexed_count, documentStats.first),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Pending: ${documentStats.second}",
+                            text = stringResource(R.string.pending_count, documentStats.second),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -383,12 +383,12 @@ fun DuplicateCleanerSection(
                 ) {
                     Column {
                         Text(
-                            text = "${selectedDuplicateIds.size} files selected for deletion",
+                            text = stringResource(R.string.selected_files_deletion, selectedDuplicateIds.size),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Level 1-2 Exact Hash & Level 3-4 Visual AI",
+                            text = stringResource(R.string.duplicate_algorithm_summary),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -414,7 +414,7 @@ fun DuplicateCleanerSection(
         // Level 1-2 Exact Duplicates Section
         item {
             Text(
-                text = "Level 1-2: Exact Hash Duplicates (${level1Duplicates.size} sets)",
+                text = stringResource(R.string.exact_hash_duplicates, level1Duplicates.size),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -423,7 +423,7 @@ fun DuplicateCleanerSection(
         if (level1Duplicates.isEmpty()) {
             item {
                 Text(
-                    text = "No exact hash duplicate files detected.",
+                    text = stringResource(R.string.no_exact_hash_duplicates),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -441,7 +441,7 @@ fun DuplicateCleanerSection(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Level 3-4: Visual & Semantic AI Duplicates (${level3Duplicates.size} sets)",
+                text = stringResource(R.string.visual_semantic_duplicates, level3Duplicates.size),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -468,7 +468,7 @@ fun DuplicateCleanerSection(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Step 7: Video Near-Duplicates (${videoDuplicates.size} sets)",
+                text = stringResource(R.string.video_near_duplicates, videoDuplicates.size),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -477,7 +477,7 @@ fun DuplicateCleanerSection(
         if (videoDuplicates.isEmpty()) {
             item {
                 Text(
-                    text = "No video keyframe near-duplicates detected.",
+                    text = stringResource(R.string.no_video_near_duplicates),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -495,7 +495,7 @@ fun DuplicateCleanerSection(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Step 6: AI Semantic Vector Matches (${semanticDuplicates.size} sets)",
+                text = stringResource(R.string.semantic_vector_matches, semanticDuplicates.size),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -504,7 +504,7 @@ fun DuplicateCleanerSection(
         if (!viewModel.isSemanticSearchAvailable) {
             item {
                 Text(
-                    text = "Semantic Search — Coming Soon (model not bundled)",
+                    text = stringResource(R.string.semantic_search_coming_soon),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -512,7 +512,7 @@ fun DuplicateCleanerSection(
         } else if (semanticDuplicates.isEmpty()) {
             item {
                 Text(
-                    text = "No AI semantic vector matches detected.",
+                    text = stringResource(R.string.no_semantic_vector_matches),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -530,7 +530,7 @@ fun DuplicateCleanerSection(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Phase 7 Step 1: Document Fingerprint Matches (${documentDuplicates.size} sets)",
+                text = stringResource(R.string.document_fingerprint_matches, documentDuplicates.size),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -539,7 +539,7 @@ fun DuplicateCleanerSection(
         if (documentDuplicates.isEmpty()) {
             item {
                 Text(
-                    text = "No document fingerprint duplicates detected.",
+                    text = stringResource(R.string.no_document_fingerprint_duplicates),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -583,7 +583,7 @@ fun DuplicateGroupCard(
                     color = if (group.level == 1) BhagwaOrange.copy(alpha = 0.2f) else SoftGold.copy(alpha = 0.2f)
                 ) {
                     Text(
-                        text = "Score: ${group.similarityScore}%",
+                        text = stringResource(R.string.score_percent, group.similarityScore),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (group.level == 1) BhagwaOrange else SoftGold,
@@ -615,7 +615,11 @@ fun DuplicateGroupCard(
                         Column {
                             Text(text = file.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text(
-                                text = "${file.path} • ${formatFileSize(file.sizeBytes)}",
+                                text = stringResource(
+                                    R.string.format_file_size_category,
+                                    file.path,
+                                    formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size))
+                                ),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -641,14 +645,14 @@ fun OcrEngineSection(ocrScannedFiles: List<FileItemEntity>) {
                         Icon(Icons.Default.QrCodeScanner, contentDescription = stringResource(R.string.ocr), tint = SkyCyan)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "ML Kit OCR Text Recognition Engine",
+                            text = stringResource(R.string.mlkit_ocr_engine),
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Extracts plain text from document scans, photos, invoices & identity cards, indexing them for instant search.",
+                        text = stringResource(R.string.ocr_engine_description),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -657,7 +661,7 @@ fun OcrEngineSection(ocrScannedFiles: List<FileItemEntity>) {
         }
         item {
             Text(
-                text = "OCR Indexed Documents (${ocrScannedFiles.size})",
+                text = stringResource(R.string.ocr_indexed_documents, ocrScannedFiles.size),
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
             )
@@ -680,7 +684,7 @@ fun OcrEngineSection(ocrScannedFiles: List<FileItemEntity>) {
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "Extracted Text: ${file.ocrText}",
+                            text = stringResource(R.string.extracted_text, file.ocrText),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(8.dp)
@@ -715,7 +719,7 @@ fun SemanticSearchSection(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "TFLite AI Semantic Search Engine",
+                            text = stringResource(R.string.tflite_semantic_engine),
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -761,7 +765,7 @@ fun SemanticSearchSection(
         }
         item {
             Text(
-                text = "Semantic Search Results",
+                text = stringResource(R.string.semantic_search_results),
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
             )
@@ -774,7 +778,7 @@ fun SemanticSearchSection(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Text(
-                        text = "Semantic Search — Coming Soon (model not bundled)",
+                        text = stringResource(R.string.semantic_search_coming_soon),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -785,7 +789,7 @@ fun SemanticSearchSection(
         } else if (results.isEmpty()) {
             item {
                 Text(
-                    text = "No semantic search results found.",
+                    text = stringResource(R.string.no_semantic_search_results),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -818,7 +822,7 @@ fun SemanticSearchSection(
                             color = EmeraldGreen.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = "Score 96%",
+                                text = stringResource(R.string.score_96),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = EmeraldGreen,
