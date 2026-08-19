@@ -66,6 +66,55 @@ data class VaultItemEntity(
     val vaultFormatVersion: Int = 1
 )
 
+object VaultOperationType {
+    const val ENCRYPT = "ENCRYPT"
+    const val RESTORE = "RESTORE"
+}
+
+object VaultOperationState {
+    const val PREPARED = "PREPARED"
+    const val ENCRYPTED = "ENCRYPTED"
+    const val VERIFIED = "VERIFIED"
+    const val SOURCE_REMOVAL_PENDING = "SOURCE_REMOVAL_PENDING"
+    const val SOURCE_REMOVED = "SOURCE_REMOVED"
+    const val RESTORE_WRITE_PENDING = "RESTORE_WRITE_PENDING"
+    const val RESTORED = "RESTORED"
+    const val VAULT_REMOVAL_PENDING = "VAULT_REMOVAL_PENDING"
+    const val VAULT_REMOVED = "VAULT_REMOVED"
+    const val METADATA_COMMITTED = "METADATA_COMMITTED"
+    const val COMPLETED = "COMPLETED"
+    const val RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+}
+
+/**
+ * Durable intent log for multi-resource vault operations. The file system and Room database
+ * cannot share one transaction, so each irreversible step is recorded before it runs.
+ */
+@JsonClass(generateAdapter = true)
+@Entity(
+    tableName = "vault_operations",
+    indices = [Index(value = ["state"]), Index(value = ["operationType"])]
+)
+data class VaultOperationEntity(
+    @PrimaryKey val id: String,
+    val operationType: String,
+    val state: String = VaultOperationState.PREPARED,
+    val sourceFileId: Long = 0L,
+    val vaultItemId: Long = 0L,
+    val sourcePath: String = "",
+    val encryptedFilePath: String = "",
+    val encryptedFileName: String = "",
+    val restoreDestinationPath: String = "",
+    val originalName: String = "",
+    val category: String = "",
+    val sizeBytes: Long = 0L,
+    val ivBase64: String = "",
+    val isBiometricProtected: Boolean = false,
+    val createdAtMs: Long = System.currentTimeMillis(),
+    val updatedAtMs: Long = System.currentTimeMillis(),
+    val recoveryError: String = ""
+)
+
 @JsonClass(generateAdapter = true)
 @Entity(
     tableName = "cloud_sync",

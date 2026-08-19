@@ -177,6 +177,41 @@ interface FileDao {
     @Query("DELETE FROM vault_items WHERE id = :id")
     suspend fun deleteVaultItemById(id: Long)
 
+    @Query("SELECT * FROM vault_items WHERE encryptedFilePath = :path LIMIT 1")
+    suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity?
+
+    // Vault operation ledger DAO
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertVaultOperation(operation: VaultOperationEntity)
+
+    @Query(
+        "SELECT * FROM vault_operations " +
+            "WHERE state NOT IN ('COMPLETED', 'RECOVERY_REQUIRED') ORDER BY createdAtMs ASC"
+    )
+    suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity>
+
+    @androidx.room.Transaction
+    suspend fun commitVaultEncryptionMetadata(
+        source: FileItemEntity,
+        vaultItem: VaultItemEntity,
+        operation: VaultOperationEntity
+    ) {
+        updateFile(source.copy(isVault = true))
+        insertVaultItem(vaultItem)
+        upsertVaultOperation(operation.copy(state = VaultOperationState.METADATA_COMMITTED))
+    }
+
+    @androidx.room.Transaction
+    suspend fun commitVaultRestoreMetadata(
+        restoredFile: FileItemEntity,
+        vaultItemId: Long,
+        operation: VaultOperationEntity
+    ) {
+        updateFile(restoredFile.copy(isVault = false))
+        deleteVaultItemById(vaultItemId)
+        upsertVaultOperation(operation.copy(state = VaultOperationState.METADATA_COMMITTED))
+    }
+
     // Cloud Sync DAO
     @Query("SELECT * FROM cloud_sync ORDER BY lastSyncedMs DESC")
     fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>>

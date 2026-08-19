@@ -5,7 +5,9 @@ import android.app.Application
 import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.data.AppDatabase
@@ -15,6 +17,7 @@ import com.example.worker.BackgroundIndexWorker
 import com.example.worker.CacheCleanupWorker
 import com.example.worker.CloudSyncWorker
 import com.example.worker.DuplicateCleanupWorker
+import com.example.worker.VaultRecoveryWorker
 import java.util.concurrent.TimeUnit
 
 import androidx.work.Configuration
@@ -103,6 +106,13 @@ class VVFApplication : Application(), Configuration.Provider {
                 DuplicateCleanupWorker.WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 duplicateCleanupWork
+            )
+
+            val vaultRecoveryWork = OneTimeWorkRequestBuilder<VaultRecoveryWorker>().build()
+            wm.enqueueUniqueWork(
+                VaultRecoveryWorker.WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                vaultRecoveryWork
             )
 
             // Cloud synchronization is never scheduled at startup. It may only be enqueued

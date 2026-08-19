@@ -410,4 +410,50 @@ class AppDatabaseMigrationTest {
         }
         db.close()
     }
+
+    @Test
+    fun migration7To8_createsDurableVaultOperationLedgerAndIndexes() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_vault_operation_recovery_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(7) {
+                override fun onCreate(db: SupportSQLiteDatabase) = Unit
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+
+        AppDatabase.MIGRATION_7_8.migrate(db)
+
+        db.execSQL(
+            """
+            INSERT INTO vault_operations
+            (id, operationType, state, sourceFileId, vaultItemId, sourcePath, encryptedFilePath,
+             encryptedFileName, restoreDestinationPath, originalName, category, sizeBytes,
+             ivBase64, isBiometricProtected, createdAtMs, updatedAtMs, recoveryError)
+            VALUES
+            ('op-1', 'ENCRYPT', 'SOURCE_REMOVAL_PENDING', 7, 0, '/files/source.pdf',
+             '/vault/ENC_op-1.vvf', 'ENC_op-1.vvf', '', 'source.pdf', 'DOCUMENTS', 64,
+             'AQIDBA==', 0, 123, 124, '')
+            """.trimIndent()
+        )
+        db.query("SELECT * FROM vault_operations WHERE id = 'op-1'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("ENCRYPT", cursor.getString(cursor.getColumnIndexOrThrow("operationType")))
+            assertEquals(
+                "SOURCE_REMOVAL_PENDING",
+                cursor.getString(cursor.getColumnIndexOrThrow("state"))
+            )
+            assertEquals(7L, cursor.getLong(cursor.getColumnIndexOrThrow("sourceFileId")))
+        }
+        db.query("PRAGMA index_list(`vault_operations`)").use { cursor ->
+            val nameColumn = cursor.getColumnIndexOrThrow("name")
+            val indexes = generateSequence {
+                if (cursor.moveToNext()) cursor.getString(nameColumn) else null
+            }.toSet()
+            assertTrue("state index missing", "index_vault_operations_state" in indexes)
+            assertTrue("operation type index missing", "index_vault_operations_operationType" in indexes)
+        }
+        db.close()
+    }
 }

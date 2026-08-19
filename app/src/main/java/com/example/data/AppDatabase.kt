@@ -12,15 +12,17 @@ private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
 private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
 private const val DATABASE_VERSION_WITH_CLOUD_RECOVERY = 7
+private const val DATABASE_VERSION_WITH_VAULT_OPERATION_RECOVERY = 8
 
 @Database(
     entities = [
         FileItemEntity::class,
         VaultItemEntity::class,
+        VaultOperationEntity::class,
         CloudSyncItemEntity::class,
         PluginEntity::class
     ],
-    version = DATABASE_VERSION_WITH_CLOUD_RECOVERY,
+    version = DATABASE_VERSION_WITH_VAULT_OPERATION_RECOVERY,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -137,6 +139,40 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(
+            DATABASE_VERSION_WITH_CLOUD_RECOVERY,
+            DATABASE_VERSION_WITH_VAULT_OPERATION_RECOVERY
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `vault_operations` (
+                        `id` TEXT NOT NULL,
+                        `operationType` TEXT NOT NULL,
+                        `state` TEXT NOT NULL,
+                        `sourceFileId` INTEGER NOT NULL,
+                        `vaultItemId` INTEGER NOT NULL,
+                        `sourcePath` TEXT NOT NULL,
+                        `encryptedFilePath` TEXT NOT NULL,
+                        `encryptedFileName` TEXT NOT NULL,
+                        `restoreDestinationPath` TEXT NOT NULL,
+                        `originalName` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `ivBase64` TEXT NOT NULL,
+                        `isBiometricProtected` INTEGER NOT NULL,
+                        `createdAtMs` INTEGER NOT NULL,
+                        `updatedAtMs` INTEGER NOT NULL,
+                        `recoveryError` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_operations_state` ON `vault_operations` (`state`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_operations_operationType` ON `vault_operations` (`operationType`)")
+            }
+        }
+
 
         private fun addColumnIfNotExists(
             db: SupportSQLiteDatabase,
@@ -173,7 +209,15 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8
+                )
 
                 val instance = builder.build()
                 INSTANCE = instance

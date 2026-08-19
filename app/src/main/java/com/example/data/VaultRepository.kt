@@ -20,10 +20,15 @@ class VaultRepository(
     vaultManagerEngine: VaultManagerEngine = VaultManagerEngine(context, keystoreVaultManager)
 ) : VaultSecurityApi by VaultSecurityDelegate(vaultManagerEngine) {
     private val engine = vaultManagerEngine
+    private val operationCoordinator = VaultOperationCoordinator(context, dao)
 
     suspend fun encryptToVault(file: FileItemEntity) = withContext(Dispatchers.IO) {
         val session = requireAuthenticatedSession()
-        val vaultStorageResult = PhysicalStorageManager.encryptAndWipeSourceStreaming(
+        val prepared = operationCoordinator.prepareEncryption(
+            file = file,
+            isBiometricProtected = engine.hasBiometricEnrollment
+        )
+        val vaultStorageResult = PhysicalStorageManager.encryptSourceStreaming(
             context = context,
             srcPath = file.path,
             session = session
@@ -31,21 +36,38 @@ class VaultRepository(
 
         if (vaultStorageResult.isSuccess) {
             val result = vaultStorageResult.getOrThrow()
-            val ivBase64 = Base64.encodeToString(result.iv, Base64.NO_WRAP)
-            dao.updateFile(file.copy(isVault = true))
-            dao.insertVaultItem(
-                VaultItemEntity(
-                    originalName = file.name,
-                    encryptedName = result.encryptedFileName,
-                    encryptedFilePath = result.vaultFilePath,
-                    ivBase64 = ivBase64,
-                    category = file.category,
-                    sizeBytes = file.sizeBytes,
-                    isBiometricProtected = engine.hasBiometricEnrollment,
-                    vaultFormatVersion = CURRENT_VAULT_FORMAT_VERSION
-                )
+            val encrypted = operationCoordinator.markEncrypted(prepared, result)
+            val verification = PhysicalStorageManager.verifyEncryptedVaultFile(
+                vaultFilePath = result.vaultFilePath,
+                iv = result.iv,
+                session = session
             )
+            if (verification.isFailure) {
+                PhysicalStorageManager.removeEncryptedVaultFile(result.vaultFilePath)
+                operationCoordinator.markCompleted(encrypted)
+                throw verification.exceptionOrNull()
+                    ?: java.io.IOException("Encrypted vault file verification failed")
+            }
+            val verified = operationCoordinator.markState(encrypted, VaultOperationState.VERIFIED)
+            val removalPending = operationCoordinator.markState(
+                verified,
+                VaultOperationState.SOURCE_REMOVAL_PENDING
+            )
+            if (!PhysicalStorageManager.removeSourceAfterVaultEncryption(context, file.path)) {
+                throw java.io.IOException("Failed to remove plaintext source after encryption")
+            }
+            val sourceRemoved = operationCoordinator.markState(
+                removalPending,
+                VaultOperationState.SOURCE_REMOVED
+            )
+            val completed = operationCoordinator.completeIfMetadataCommitted(
+                operationCoordinator.commitEncryptionMetadata(sourceRemoved)
+            )
+            check(completed.state == VaultOperationState.COMPLETED) {
+                "Vault encryption metadata commit requires recovery"
+            }
         } else {
+            operationCoordinator.markCompleted(prepared)
             throw vaultStorageResult.exceptionOrNull()
                 ?: java.io.IOException("Failed to encrypt and wipe source file")
         }
@@ -60,31 +82,57 @@ class VaultRepository(
                 vaultItem
             }
             val targetFile = file ?: dao.getVaultFileByName(migratedItem.originalName)
-            if (targetFile != null) {
-                val iv = Base64.decode(migratedItem.ivBase64, Base64.DEFAULT)
-                val decryptResult = PhysicalStorageManager.decryptAndRestoreStreaming(
-                    context = context,
-                    request = VaultRestoreRequest(
-                        vaultFilePath = migratedItem.encryptedFilePath,
-                        originalPath = targetFile.path,
-                        originalName = migratedItem.originalName,
-                        iv = iv
-                    ),
-                    session = session
-                )
-                if (decryptResult.isSuccess) {
-                    dao.updateFile(targetFile.copy(path = decryptResult.getOrThrow(), isVault = false))
-                    dao.deleteVaultItemById(migratedItem.id)
-                    true
-                } else {
-                    throw decryptResult.exceptionOrNull()
-                        ?: java.io.IOException("Failed to physically decrypt vault file")
-                }
-            } else {
-                dao.deleteVaultItemById(migratedItem.id)
-                true
+                ?: throw java.io.IOException("Vault restore target metadata is missing")
+            val prepared = operationCoordinator.prepareRestore(migratedItem, targetFile)
+            val writePending = operationCoordinator.markState(
+                prepared,
+                VaultOperationState.RESTORE_WRITE_PENDING
+            )
+            val iv = Base64.decode(migratedItem.ivBase64, Base64.DEFAULT)
+            val decryptResult = PhysicalStorageManager.decryptToRestoreDestinationStreaming(
+                context = context,
+                request = VaultRestoreRequest(
+                    vaultFilePath = migratedItem.encryptedFilePath,
+                    originalPath = targetFile.path,
+                    originalName = migratedItem.originalName,
+                    iv = iv,
+                    restoreDestinationPath = prepared.restoreDestinationPath
+                ),
+                session = session
+            )
+            if (decryptResult.isFailure) {
+                operationCoordinator.markCompleted(writePending)
+                throw decryptResult.exceptionOrNull()
+                    ?: java.io.IOException("Failed to physically decrypt vault file")
             }
+            val restored = operationCoordinator.markState(
+                writePending,
+                VaultOperationState.RESTORED,
+                decryptResult.getOrThrow()
+            )
+            val removalPending = operationCoordinator.markState(
+                restored,
+                VaultOperationState.VAULT_REMOVAL_PENDING
+            )
+            if (!PhysicalStorageManager.removeEncryptedVaultFile(migratedItem.encryptedFilePath)) {
+                throw java.io.IOException("Unable to delete encrypted vault file after restoration")
+            }
+            val vaultRemoved = operationCoordinator.markState(
+                removalPending,
+                VaultOperationState.VAULT_REMOVED
+            )
+            val completed = operationCoordinator.completeIfMetadataCommitted(
+                operationCoordinator.commitRestoreMetadata(vaultRemoved)
+            )
+            check(completed.state == VaultOperationState.COMPLETED) {
+                "Vault restore metadata commit requires recovery"
+            }
+            true
         }
+
+    suspend fun recoverIncompleteOperations() = withContext(Dispatchers.IO) {
+        operationCoordinator.recoverIncompleteOperations()
+    }
 
     /** Re-encrypts a legacy direct-Keystore vault file with the authenticated V2 session. */
     private suspend fun migrateLegacyItem(

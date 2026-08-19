@@ -70,7 +70,7 @@ class VaultRepositoryTest {
     }
 
     @Test
-    fun encryptToVault_updatesFileAndPersistsVaultMetadataAfterPhysicalSuccess() = runBlocking {
+    fun encryptToVault_persistsDurableStatesBeforeSourceRemovalAndMetadataCommit() = runBlocking {
         val file = fileItem(id = 9L, name = "report.pdf", path = "/source/report.pdf")
         val result = VaultStorageResult(
             vaultFilePath = "/vault/ENC_123_report.pdf.vvf",
@@ -79,30 +79,51 @@ class VaultRepositoryTest {
         )
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.encryptAndWipeSourceStreaming(
+            PhysicalStorageManager.encryptSourceStreaming(
                 context,
                 file.path,
                 any()
             )
         } returns Result.success(result)
-        val updated = slot<FileItemEntity>()
-        val inserted = slot<VaultItemEntity>()
-        coEvery { dao.updateFile(capture(updated)) } just Runs
-        coEvery { dao.insertVaultItem(capture(inserted)) } returns 17L
+        every { PhysicalStorageManager.verifyEncryptedVaultFile(result.vaultFilePath, result.iv, any()) } returns Result.success(Unit)
+        every { PhysicalStorageManager.removeSourceAfterVaultEncryption(context, file.path) } returns true
+        val committedSource = slot<FileItemEntity>()
+        val committedVaultItem = slot<VaultItemEntity>()
+        val operations = mutableListOf<VaultOperationEntity>()
+        coEvery { dao.getFileById(file.id) } returns file
+        coEvery { dao.getVaultItemByEncryptedPath(result.vaultFilePath) } returns null
+        coEvery {
+            dao.commitVaultEncryptionMetadata(
+                capture(committedSource),
+                capture(committedVaultItem),
+                any()
+            )
+        } just Runs
+        coEvery { dao.upsertVaultOperation(capture(operations)) } just Runs
 
         repository.encryptToVault(file)
 
-        assertTrue(updated.captured.isVault)
-        assertEquals(file.id, updated.captured.id)
-        assertEquals(file.path, updated.captured.path)
-        assertEquals(file.name, inserted.captured.originalName)
-        assertEquals(result.encryptedFileName, inserted.captured.encryptedName)
-        assertEquals(result.vaultFilePath, inserted.captured.encryptedFilePath)
-        assertEquals("AQIDBA==", inserted.captured.ivBase64)
-        assertEquals(file.category, inserted.captured.category)
-        assertEquals(file.sizeBytes, inserted.captured.sizeBytes)
-        coVerify(exactly = 1) { dao.updateFile(any()) }
-        coVerify(exactly = 1) { dao.insertVaultItem(any()) }
+        assertTrue(committedSource.captured.isVault)
+        assertEquals(file.id, committedSource.captured.id)
+        assertEquals(file.path, committedSource.captured.path)
+        assertEquals(file.name, committedVaultItem.captured.originalName)
+        assertEquals(result.encryptedFileName, committedVaultItem.captured.encryptedName)
+        assertEquals(result.vaultFilePath, committedVaultItem.captured.encryptedFilePath)
+        assertEquals("AQIDBA==", committedVaultItem.captured.ivBase64)
+        assertEquals(file.category, committedVaultItem.captured.category)
+        assertEquals(file.sizeBytes, committedVaultItem.captured.sizeBytes)
+        assertEquals(
+            listOf(
+                VaultOperationState.PREPARED,
+                VaultOperationState.ENCRYPTED,
+                VaultOperationState.VERIFIED,
+                VaultOperationState.SOURCE_REMOVAL_PENDING,
+                VaultOperationState.SOURCE_REMOVED,
+                VaultOperationState.COMPLETED
+            ),
+            operations.map { it.state }
+        )
+        coVerify(exactly = 1) { dao.commitVaultEncryptionMetadata(any(), any(), any()) }
     }
 
     @Test
@@ -111,7 +132,7 @@ class VaultRepositoryTest {
         val failure = IOException("source could not be securely wiped")
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.encryptAndWipeSourceStreaming(
+            PhysicalStorageManager.encryptSourceStreaming(
                 context,
                 file.path,
                 any()
@@ -130,42 +151,65 @@ class VaultRepositoryTest {
     }
 
     @Test
-    fun unlockFromVault_usesDaoTargetAndClearsVaultAfterPhysicalSuccess() = runBlocking {
+    fun unlockFromVault_persistsRestoreIntentBeforeVaultFileRemovalAndMetadataCommit() = runBlocking {
         val target = fileItem(id = 12L, name = "photo.jpg", path = "/source/photo.jpg")
         val vaultItem = vaultItem(id = 31L, originalName = target.name)
         coEvery { dao.getVaultFileByName(target.name) } returns target
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.decryptAndRestoreStreaming(
+            PhysicalStorageManager.decryptToRestoreDestinationStreaming(
                 context,
                 any(),
                 any()
             )
         } returns Result.success(target.path)
-        val updated = slot<FileItemEntity>()
-        coEvery { dao.updateFile(capture(updated)) } just Runs
-        coEvery { dao.deleteVaultItemById(vaultItem.id) } just Runs
+        every { PhysicalStorageManager.removeEncryptedVaultFile(vaultItem.encryptedFilePath) } returns true
+        val committedRestoredFile = slot<FileItemEntity>()
+        val operations = mutableListOf<VaultOperationEntity>()
+        coEvery { dao.getFileById(target.id) } returns target
+        coEvery {
+            dao.commitVaultRestoreMetadata(
+                capture(committedRestoredFile),
+                vaultItem.id,
+                any()
+            )
+        } just Runs
+        coEvery { dao.upsertVaultOperation(capture(operations)) } just Runs
 
         assertTrue(repository.unlockFromVault(vaultItem, file = null))
 
-        assertFalse(updated.captured.isVault)
-        assertEquals(target.id, updated.captured.id)
+        assertFalse(committedRestoredFile.captured.isVault)
+        assertEquals(target.id, committedRestoredFile.captured.id)
+        assertEquals(
+            listOf(
+                VaultOperationState.PREPARED,
+                VaultOperationState.RESTORE_WRITE_PENDING,
+                VaultOperationState.RESTORED,
+                VaultOperationState.VAULT_REMOVAL_PENDING,
+                VaultOperationState.VAULT_REMOVED,
+                VaultOperationState.COMPLETED
+            ),
+            operations.map { it.state }
+        )
         coVerify(exactly = 1) { dao.getVaultFileByName(target.name) }
-        coVerify(exactly = 1) { dao.updateFile(any()) }
-        coVerify(exactly = 1) { dao.deleteVaultItemById(vaultItem.id) }
+        coVerify(exactly = 1) { dao.commitVaultRestoreMetadata(any(), vaultItem.id, any()) }
     }
 
     @Test
-    fun unlockFromVault_deletesOrphanedVaultMetadataWhenTargetIsMissing() = runBlocking {
+    fun unlockFromVault_rejectsMissingTargetMetadataWithoutDeletingRecoverableVaultState() = runBlocking {
         val vaultItem = vaultItem(id = 44L, originalName = "missing.txt")
         repository.unlockWithPin("1234")
         coEvery { dao.getVaultFileByName(vaultItem.originalName) } returns null
-        coEvery { dao.deleteVaultItemById(vaultItem.id) } just Runs
 
-        assertTrue(repository.unlockFromVault(vaultItem, file = null))
+        try {
+            repository.unlockFromVault(vaultItem, file = null)
+            fail("Expected missing restore target failure")
+        } catch (error: IOException) {
+            assertEquals("Vault restore target metadata is missing", error.message)
+        }
 
         coVerify(exactly = 1) { dao.getVaultFileByName(vaultItem.originalName) }
-        coVerify(exactly = 1) { dao.deleteVaultItemById(vaultItem.id) }
+        coVerify(exactly = 0) { dao.deleteVaultItemById(any()) }
         coVerify(exactly = 0) { dao.updateFile(any()) }
     }
 
@@ -176,7 +220,7 @@ class VaultRepositoryTest {
         val failure = IOException("tampered vault data")
         repository.unlockWithPin("1234")
         every {
-            PhysicalStorageManager.decryptAndRestoreStreaming(
+            PhysicalStorageManager.decryptToRestoreDestinationStreaming(
                 context,
                 any(),
                 any()
