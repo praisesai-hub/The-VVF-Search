@@ -240,10 +240,10 @@ fun CloudSyncSection(
                         Text(text = stringResource(R.string.strategy_mode), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = {
                             onConflictModeChange(
-                                if (conflictMode == keepLocalLabel) keepCloudLabel else keepLocalLabel
+                                if (conflictResolutionMode == keepLocalLabel) keepCloudLabel else keepLocalLabel
                             )
                         }) {
-                            Text(text = conflictMode, color = BhagwaOrange, fontWeight = FontWeight.Bold)
+                            Text(text = conflictResolutionMode, color = BhagwaOrange, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

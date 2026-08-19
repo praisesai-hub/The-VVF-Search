@@ -323,22 +323,21 @@ fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResul
 fun MainViewModel.onBiometricEnrollmentSuccess(result: BiometricPrompt.AuthenticationResult): Boolean {
     return try {
         val success = repository.completeBiometricEnrollment(result)
-        if (!success) compatState().pinError.value = "Biometric enrollment could not be saved."
+        if (!success) compatState().pinError.value = compatMessage(R.string.pin_error_biometric_enrollment_saved)
         success
     } catch (_: java.security.GeneralSecurityException) {
-        compatState().pinError.value = "Biometric enrollment failed."
+        compatState().pinError.value = compatMessage(R.string.pin_error_biometric_enrollment_failed)
         false
     } catch (_: SecurityException) {
-        compatState().pinError.value = "Biometric enrollment failed."
+        compatState().pinError.value = compatMessage(R.string.pin_error_biometric_enrollment_failed)
         false
     }
 }
 
 /** Callback-only unlock is intentionally fail-closed and cannot change vault state. */
-@Deprecated("Use onBiometricSuccess(AuthenticationResult)")
-@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases; use onBiometricSuccess(AuthenticationResult)")
 fun MainViewModel.onBiometricSuccess() {
-    onBiometricError("Authenticated CryptoObject is required.")
+    onBiometricError(compatMessage(R.string.pin_error_biometric_crypto_required))
 }
 
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
@@ -353,7 +352,7 @@ fun MainViewModel.changeVaultPin(oldPin: String, newPin: String): Boolean {
     if (success) {
         state.pinError.value = null
     } else {
-        state.pinError.value = "Failed to update PIN. Check current PIN."
+        state.pinError.value = compatMessage(R.string.pin_update_failed)
     }
     return success
 }

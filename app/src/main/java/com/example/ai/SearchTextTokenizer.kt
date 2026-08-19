@@ -18,9 +18,9 @@ object SearchTextTokenizer {
         val builder = StringBuilder(normalized.length)
         for (codePoint in normalized.codePoints().toArray()) {
             val type = Character.getType(codePoint)
-            val isMark = type == Character.NON_SPACING_MARK ||
-                type == Character.COMBINING_SPACING_MARK ||
-                type == Character.ENCLOSING_MARK
+            val isMark = type == Character.NON_SPACING_MARK.toInt() ||
+                type == Character.COMBINING_SPACING_MARK.toInt() ||
+                type == Character.ENCLOSING_MARK.toInt()
             if (Character.isLetterOrDigit(codePoint) || codePoint == '_'.code || isMark) {
                 builder.appendCodePoint(codePoint)
             } else {

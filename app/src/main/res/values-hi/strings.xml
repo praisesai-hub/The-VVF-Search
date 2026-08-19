@@ -269,4 +269,7 @@
     <string name="pin_error_incorrect">गलत PIN। फिर प्रयास करें।</string>
     <string name="pin_error_biometric_session">प्रमाणित वॉल्ट सत्र बनाया नहीं जा सका।</string>
     <string name="pin_error_biometric_unlock">बायोमेट्रिक वॉल्ट अनलॉक विफल रहा।</string>
+    <string name="pin_error_biometric_enrollment_saved">बायोमेट्रिक नामांकन सहेजा नहीं जा सका।</string>
+    <string name="pin_error_biometric_enrollment_failed">बायोमेट्रिक नामांकन विफल रहा।</string>
+    <string name="pin_error_biometric_crypto_required">प्रमाणित CryptoObject आवश्यक है।</string>
 </resources>

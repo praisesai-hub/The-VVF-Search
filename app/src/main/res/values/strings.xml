@@ -273,4 +273,7 @@
     <string name="pin_error_incorrect">Incorrect PIN. Try again.</string>
     <string name="pin_error_biometric_session">Authenticated vault session could not be created.</string>
     <string name="pin_error_biometric_unlock">Biometric vault unlock failed.</string>
+    <string name="pin_error_biometric_enrollment_saved">Biometric enrollment could not be saved.</string>
+    <string name="pin_error_biometric_enrollment_failed">Biometric enrollment failed.</string>
+    <string name="pin_error_biometric_crypto_required">Authenticated CryptoObject is required.</string>
 </resources>

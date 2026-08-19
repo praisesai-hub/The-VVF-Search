@@ -105,11 +105,12 @@ fun VVFSmartManagerApp(viewModel: MainViewModel) {
     val plugins by viewModel.plugins.collectAsStateWithLifecycle()
     val globalError by viewModel.globalError.collectAsStateWithLifecycle()
     val snackbarHostState = androidx.compose.runtime.remember { androidx.compose.material3.SnackbarHostState() }
+    val retryLabel = stringResource(R.string.retry)
     androidx.compose.runtime.LaunchedEffect(globalError) {
         globalError?.let { errorMsg ->
             val result = snackbarHostState.showSnackbar(
                 message = errorMsg,
-                actionLabel = stringResource(R.string.retry),
+                actionLabel = retryLabel,
                 duration = androidx.compose.material3.SnackbarDuration.Long
             )
             if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
