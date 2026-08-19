@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import com.example.ai.SemanticEmbeddingProvider
+import io.mockk.clearMocks
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -94,6 +95,7 @@ class SmartManagerRepositoryJvmTest {
     @Test
     fun enqueueCloudSyncItem_deniesTransfersBeforeAnyProviderOrQueueAccess() = runBlocking {
         val repository = repository(cloudTransferAllowed = { false })
+        clearMocks(dao, answers = false)
 
         val queued = repository.enqueueCloudSyncItem(
             provider = "GOOGLE_DRIVE",
