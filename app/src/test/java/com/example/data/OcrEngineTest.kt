@@ -67,7 +67,9 @@ class OcrEngineTest {
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun observeSearchFiles(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(duplicateFiles)
         override suspend fun insertFile(file: FileItemEntity): Long = 0L
         override suspend fun insertFiles(files: List<FileItemEntity>) {}
@@ -102,6 +104,10 @@ class OcrEngineTest {
     private class FakeSearchIndexDao(
         private val currentFiles: () -> List<FileItemEntity>
     ) : SearchIndexDao {
+        override fun observeFilesByFtsQuery(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
         override fun observeFilesByFts(
             ftsQuery: String,
             category: String?,

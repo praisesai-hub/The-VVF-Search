@@ -61,7 +61,7 @@ class SmartManagerRepositoryInstrumentedTest {
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flow { emit(recycleBinFiles.toList()) }
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun observeSearchFiles(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flow { emit(duplicateFiles.toList()) }
         override suspend fun insertFile(file: FileItemEntity): Long = file.id
         override suspend fun insertFiles(files: List<FileItemEntity>) = Unit

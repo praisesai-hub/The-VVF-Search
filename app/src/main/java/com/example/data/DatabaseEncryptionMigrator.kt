@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase as FrameworkSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
+import net.zetetic.database.sqlcipher.SQLiteDatabase as CipherSQLiteDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
 import java.io.FileOutputStream
@@ -36,10 +37,11 @@ class DatabaseEncryptionMigrator(
     }
 
     private fun convertPlaintextDatabase() {
+        val sourceVersion = plaintext.readUserVersion(source)
         journal.mark(DatabaseConversionState.PREPARED)
         journal.deleteDatabaseArtifacts(encryptedTemp)
-        cipher.copyPlaintextInto(source, encryptedTemp, plaintext.readUserVersion(source))
-        verifyEquivalent()
+        cipher.copyPlaintextInto(source, encryptedTemp, sourceVersion)
+        verifyEquivalent(sourceVersion)
         journal.mark(DatabaseConversionState.TEMP_VALIDATED)
         journal.renameOrThrow(source, plaintextBackup)
         journal.mark(DatabaseConversionState.SOURCE_BACKED_UP)
@@ -87,11 +89,11 @@ class DatabaseEncryptionMigrator(
         error("Encrypted database conversion was rolled back; retry required")
     }
 
-    private fun verifyEquivalent() {
+    private fun verifyEquivalent(expectedVersion: Int) {
         check(plaintext.readInventory(source) == cipher.readInventory(encryptedTemp)) {
             "Encrypted database content verification failed"
         }
-        check(plaintext.readUserVersion(source) == cipher.readUserVersion(encryptedTemp)) {
+        check(expectedVersion == cipher.readUserVersion(encryptedTemp)) {
             "Encrypted database version verification failed"
         }
     }
@@ -203,7 +205,7 @@ private class CipherDatabaseAccess(
     }
 
     fun isReadable(file: File): Boolean = try {
-        withDatabase(file) { database ->
+        withReadOnlyDatabase(file) { database ->
             database.query("SELECT count(*) FROM sqlite_master").use { it.moveToFirst() }
         }
         true
@@ -211,15 +213,35 @@ private class CipherDatabaseAccess(
         false
     }
 
-    fun readUserVersion(file: File): Int = withDatabase(file) { database ->
+    fun readUserVersion(file: File): Int = withReadOnlyDatabase(file) { database ->
         database.query("PRAGMA user_version").use { cursor ->
             check(cursor.moveToFirst()) { "Missing encrypted database version" }
             cursor.getInt(0)
         }
     }
 
-    fun readInventory(file: File): Map<String, Long> = withDatabase(file) { database ->
+    fun readInventory(file: File): Map<String, Long> = withReadOnlyDatabase(file) { database ->
         DatabaseInventory.readTables(database::query)
+    }
+
+    /**
+     * Never use a versioned SupportSQLiteOpenHelper merely to inspect an encrypted database.
+     * Its upgrade callback may otherwise mutate `PRAGMA user_version` before Room can run
+     * the real schema migration.
+     */
+    private fun <T> withReadOnlyDatabase(file: File, action: (SupportSQLiteDatabase) -> T): T {
+        val database = CipherSQLiteDatabase.openDatabase(
+            file.absolutePath,
+            passphrase.copyOf(),
+            null,
+            CipherSQLiteDatabase.OPEN_READONLY,
+            null
+        )
+        return try {
+            action(database)
+        } finally {
+            database.close()
+        }
     }
 
     private fun <T> withDatabase(file: File, action: (SupportSQLiteDatabase) -> T): T {

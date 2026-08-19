@@ -67,7 +67,7 @@ private class InstrumentedWorkerFileDao : FileDao {
     override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-    override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+    override fun observeSearchFiles(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override suspend fun getUnhashedFiles(): List<FileItemEntity> = emptyList()
     override suspend fun updateFiles(files: List<FileItemEntity>): Unit = Unit
     override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null

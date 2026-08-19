@@ -3,9 +3,10 @@ package com.example.data
 import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
-import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.platform.app.InstrumentationRegistry
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
+import org.junit.Before
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,15 +15,23 @@ class SearchIndexMigrationInstrumentedTest {
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
     private val databaseName = "fts-migration-${System.nanoTime()}.db"
+    private val passphrase = "fts-migration-test-passphrase".toByteArray()
+
+    @Before
+    fun loadSqlCipher() {
+        System.loadLibrary("sqlcipher")
+    }
 
     @After
     fun tearDown() {
         File(context.getDatabasePath(databaseName).path).delete()
+        File(context.getDatabasePath("$databaseName-wal").path).delete()
+        File(context.getDatabasePath("$databaseName-shm").path).delete()
     }
 
     @Test
     fun migration8To9_rebuildsHindiFtsIndexAndCreatesSynchronizationTriggers() {
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
+        val helper = SupportOpenHelperFactory(passphrase.copyOf()).create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(databaseName)
                 .callback(object : SupportSQLiteOpenHelper.Callback(8) {
@@ -79,6 +88,6 @@ class SearchIndexMigrationInstrumentedTest {
         db.query(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'semantic_ann_buckets'"
         ).use { cursor -> assertTrue(cursor.moveToFirst()) }
-        db.close()
+        helper.close()
     }
 }

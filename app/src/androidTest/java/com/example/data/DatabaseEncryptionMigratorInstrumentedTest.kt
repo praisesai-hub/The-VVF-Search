@@ -51,13 +51,17 @@ class DatabaseEncryptionMigratorInstrumentedTest {
         val helper = SupportOpenHelperFactory(passphrase.copyOf()).create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(databaseName)
-                .callback(emptyCallback(DATABASE_SCHEMA_VERSION))
+                .callback(emptyCallback(8))
                 .build()
         )
         try {
             helper.readableDatabase.query("SELECT secret FROM private_metadata WHERE id = 7").use { cursor ->
                 require(cursor.moveToFirst())
                 assertEquals("sensitive OCR text", cursor.getString(0))
+            }
+            helper.readableDatabase.query("PRAGMA user_version").use { cursor ->
+                require(cursor.moveToFirst())
+                assertEquals(8, cursor.getInt(0))
             }
         } finally {
             helper.close()

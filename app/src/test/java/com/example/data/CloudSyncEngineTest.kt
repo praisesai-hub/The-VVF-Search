@@ -279,7 +279,9 @@ private class FakeFileDaoForCloudSyncEngine : FileDao {
     override fun getFilesByCategory(category: String) = kotlinx.coroutines.flow.flowOf(emptyList<FileItemEntity>())
     override fun getRecycleBinFiles() = kotlinx.coroutines.flow.flowOf(emptyList<FileItemEntity>())
     override fun getVaultFiles() = kotlinx.coroutines.flow.flowOf(emptyList<FileItemEntity>())
-    override fun searchFiles(query: String) = kotlinx.coroutines.flow.flowOf(emptyList<FileItemEntity>())
+    override fun observeSearchFiles(
+        query: androidx.sqlite.db.SupportSQLiteQuery
+    ) = kotlinx.coroutines.flow.flowOf(emptyList<FileItemEntity>())
     override suspend fun getUnhashedFiles() = emptyList<FileItemEntity>()
     override suspend fun updateFiles(files: List<FileItemEntity>) = Unit
     override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null

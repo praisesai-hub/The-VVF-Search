@@ -4,8 +4,11 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.SkipQueryVerification
 import androidx.room.Update
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
 /** Aggregate projection returned by FileDao.getCategoryStats(). */
@@ -59,18 +62,26 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE isVault = 1")
     fun getVaultFiles(): Flow<List<FileItemEntity>>
 
-    @SkipQueryVerification
-    @Query(
-        """
-        SELECT files.* FROM files
-        JOIN file_search_fts ON file_search_fts.rowid = files.id
-        WHERE file_search_fts MATCH :query
-          AND files.isVault = 0 AND files.isRecycleBin = 0
-        ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
-        LIMIT 100
-        """
+    @RawQuery(observedEntities = [FileItemEntity::class])
+    fun observeSearchFiles(query: SupportSQLiteQuery): Flow<List<FileItemEntity>>
+
+    /**
+     * FTS5 is a derived virtual table maintained by `files` triggers. Room cannot register raw
+     * FTS5 schema in its invalidation tracker, so observe the authoritative `files` entity.
+     */
+    fun searchFiles(query: String): Flow<List<FileItemEntity>> = observeSearchFiles(
+        SimpleSQLiteQuery(
+            """
+            SELECT files.* FROM files
+            JOIN file_search_fts ON file_search_fts.rowid = files.id
+            WHERE file_search_fts MATCH ?
+              AND files.isVault = 0 AND files.isRecycleBin = 0
+            ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
+            LIMIT 100
+            """.trimIndent(),
+            arrayOf<Any?>(query)
+        )
     )
-    fun searchFiles(query: String): Flow<List<FileItemEntity>>
 
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (md5Hash IS NULL OR md5Hash = '' OR ((category = 'IMAGES' OR category = 'VIDEO') AND (visualSimilarityHash IS NULL OR visualSimilarityHash = '')) OR semanticIndexed = 0)")
     suspend fun getUnhashedFiles(): List<FileItemEntity>

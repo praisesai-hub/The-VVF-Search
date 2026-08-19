@@ -4,8 +4,11 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
 import androidx.room.SkipQueryVerification
 import androidx.room.Transaction
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
 private const val ANN_REBUILD_BATCH_SIZE = 250
@@ -15,25 +18,31 @@ private const val ANN_BUCKET_INSERT_BATCH_SIZE = 900
  * Separate index DAO. FileDao stays focused on source-of-truth file metadata, while this DAO
  * owns virtual FTS5 and derived ANN tables.
  */
+@Suppress("TooManyFunctions") // Cohesive DAO boundary for FTS5 and ANN index maintenance.
 @Dao
 interface SearchIndexDao {
-    @SkipQueryVerification
-    @Query(
-        """
-        SELECT files.* FROM files
-        JOIN file_search_fts ON file_search_fts.rowid = files.id
-        WHERE file_search_fts MATCH :ftsQuery
-          AND files.isVault = 0 AND files.isRecycleBin = 0
-          AND (:category IS NULL OR files.category = :category)
-        ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
-        LIMIT :limit
-        """
-    )
+    @RawQuery(observedEntities = [FileItemEntity::class])
+    fun observeFilesByFtsQuery(query: SupportSQLiteQuery): Flow<List<FileItemEntity>>
+
+    /** The FTS5 virtual table is derived from `files`, which is the observable source of truth. */
     fun observeFilesByFts(
         ftsQuery: String,
         category: String?,
         limit: Int
-    ): Flow<List<FileItemEntity>>
+    ): Flow<List<FileItemEntity>> = observeFilesByFtsQuery(
+        SimpleSQLiteQuery(
+            """
+            SELECT files.* FROM files
+            JOIN file_search_fts ON file_search_fts.rowid = files.id
+            WHERE file_search_fts MATCH ?
+              AND files.isVault = 0 AND files.isRecycleBin = 0
+              AND (? IS NULL OR files.category = ?)
+            ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
+            LIMIT ?
+            """.trimIndent(),
+            arrayOf<Any?>(ftsQuery, category, category, limit)
+        )
+    )
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSemanticAnnBuckets(buckets: List<SemanticAnnBucketEntity>)

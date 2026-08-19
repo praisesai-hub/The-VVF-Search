@@ -44,7 +44,9 @@ class DuplicateManagerTest {
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun observeSearchFiles(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override suspend fun getUnhashedFiles(): List<FileItemEntity> = emptyList()
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override suspend fun insertFile(file: FileItemEntity): Long = 0L

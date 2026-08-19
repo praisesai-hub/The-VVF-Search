@@ -81,6 +81,10 @@ class SearchIndexDaoDefaultMethodTest {
         val markedVersions = mutableListOf<Int>()
         val requestedOffsets = mutableListOf<Int>()
 
+        override fun observeFilesByFtsQuery(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
         override fun observeFilesByFts(
             ftsQuery: String,
             category: String?,

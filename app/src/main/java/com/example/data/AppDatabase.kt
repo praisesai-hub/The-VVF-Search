@@ -15,7 +15,8 @@ private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
 private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
 private const val DATABASE_VERSION_WITH_CLOUD_RECOVERY = 7
 private const val DATABASE_VERSION_WITH_VAULT_OPERATIONS = 8
-internal const val DATABASE_SCHEMA_VERSION = 9
+private const val DATABASE_VERSION_WITH_FTS5_AND_ANN = 9
+internal const val DATABASE_SCHEMA_VERSION = 10
 
 @Database(
     entities = [
@@ -187,7 +188,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_8_9 = object : Migration(
             DATABASE_VERSION_WITH_VAULT_OPERATIONS,
-            DATABASE_SCHEMA_VERSION
+            DATABASE_VERSION_WITH_FTS5_AND_ANN
         ) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -217,6 +218,18 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_semantic_ann_buckets_fileId` " +
                         "ON `semantic_ann_buckets` (`fileId`)"
                 )
+                SearchIndexSchema.createFtsIndex(db)
+                SearchIndexSchema.rebuildFtsIndex(db)
+                SearchIndexSchema.createAnnCleanupTrigger(db)
+            }
+        }
+
+        /**
+         * Repairs the derived FTS schema for databases created during the version 9 rollout.
+         * The virtual table is intentionally idempotent because it is derived only from `files`.
+         */
+        val MIGRATION_9_10 = object : Migration(DATABASE_VERSION_WITH_FTS5_AND_ANN, DATABASE_SCHEMA_VERSION) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 SearchIndexSchema.createFtsIndex(db)
                 SearchIndexSchema.rebuildFtsIndex(db)
                 SearchIndexSchema.createAnnCleanupTrigger(db)
@@ -276,11 +289,19 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
                     )
 
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
+                            SearchIndexSchema.createFtsIndex(db)
+                            SearchIndexSchema.createAnnCleanupTrigger(db)
+                        }
+
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            // A plaintext-to-SQLCipher conversion preserves the source version.
+                            // Ensure an already-versioned database still has its derived indexes.
                             SearchIndexSchema.createFtsIndex(db)
                             SearchIndexSchema.createAnnCleanupTrigger(db)
                         }
