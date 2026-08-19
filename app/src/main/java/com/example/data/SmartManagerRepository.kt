@@ -39,7 +39,11 @@ open class SmartManagerRepository(
     // Production remains default-deny. Tests may inject an explicit authorized fixture
     // without changing build provisioning or device-owner consent.
     private val cloudTransferAllowed: (Context) -> Boolean = CloudSyncPolicy::canTransfer,
+    private val fileOperationStoreOverride: FileOperationStore? = null,
 ) {
+    private val fileOperationStore: FileOperationStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        fileOperationStoreOverride ?: AppDatabase.getDatabase(context).fileOperationStore()
+    }
     val keystoreVaultManager: KeystoreVaultManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { KeystoreVaultManager() }
     val storageScanner = StorageScanner(context)
     val workCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { WorkCoordinator(context) }
@@ -316,44 +320,171 @@ open class SmartManagerRepository(
     }
 
     suspend fun moveToRecycleBin(file: FileItemEntity) = withContext(Dispatchers.IO) {
+        recoverPendingFileOperations()
         val currentFile = dao.getFileById(file.id) ?: return@withContext
         if (currentFile.isRecycleBin) return@withContext
         withRetry(RetryOperation.FILE_STORAGE) {
-            val trashResult = PhysicalStorageManager.moveToTrash(context, currentFile.path)
-            if (trashResult.isFailure) throw trashResult.exceptionOrNull() ?: java.io.IOException("Failed to move file to trash")
+            val operation = prepareFileOperation(
+                type = FILE_OPERATION_MOVE_TO_TRASH,
+                fileId = currentFile.id,
+                sourcePath = currentFile.path,
+                targetPath = PhysicalStorageManager.trashPathForOperation(context, currentFile.path, operationId(currentFile.id, FILE_OPERATION_MOVE_TO_TRASH))
+            )
+            val operationId = operation.operationId
+            val trashResult = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+                Result.success(operation.targetPath)
+            } else {
+                PhysicalStorageManager.moveToTrash(context, operation.sourcePath, operationId)
+            }
+            if (trashResult.isFailure) {
+                fileOperationStore.transition(operationId, FILE_OPERATION_FAILED, operation.sourcePath, operation.targetPath, System.currentTimeMillis(), "PHYSICAL_MOVE_FAILED")
+                throw trashResult.exceptionOrNull() ?: java.io.IOException("Failed to move file to trash")
+            }
             val newPath = trashResult.getOrThrow()
-            val originalPathToKeep = if (currentFile.originalPath.isNotBlank()) currentFile.originalPath else currentFile.path
-            dao.updateFile(currentFile.copy(path = newPath, originalPath = originalPathToKeep, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
+            fileOperationStore.transition(operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, newPath, System.currentTimeMillis(), null)
+            val latest = dao.getFileById(currentFile.id) ?: return@withRetry
+            val originalPathToKeep = if (latest.originalPath.isNotBlank()) latest.originalPath else operation.sourcePath
+            dao.updateFile(latest.copy(path = newPath, originalPath = originalPathToKeep, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
+            fileOperationStore.transition(operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, newPath, System.currentTimeMillis(), null)
+            fileOperationStore.delete(operationId)
         }
     }
 
     suspend fun restoreFromRecycleBin(file: FileItemEntity) = withContext(Dispatchers.IO) {
+        recoverPendingFileOperations()
         val currentFile = dao.getFileById(file.id) ?: return@withContext
         if (!currentFile.isRecycleBin) return@withContext
         withRetry(RetryOperation.FILE_STORAGE) {
             val targetPath = if (currentFile.originalPath.isNotBlank()) currentFile.originalPath else currentFile.path
-            val restoreResult = PhysicalStorageManager.restoreFromTrash(context, currentFile.path, targetPath)
-            if (restoreResult.isFailure) throw restoreResult.exceptionOrNull() ?: java.io.IOException("Failed to restore file from trash")
-            dao.updateFile(currentFile.copy(path = restoreResult.getOrThrow(), originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
+            val operation = prepareFileOperation(FILE_OPERATION_RESTORE, currentFile.id, currentFile.path, targetPath)
+            val restoreResult = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+                Result.success(operation.targetPath)
+            } else {
+                PhysicalStorageManager.restoreFromTrash(context, operation.sourcePath, operation.targetPath)
+            }
+            if (restoreResult.isFailure) {
+                fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, operation.targetPath, System.currentTimeMillis(), "PHYSICAL_RESTORE_FAILED")
+                throw restoreResult.exceptionOrNull() ?: java.io.IOException("Failed to restore file from trash")
+            }
+            val restoredPath = restoreResult.getOrThrow()
+            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, restoredPath, System.currentTimeMillis(), null)
+            val latest = dao.getFileById(currentFile.id) ?: return@withRetry
+            dao.updateFile(latest.copy(path = restoredPath, originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
+            fileOperationStore.transition(operation.operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, restoredPath, System.currentTimeMillis(), null)
+            fileOperationStore.delete(operation.operationId)
         }
     }
 
     suspend fun deletePermanently(file: FileItemEntity) = withContext(Dispatchers.IO) {
+        recoverPendingFileOperations()
         val currentFile = dao.getFileById(file.id) ?: return@withContext
         withRetry(RetryOperation.FILE_STORAGE) {
-            if (!PhysicalStorageManager.deleteFile(context, currentFile.path)) throw java.io.IOException("Failed to physically delete file at ${currentFile.path}")
+            val operation = prepareFileOperation(FILE_OPERATION_DELETE, currentFile.id, currentFile.path, "")
+            if (operation.status != FILE_OPERATION_PHYSICAL_COMPLETED) {
+                if (!PhysicalStorageManager.deleteFile(context, operation.sourcePath)) {
+                    if (File(operation.sourcePath).exists()) {
+                        fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, "", System.currentTimeMillis(), "PHYSICAL_DELETE_FAILED")
+                        throw java.io.IOException("Failed to physically delete file")
+                    }
+                }
+                fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
+            }
             dao.deleteFileById(currentFile.id)
+            fileOperationStore.transition(operation.operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, "", System.currentTimeMillis(), null)
+            fileOperationStore.delete(operation.operationId)
         }
     }
 
     suspend fun emptyRecycleBin() = withContext(Dispatchers.IO) {
-        withRetry(RetryOperation.FILE_STORAGE) {
-            val trashFiles = dao.getRecycleBinFiles().first()
-            var failedCount = 0
-            trashFiles.forEach { if (!PhysicalStorageManager.deleteFile(context, it.path)) failedCount++ }
-            if (failedCount > 0) throw java.io.IOException("Failed to physically delete $failedCount trash files")
-            dao.emptyRecycleBin()
+        recoverPendingFileOperations()
+        val trashFiles = dao.getRecycleBinFiles().first()
+        trashFiles.forEach { deletePermanently(it) }
+    }
+
+    suspend fun recoverPendingFileOperations() = withContext(Dispatchers.IO) {
+        fileOperationStore.getOpenOperations().forEach { operation ->
+            when (operation.operationType) {
+                FILE_OPERATION_MOVE_TO_TRASH -> recoverMoveToTrash(operation)
+                FILE_OPERATION_RESTORE -> recoverRestore(operation)
+                FILE_OPERATION_DELETE -> recoverDelete(operation)
+            }
         }
+    }
+
+    private suspend fun recoverMoveToTrash(operation: FileOperationEntity) {
+        val current = dao.getFileById(operation.fileId) ?: run {
+            fileOperationStore.delete(operation.operationId)
+            return
+        }
+        if (current.isRecycleBin) {
+            fileOperationStore.delete(operation.operationId)
+            return
+        }
+        val result = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+            Result.success(operation.targetPath)
+        } else if (!operation.sourcePath.startsWith("content://") && !File(operation.sourcePath).exists() && File(operation.targetPath).exists()) {
+            Result.success(operation.targetPath)
+        } else {
+            PhysicalStorageManager.moveToTrash(context, operation.sourcePath, operation.operationId)
+        }
+        if (result.isSuccess) {
+            val path = result.getOrThrow()
+            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, path, System.currentTimeMillis(), null)
+            dao.updateFile(current.copy(path = path, originalPath = operation.sourcePath, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
+            fileOperationStore.delete(operation.operationId)
+        }
+    }
+
+    private suspend fun recoverRestore(operation: FileOperationEntity) {
+        val current = dao.getFileById(operation.fileId) ?: run {
+            fileOperationStore.delete(operation.operationId)
+            return
+        }
+        if (!current.isRecycleBin) {
+            fileOperationStore.delete(operation.operationId)
+            return
+        }
+        val result = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+            Result.success(operation.targetPath)
+        } else {
+            PhysicalStorageManager.restoreFromTrash(context, operation.sourcePath, operation.targetPath)
+        }
+        if (result.isSuccess) {
+            val path = result.getOrThrow()
+            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, path, System.currentTimeMillis(), null)
+            dao.updateFile(current.copy(path = path, originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
+            fileOperationStore.delete(operation.operationId)
+        }
+    }
+
+    private suspend fun recoverDelete(operation: FileOperationEntity) {
+        if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED || PhysicalStorageManager.deleteFile(context, operation.sourcePath) || !File(operation.sourcePath).exists()) {
+            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
+            dao.deleteFileById(operation.fileId)
+            fileOperationStore.delete(operation.operationId)
+        }
+    }
+
+    private suspend fun prepareFileOperation(type: String, fileId: Long, sourcePath: String, targetPath: String): FileOperationEntity {
+        val operationId = operationId(fileId, type)
+        val existing = fileOperationStore.findOpenOperation(fileId, type)
+        if (existing != null) return existing
+        val now = System.currentTimeMillis()
+        return FileOperationEntity(operationId, type, fileId, sourcePath, targetPath, FILE_OPERATION_PREPARED, now, now).also {
+            fileOperationStore.insert(it)
+        }
+    }
+
+    private fun operationId(fileId: Long, type: String): String = "file-$type-$fileId"
+
+    companion object {
+        private const val FILE_OPERATION_PREPARED = FileOperationStatus.PREPARED
+        private const val FILE_OPERATION_PHYSICAL_COMPLETED = FileOperationStatus.PHYSICAL_COMPLETED
+        private const val FILE_OPERATION_COMMITTED = FileOperationStatus.COMMITTED
+        private const val FILE_OPERATION_FAILED = FileOperationStatus.FAILED
+        private const val FILE_OPERATION_MOVE_TO_TRASH = "MOVE_TO_TRASH"
+        private const val FILE_OPERATION_RESTORE = "RESTORE"
+        private const val FILE_OPERATION_DELETE = "DELETE"
     }
 
     suspend fun encryptToVault(file: FileItemEntity) = vaultRepository.encryptToVault(file)

@@ -174,6 +174,22 @@ for worker_name in (
     if worker_path.exists() and "executeWithDurableLease(" not in worker_path.read_text(encoding="utf-8"):
         errors.append(f"{worker_path.relative_to(ROOT)} is not wrapped by executeWithDurableLease")
 
+# Destructive file operations must use a durable intent/state machine rather than a physical-first best-effort sequence.
+file_operation_store = MAIN / "com/example/data/FileOperationStore.kt"
+repository = MAIN / "com/example/data/SmartManagerRepository.kt"
+if not file_operation_store.exists():
+    errors.append("FileOperationStore.kt is missing durable destructive-operation state")
+else:
+    file_operation_text = file_operation_store.read_text(encoding="utf-8")
+    for required_symbol in ("PREPARED", "PHYSICAL_COMPLETED", "COMMITTED", "getOpenOperations"):
+        if required_symbol not in file_operation_text:
+            errors.append(f"FileOperationStore is missing state-machine primitive: {required_symbol}")
+if repository.exists():
+    repository_text = repository.read_text(encoding="utf-8")
+    for required_symbol in ("prepareFileOperation", "recoverPendingFileOperations", "PHYSICAL_COMPLETED"):
+        if required_symbol not in repository_text:
+            errors.append(f"SmartManagerRepository is missing destructive-operation recovery primitive: {required_symbol}")
+
 # New production code must not silently add another repository compatibility façade.
 for path in MAIN.rglob("*.kt"):
     if path.name.endswith("Compat.kt") and path not in compat_files:

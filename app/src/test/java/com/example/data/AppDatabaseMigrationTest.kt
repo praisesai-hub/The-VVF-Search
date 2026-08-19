@@ -397,6 +397,29 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun testMigrationFrom9To10CreatesFileOperationTable() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(9) {
+                override fun onCreate(db: SupportSQLiteDatabase) {}
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+
+        AppDatabase.MIGRATION_9_10.migrate(db)
+        db.execSQL("INSERT INTO file_operations (operationId, operationType, fileId, sourcePath, targetPath, status, createdAtMs, updatedAtMs, lastErrorCode) VALUES ('file-DELETE-1', 'DELETE', 1, '/source', '', 'PREPARED', 10, 10, NULL)")
+
+        val cursor = db.query("SELECT operationType, status FROM file_operations WHERE operationId = 'file-DELETE-1'")
+        assertTrue(cursor.moveToFirst())
+        assertEquals("DELETE", cursor.getString(cursor.getColumnIndexOrThrow("operationType")))
+        assertEquals("PREPARED", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+        cursor.close()
+        db.close()
+    }
+
+    @Test
     fun testFullMigrationPathFrom1To4PreservesData() {
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
             .name("test_migration_db")

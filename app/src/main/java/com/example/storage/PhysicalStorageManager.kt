@@ -213,12 +213,26 @@ object PhysicalStorageManager {
         return deleted || !file.exists()
     }
 
-    fun moveToTrash(context: Context, path: String): Result<String> {
+    fun trashPathForOperation(context: Context, path: String, operationId: String): String {
+        val operationToken = operationId.replace(Regex("[^A-Za-z0-9_-]"), "_").take(64)
+        val prefix = if (operationToken.isBlank()) System.currentTimeMillis().toString() else "op_$operationToken"
+        val name = if (path.startsWith("content://")) {
+            runCatching {
+                DocumentFile.fromSingleUri(context, path.toUri())?.name
+            }.getOrNull() ?: "content.bin"
+        } else {
+            File(path).name
+        }
+        return File(getRecycleBinDir(context), "${prefix}_${safeTrashFileName(name)}").absolutePath
+    }
+
+    fun moveToTrash(context: Context, path: String): Result<String> =
+        moveToTrash(context, path, "")
+
+    fun moveToTrash(context: Context, path: String, operationId: String): Result<String> {
         if (path.startsWith("content://")) {
-            val trashDir = getRecycleBinDir(context)
             val uri = path.toUri()
-            val docName = try { DocumentFile.fromSingleUri(context, uri)?.name ?: "content_${System.currentTimeMillis()}.bin" } catch (_: Exception) { "content_${System.currentTimeMillis()}.bin" }
-            val trashFile = File(trashDir, "${System.currentTimeMillis()}_${safeTrashFileName(docName)}")
+            val trashFile = File(trashPathForOperation(context, path, operationId))
             return try {
                 val copied = context.contentResolver.openInputStream(uri)?.use { input -> trashFile.outputStream().use { output -> input.copyTo(output) }; true } ?: false
                 if (!copied) { try { trashFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("copy failed")) }
@@ -229,7 +243,7 @@ object PhysicalStorageManager {
         }
         val srcFile = File(path)
         if (!srcFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.FileNotFoundException("source unavailable"))
-        val trashFile = File(getRecycleBinDir(context), "${System.currentTimeMillis()}_${srcFile.name}")
+        val trashFile = File(trashPathForOperation(context, path, operationId))
         var moved = false
         try { moved = srcFile.renameTo(trashFile) } catch (e: Exception) { Log.w(TAG, "Direct rename to trash failed: ${e.message}") }
         if (!moved) {

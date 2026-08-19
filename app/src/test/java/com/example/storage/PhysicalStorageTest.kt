@@ -116,6 +116,19 @@ class PhysicalStorageTest {
     }
 
     @Test
+    fun operationTrashPath_isDeterministicAndSanitized() {
+        val source = File(testDir, "report final.pdf")
+        val operationId = "file-MOVE_TO_TRASH-42/unsafe"
+
+        val first = PhysicalStorageManager.trashPathForOperation(context, source.absolutePath, operationId)
+        val second = PhysicalStorageManager.trashPathForOperation(context, source.absolutePath, operationId)
+
+        assertEquals(first, second)
+        assertTrue(File(first).parentFile == PhysicalStorageManager.getRecycleBinDir(context))
+        assertTrue(File(first).name.startsWith("op_file-MOVE_TO_TRASH-42_unsafe_"))
+    }
+
+    @Test
     fun storageDirectories_areCreatedWithinApplicationStorage() {
         val recycleBin = PhysicalStorageManager.getRecycleBinDir(context)
         val vault = PhysicalStorageManager.getVaultDir(context)
