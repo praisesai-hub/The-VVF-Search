@@ -3,6 +3,7 @@ package com.example.data
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
+import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
@@ -16,6 +17,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import kotlinx.coroutines.runBlocking
 
 @RunWith(AndroidJUnit4::class)
 class DatabaseEncryptionMigratorInstrumentedTest {
@@ -59,6 +61,41 @@ class DatabaseEncryptionMigratorInstrumentedTest {
             }
         } finally {
             helper.close()
+        }
+    }
+
+    @Test
+    fun ensureEncrypted_preservesRoomRowsAndReopensWithProductionSchema() = runBlocking {
+        val plaintextRoom = Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
+            .openHelperFactory(FrameworkSQLiteOpenHelperFactory())
+            .build()
+        plaintextRoom.fileDao().insertFileDirect(
+            FileItemEntity(
+                name = "private-invoice.pdf",
+                path = "content://documents/private-invoice",
+                category = "DOCUMENTS",
+                sizeBytes = 2048,
+                ocrText = "sensitive invoice amount",
+                tags = "finance,private",
+                semanticEmbeddingString = "0.1,0.2"
+            )
+        )
+        plaintextRoom.close()
+
+        DatabaseEncryptionMigrator(context, databaseName, passphrase).ensureEncrypted()
+
+        val encryptedRoom = Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
+            .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
+            .build()
+        try {
+            val row = encryptedRoom.fileDao().getFileByPath("content://documents/private-invoice")
+            requireNotNull(row)
+            assertEquals("private-invoice.pdf", row.name)
+            assertEquals("sensitive invoice amount", row.ocrText)
+            assertEquals("finance,private", row.tags)
+            assertEquals("0.1,0.2", row.semanticEmbeddingString)
+        } finally {
+            encryptedRoom.close()
         }
     }
 
