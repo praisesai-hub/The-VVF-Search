@@ -22,7 +22,19 @@ class GoogleDriveProviderAdapter(
     override val providerId: String = "GOOGLE_DRIVE"
 
     @Suppress("LongMethod", "NestedBlockDepth", "ReturnCount")
-    override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
+    override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult =
+        uploadFileWithOperationId(file, remotePath, null)
+
+    @Suppress("LongMethod", "NestedBlockDepth", "ReturnCount")
+    override suspend fun uploadFile(file: File, remotePath: String, operationId: String): CloudSyncResult =
+        uploadFileWithOperationId(file, remotePath, operationId)
+
+    @Suppress("LongMethod", "NestedBlockDepth", "ReturnCount")
+    private suspend fun uploadFileWithOperationId(
+        file: File,
+        remotePath: String,
+        operationId: String?
+    ): CloudSyncResult {
         if (!file.exists() || !file.isFile) {
             return CloudSyncResult.Error(
                 message = "The selected file is unavailable.",
@@ -36,13 +48,30 @@ class GoogleDriveProviderAdapter(
         )
 
         return try {
+            if (!operationId.isNullOrBlank()) {
+                val lookupRequest = Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files?q=appProperties%20has%20%7B%20key='vvf_operation_id'%20and%20value='$operationId'%20%7D%20and%20trashed=false")
+                    .header("Authorization", authorization)
+                    .get()
+                    .build()
+                httpClient.newCall(lookupRequest).execute().use { lookupResponse ->
+                    val lookupBody = lookupResponse.body?.string().orEmpty()
+                    if (!lookupResponse.isSuccessful) {
+                        return classifyHttpError("Cloud idempotency lookup failed", lookupResponse.code, lookupBody)
+                    }
+                    if (hasExistingOperation(lookupBody)) return CloudSyncResult.Success()
+                }
+            }
+
             val mimeType = determineMimeType(file)
-            val metadataJson = Gson().toJson(
-                mapOf(
-                    "name" to remotePath,
-                    "description" to "Uploaded via Smart Vault Engine"
-                )
+            val metadata = mutableMapOf<String, Any>(
+                "name" to remotePath,
+                "description" to "Uploaded via Smart Vault Engine"
             )
+            if (!operationId.isNullOrBlank()) {
+                metadata["appProperties"] = mapOf("vvf_operation_id" to operationId)
+            }
+            val metadataJson = Gson().toJson(metadata)
 
             // 1. Prepare Resumable Upload
             val initRequest = Request.Builder()
@@ -95,6 +124,11 @@ class GoogleDriveProviderAdapter(
             classifyException(e)
         }
     }
+
+    private fun hasExistingOperation(body: String): Boolean = runCatching {
+        val files = Gson().fromJson(body, Map::class.java)["files"] as? List<*>
+        !files.isNullOrEmpty()
+    }.getOrDefault(false)
 
     @Suppress("NestedBlockDepth", "ReturnCount")
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult {

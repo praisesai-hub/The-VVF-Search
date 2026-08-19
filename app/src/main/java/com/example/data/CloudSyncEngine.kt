@@ -61,7 +61,7 @@ class CloudSyncEngine(
 
         Log.i(TAG, "Starting sync for item ${item.id} (${item.fileName}) with provider ${item.provider}...")
         return try {
-            adapter.uploadFile(file, item.fileName)
+            adapter.uploadFile(file, item.fileName, item.operationId)
         } catch (e: Exception) {
             val error = DomainErrorMapper.fromThrowable(
                 operation = "CLOUD_TRANSFER",

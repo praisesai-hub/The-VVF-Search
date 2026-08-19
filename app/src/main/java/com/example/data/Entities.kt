@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.squareup.moshi.JsonClass
+import java.util.UUID
 
 enum class FileCategory {
     IMAGES, DOCUMENTS, AUDIO, VIDEO, ARCHIVES, APKS, DOWNLOADS, OTHER
@@ -67,16 +68,27 @@ data class VaultItemEntity(
 )
 
 @JsonClass(generateAdapter = true)
-@Entity(tableName = "cloud_sync")
+@Entity(
+    tableName = "cloud_sync",
+    indices = [Index(value = ["operationId"], unique = true)]
+)
 data class CloudSyncItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val provider: String, // GOOGLE_DRIVE, ONEDRIVE, DROPBOX, NEXTCLOUD, S3, NAS
     val fileName: String,
     val filePath: String = "",
     val fileSize: Long,
-    val status: String, // SYNCED, PENDING, UPLOADING, FAILED
+    val status: String, // SYNCED, PENDING, QUEUED, UPLOADING, FAILED
     val lastSyncedMs: Long = System.currentTimeMillis(),
-    val isCore: Boolean = false
+    val isCore: Boolean = false,
+    val operationId: String = "op-${UUID.randomUUID()}",
+    val leaseOwner: String? = null,
+    val leaseExpiresAtMs: Long = 0L,
+    val attemptCount: Int = 0,
+    val startedAtMs: Long = 0L,
+    val heartbeatAtMs: Long = 0L,
+    val completedAtMs: Long = 0L,
+    val lastErrorCode: String? = null
 )
 
 @JsonClass(generateAdapter = true)

@@ -272,6 +272,54 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun testMigrationFrom5To6AddsCloudOperationState() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(5) {
+                override fun onCreate(db: SupportSQLiteDatabase) {}
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `cloud_sync` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `provider` TEXT NOT NULL,
+                `fileName` TEXT NOT NULL,
+                `filePath` TEXT NOT NULL DEFAULT '',
+                `fileSize` INTEGER NOT NULL,
+                `status` TEXT NOT NULL,
+                `lastSyncedMs` INTEGER NOT NULL,
+                `isCore` INTEGER NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("""
+            INSERT INTO `cloud_sync` (id, provider, fileName, filePath, fileSize, status, lastSyncedMs, isCore)
+            VALUES (601, 'GOOGLE_DRIVE', 'cloud_file.txt', '/tmp/cloud_file.txt', 500, 'QUEUED', 10000, 0)
+        """.trimIndent())
+
+        AppDatabase.MIGRATION_5_6.migrate(db)
+
+        val cursor = db.query("SELECT * FROM cloud_sync WHERE id = 601")
+        assertTrue(cursor.moveToFirst())
+        assertEquals("legacy-601", cursor.getString(cursor.getColumnIndexOrThrow("operationId")))
+        assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("attemptCount")))
+        assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("leaseExpiresAtMs")))
+        assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("startedAtMs")))
+        assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("heartbeatAtMs")))
+        assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("completedAtMs")))
+        cursor.close()
+        val indexCursor = db.query("SELECT name FROM sqlite_master WHERE type='index' AND name='index_cloud_sync_operationId'")
+        assertTrue(indexCursor.moveToFirst())
+        indexCursor.close()
+        val workTableCursor = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='work_operations'")
+        assertTrue(workTableCursor.moveToFirst())
+        workTableCursor.close()
+        db.close()
+    }
+
+    @Test
     fun testFullMigrationPathFrom1To4PreservesData() {
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
             .name("test_migration_db")

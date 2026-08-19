@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import com.example.data.CategoryStat
 import com.example.data.CloudSyncItemEntity
+import com.example.data.CloudSyncOperationStore
 import com.example.data.FileDao
 import com.example.data.FileItemEntity
 import com.example.data.GoogleAuthManager
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -134,6 +136,86 @@ class FakeCloudProviderAdapter : CloudProviderAdapter {
     }
 }
 
+private class FakeCloudSyncOperationStore(
+    private val items: MutableList<CloudSyncItemEntity>
+) : CloudSyncOperationStore {
+    private fun indexFor(operationId: String): Int = items.indexOfFirst {
+        it.operationId == operationId || (it.operationId.isBlank() && operationId == "legacy-${it.id}")
+    }
+
+    override suspend fun releaseExpiredLeases(nowMs: Long): Int {
+        var released = 0
+        items.forEachIndexed { index, item ->
+            if (item.status == "UPLOADING" && (item.leaseExpiresAtMs == 0L || item.leaseExpiresAtMs <= nowMs)) {
+                items[index] = item.copy(status = "QUEUED", leaseOwner = null, leaseExpiresAtMs = 0L, heartbeatAtMs = 0L)
+                released++
+            }
+        }
+        return released
+    }
+
+    override suspend fun claim(operationId: String, leaseOwner: String, nowMs: Long, leaseExpiresAtMs: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0) return 0
+        val item = items[index]
+        if (item.status !in setOf("PENDING", "QUEUED") ||
+            (item.leaseOwner != null && item.leaseExpiresAtMs > nowMs)
+        ) return 0
+        items[index] = item.copy(
+            operationId = operationId,
+            status = "UPLOADING",
+            leaseOwner = leaseOwner,
+            leaseExpiresAtMs = leaseExpiresAtMs,
+            heartbeatAtMs = nowMs,
+            startedAtMs = if (item.startedAtMs == 0L) nowMs else item.startedAtMs,
+            attemptCount = item.attemptCount + 1
+        )
+        return 1
+    }
+
+    override suspend fun heartbeat(operationId: String, leaseOwner: String, nowMs: Long, leaseExpiresAtMs: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(heartbeatAtMs = nowMs, leaseExpiresAtMs = leaseExpiresAtMs)
+        return 1
+    }
+
+    override suspend fun markCompleted(operationId: String, leaseOwner: String, nowMs: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(
+            status = "SYNCED",
+            lastSyncedMs = nowMs,
+            heartbeatAtMs = nowMs,
+            completedAtMs = nowMs,
+            leaseOwner = null,
+            leaseExpiresAtMs = 0L,
+            lastErrorCode = null
+        )
+        return 1
+    }
+
+    override suspend fun markFailed(
+        operationId: String,
+        leaseOwner: String,
+        status: String,
+        errorCode: String?,
+        nowMs: Long
+    ): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(
+            status = status,
+            heartbeatAtMs = nowMs,
+            completedAtMs = if (status == "FAILED") nowMs else 0L,
+            leaseOwner = null,
+            leaseExpiresAtMs = 0L,
+            lastErrorCode = errorCode
+        )
+        return 1
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class CloudSyncWorkerTest {
@@ -141,6 +223,7 @@ class CloudSyncWorkerTest {
     private lateinit var context: Context
     private lateinit var fakeDao: FakeFileDao
     private lateinit var fakeAdapter: FakeCloudProviderAdapter
+    private lateinit var fakeOperationStore: FakeCloudSyncOperationStore
 
     @Before
     fun setUp() {
@@ -155,6 +238,7 @@ class CloudSyncWorkerTest {
             isCore = false
         )
         fakeAdapter = FakeCloudProviderAdapter()
+        fakeOperationStore = FakeCloudSyncOperationStore(fakeDao.cloudSyncItems)
     }
 
     @After
@@ -175,6 +259,7 @@ class CloudSyncWorkerTest {
                     appContext,
                     workerParameters,
                     daoOverride = fakeDao,
+                    operationStoreOverride = fakeOperationStore,
                     providerAdapterOverride = fakeAdapter,
                     authManagerOverride = GoogleAuthManager(
                         appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)
@@ -248,10 +333,16 @@ class CloudSyncWorkerTest {
         val itemsInDb = fakeDao.getCloudSyncItems().first()
         val updatedItem = itemsInDb.find { it.id == 101L }
         assertEquals("SYNCED", updatedItem?.status)
+        assertTrue(!updatedItem?.operationId.isNullOrBlank())
+        assertEquals(1, updatedItem?.attemptCount)
+        assertEquals(null, updatedItem?.leaseOwner)
+        assertTrue((updatedItem?.startedAtMs ?: 0L) > 0L)
+        assertTrue((updatedItem?.heartbeatAtMs ?: 0L) > 0L)
+        assertTrue((updatedItem?.completedAtMs ?: 0L) > 0L)
     }
 
     @Test
-    fun testNetworkFailure_updatesStatusToFailedAndReturnsRetry() = runBlocking {
+    fun testNetworkFailure_releasesLeaseAndRequeuesWithStableOperationState() = runBlocking {
         val tempFile = File.createTempFile("sync_test_failure", ".txt")
         tempFile.writeText("sample data for upload")
         tempFile.deleteOnExit()
@@ -278,7 +369,12 @@ class CloudSyncWorkerTest {
 
         val itemsInDb = fakeDao.getCloudSyncItems().first()
         val updatedItem = itemsInDb.find { it.id == 102L }
-        assertEquals("FAILED", updatedItem?.status)
+        assertEquals("QUEUED", updatedItem?.status)
+        assertTrue(!updatedItem?.operationId.isNullOrBlank())
+        assertEquals(1, updatedItem?.attemptCount)
+        assertEquals(null, updatedItem?.leaseOwner)
+        assertEquals(0L, updatedItem?.completedAtMs)
+        assertEquals("IO_FAILURE", updatedItem?.lastErrorCode)
     }
 
     @Test

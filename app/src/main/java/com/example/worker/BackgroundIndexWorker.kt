@@ -10,6 +10,7 @@ import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
 import com.example.domain.retry.RetryOperation
 import com.example.domain.retry.RetryPolicy
+import com.example.domain.WorkCoordinator
 
 class BackgroundIndexWorker(
     appContext: Context,
@@ -21,7 +22,15 @@ class BackgroundIndexWorker(
         const val WORK_NAME = "VVF_BACKGROUND_STORAGE_INDEX"
     }
 
-    override suspend fun doWork(): androidx.work.ListenableWorker.Result {
+    override suspend fun doWork(): androidx.work.ListenableWorker.Result = executeWithDurableLease(
+        context = applicationContext,
+        worker = this,
+        workName = WORK_NAME,
+        operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
+        block = { runWork() }
+    )
+
+    private suspend fun runWork(): androidx.work.ListenableWorker.Result {
         Log.i(TAG, "Starting background file storage indexing...")
         return try {
             val scanner = StorageScanner(applicationContext)

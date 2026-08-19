@@ -9,13 +9,22 @@ import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
 import com.example.domain.retry.RetryOperation
 import com.example.domain.retry.RetryPolicy
+import com.example.domain.WorkCoordinator
 
 class CacheCleanupWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = executeWithDurableLease(
+        context = applicationContext,
+        worker = this,
+        workName = WORK_NAME,
+        operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
+        block = { runWork() }
+    )
+
+    private suspend fun runWork(): Result {
         Log.i(TAG, "Starting CacheCleanupWorker...")
         return try {
             val cacheDir = applicationContext.cacheDir

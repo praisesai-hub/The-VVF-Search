@@ -20,6 +20,7 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     override val providerId: String = "TEST_PROVIDER"
     var uploadedFile: File? = null
     var uploadedRemotePath: String? = null
+    var uploadedOperationId: String? = null
     var result: CloudSyncResult = CloudSyncResult.Success()
     var exceptionToThrow: Exception? = null
 
@@ -28,6 +29,11 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
         uploadedRemotePath = remotePath
         exceptionToThrow?.let { throw it }
         return result
+    }
+
+    override suspend fun uploadFile(file: File, remotePath: String, operationId: String): CloudSyncResult {
+        uploadedOperationId = operationId
+        return uploadFile(file, remotePath)
     }
 
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult =
@@ -63,14 +69,16 @@ class CloudSyncEngineTest {
     private fun item(
         provider: String = "GOOGLE_DRIVE",
         file: File,
-        fileName: String = "remote-name.txt"
+        fileName: String = "remote-name.txt",
+        operationId: String = ""
     ): CloudSyncItemEntity = CloudSyncItemEntity(
         id = 41L,
         provider = provider,
         fileName = fileName,
         filePath = file.absolutePath,
         fileSize = file.length(),
-        status = "PENDING"
+        status = "PENDING",
+        operationId = operationId
     )
 
     @Test
@@ -116,6 +124,17 @@ class CloudSyncEngineTest {
         assertSame(adapter.result, result)
         assertEquals(file, adapter.uploadedFile)
         assertEquals("remote.txt", adapter.uploadedRemotePath)
+    }
+
+    @Test
+    fun adapterOverride_receivesStableOperationIdForIdempotentUpload(): Unit = runBlocking {
+        val file = createFile()
+        val adapter = RecordingCloudProviderAdapter()
+        val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager, adapter)
+
+        engine.syncItem(item(file = file, operationId = "operation-41"))
+
+        assertEquals("operation-41", adapter.uploadedOperationId)
     }
 
     @Test

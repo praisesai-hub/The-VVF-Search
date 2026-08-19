@@ -23,6 +23,13 @@ sealed class CloudSyncResult {
 interface CloudProviderAdapter {
     val providerId: String
     suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult
+
+    /**
+     * Upload with a stable operation key. Providers may use it for remote
+     * deduplication; the default preserves compatibility with legacy adapters.
+     */
+    suspend fun uploadFile(file: File, remotePath: String, operationId: String): CloudSyncResult =
+        uploadFile(file, remotePath)
     suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult
 }
 

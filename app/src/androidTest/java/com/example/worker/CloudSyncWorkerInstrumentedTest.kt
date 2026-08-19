@@ -9,6 +9,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import com.example.data.CategoryStat
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncItemEntity
+import com.example.data.CloudSyncOperationStore
 import com.example.data.CloudSyncResult
 import com.example.data.FileDao
 import com.example.data.FileItemEntity
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -90,6 +92,65 @@ private class InstrumentedWorkerFileDao : FileDao {
     override suspend fun insertPlugins(plugins: List<PluginEntity>): Unit = Unit
 }
 
+private class InstrumentedWorkerOperationStore(
+    private val items: MutableList<CloudSyncItemEntity>
+) : CloudSyncOperationStore {
+    private fun indexFor(operationId: String): Int = items.indexOfFirst {
+        it.operationId == operationId || (it.operationId.isBlank() && operationId == "legacy-${it.id}")
+    }
+
+    override suspend fun releaseExpiredLeases(nowMs: Long): Int {
+        var released = 0
+        items.forEachIndexed { index, item ->
+            if (item.status == "UPLOADING" && (item.leaseExpiresAtMs == 0L || item.leaseExpiresAtMs <= nowMs)) {
+                items[index] = item.copy(status = "QUEUED", leaseOwner = null, leaseExpiresAtMs = 0L, heartbeatAtMs = 0L)
+                released++
+            }
+        }
+        return released
+    }
+
+    override suspend fun claim(operationId: String, leaseOwner: String, nowMs: Long, leaseExpiresAtMs: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0) return 0
+        val item = items[index]
+        if (item.status !in setOf("PENDING", "QUEUED") ||
+            (item.leaseOwner != null && item.leaseExpiresAtMs > nowMs)
+        ) return 0
+        items[index] = item.copy(
+            operationId = operationId,
+            status = "UPLOADING",
+            leaseOwner = leaseOwner,
+            leaseExpiresAtMs = leaseExpiresAtMs,
+            heartbeatAtMs = nowMs,
+            startedAtMs = if (item.startedAtMs == 0L) nowMs else item.startedAtMs,
+            attemptCount = item.attemptCount + 1
+        )
+        return 1
+    }
+
+    override suspend fun heartbeat(operationId: String, leaseOwner: String, nowMs: Long, leaseExpiresAtMs: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(heartbeatAtMs = nowMs, leaseExpiresAtMs = leaseExpiresAtMs)
+        return 1
+    }
+
+    override suspend fun markCompleted(operationId: String, leaseOwner: String, nowMs: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(status = "SYNCED", completedAtMs = nowMs, heartbeatAtMs = nowMs, leaseOwner = null, leaseExpiresAtMs = 0L)
+        return 1
+    }
+
+    override suspend fun markFailed(operationId: String, leaseOwner: String, status: String, errorCode: String?, nowMs: Long): Int {
+        val index = indexFor(operationId)
+        if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
+        items[index] = items[index].copy(status = status, lastErrorCode = errorCode, completedAtMs = if (status == "FAILED") nowMs else 0L, heartbeatAtMs = nowMs, leaseOwner = null, leaseExpiresAtMs = 0L)
+        return 1
+    }
+}
+
 private class InstrumentedWorkerCloudAdapter : CloudProviderAdapter {
     override val providerId: String = "GOOGLE_DRIVE"
     var exceptionToThrow: Exception? = null
@@ -110,6 +171,7 @@ class CloudSyncWorkerInstrumentedTest {
     private lateinit var context: Context
     private lateinit var fakeDao: InstrumentedWorkerFileDao
     private lateinit var fakeAdapter: InstrumentedWorkerCloudAdapter
+    private lateinit var operationStore: InstrumentedWorkerOperationStore
 
     @Before
     fun setUp(): Unit {
@@ -124,6 +186,7 @@ class CloudSyncWorkerInstrumentedTest {
             isCore = false
         )
         fakeAdapter = InstrumentedWorkerCloudAdapter()
+        operationStore = InstrumentedWorkerOperationStore(fakeDao.cloudSyncItems)
     }
 
     private fun createFile(prefix: String, content: String = "cloud sync instrumented data"): File =
@@ -157,6 +220,7 @@ class CloudSyncWorkerInstrumentedTest {
                 appContext,
                 workerParameters,
                 daoOverride = fakeDao,
+                operationStoreOverride = operationStore,
                 providerAdapterOverride = fakeAdapter,
                 authManagerOverride = GoogleAuthManager(
                     appContext.getSharedPreferences("cloud_sync_worker_instrumented_auth", Context.MODE_PRIVATE)
@@ -183,7 +247,11 @@ class CloudSyncWorkerInstrumentedTest {
         fakeDao.cloudSyncItems += item(301L, file)
 
         assertEquals(ListenableWorker.Result.success(), createWorker().doWork())
-        assertEquals("SYNCED", fakeDao.getCloudSyncItems().first().single().status)
+        val syncedItem = fakeDao.getCloudSyncItems().first().single()
+        assertEquals("SYNCED", syncedItem.status)
+        assertEquals(1, syncedItem.attemptCount)
+        assertTrue(syncedItem.startedAtMs > 0L)
+        assertTrue(syncedItem.completedAtMs > 0L)
     }
 
     @Test
@@ -193,7 +261,7 @@ class CloudSyncWorkerInstrumentedTest {
         val synced = createFile("worker_synced")
         val disabled = createFile("worker_disabled")
         fakeDao.cloudSyncItems += listOf(
-            item(302L, failed, status = "FAILED"),
+            item(302L, failed, status = "QUEUED"),
             item(303L, uploading, status = "UPLOADING"),
             item(304L, synced, status = "SYNCED"),
             item(305L, disabled, provider = "DROPBOX")
@@ -214,7 +282,11 @@ class CloudSyncWorkerInstrumentedTest {
         fakeAdapter.exceptionToThrow = IOException("network unavailable")
 
         assertEquals(ListenableWorker.Result.retry(), createWorker(runAttemptCount = 0).doWork())
-        assertEquals("FAILED", fakeDao.getCloudSyncItems().first().single().status)
+        val retryItem = fakeDao.getCloudSyncItems().first().single()
+        assertEquals("QUEUED", retryItem.status)
+        assertEquals(1, retryItem.attemptCount)
+        assertEquals(null, retryItem.leaseOwner)
+        assertEquals(0L, retryItem.completedAtMs)
     }
 
     @Test

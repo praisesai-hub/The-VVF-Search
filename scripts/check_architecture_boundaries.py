@@ -102,6 +102,33 @@ for path in retry_surface_files:
     if "runAttemptCount >= 3" in text:
         errors.append(f"{path.relative_to(ROOT)} uses a blind runAttemptCount retry threshold")
 
+# Cloud uploads must use durable operation identity, lease claims, heartbeats, and CAS completion.
+cloud_worker = MAIN / "com/example/worker/CloudSyncWorker.kt"
+if cloud_worker.exists():
+    cloud_worker_text = cloud_worker.read_text(encoding="utf-8")
+    for required_symbol in (
+        "CloudSyncOperationStore",
+        "operationStoreOverride",
+        "releaseExpiredLeases",
+        "claim(",
+        "heartbeat(",
+        "markCompleted(",
+        "markFailed(",
+    ):
+        if required_symbol not in cloud_worker_text:
+            errors.append(f"CloudSyncWorker is missing durable idempotency primitive: {required_symbol}")
+
+# Every scheduled worker must persist a stable operation lease and completion state.
+for worker_name in (
+    "BackgroundIndexWorker.kt",
+    "CacheCleanupWorker.kt",
+    "CloudSyncWorker.kt",
+    "DuplicateCleanupWorker.kt",
+):
+    worker_path = MAIN / "com/example/worker" / worker_name
+    if worker_path.exists() and "executeWithDurableLease(" not in worker_path.read_text(encoding="utf-8"):
+        errors.append(f"{worker_path.relative_to(ROOT)} is not wrapped by executeWithDurableLease")
+
 # New production code must not silently add another repository compatibility façade.
 for path in MAIN.rglob("*.kt"):
     if path.name.endswith("Compat.kt") and path not in compat_files:

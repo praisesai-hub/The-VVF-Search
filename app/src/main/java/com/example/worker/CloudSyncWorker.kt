@@ -4,49 +4,65 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.data.AppDatabase
-import com.example.data.CloudSyncItemEntity
-import com.example.data.FileDao
-import com.example.data.CloudProviderAdapter
-import com.example.data.CloudSyncResult
-import com.example.data.CloudSyncPolicy
 import com.example.context.drive.DriveAuthorizationFactory
 import com.example.context.drive.DriveAuthorizationPort
+import com.example.data.AppDatabase
+import com.example.data.CloudProviderAdapter
+import com.example.data.CloudSyncItemEntity
+import com.example.data.CloudSyncOperationStore
+import com.example.data.CloudSyncPolicy
+import com.example.data.CloudSyncResult
+import com.example.data.FileDao
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
 import com.example.domain.retry.RetryDecision
 import com.example.domain.retry.RetryOperation
 import com.example.domain.retry.RetryPolicy
-import kotlinx.coroutines.flow.first
+import com.example.domain.WorkCoordinator
 import java.io.File
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 class CloudSyncWorker @JvmOverloads constructor(
     appContext: Context,
     workerParams: WorkerParameters,
     private val daoOverride: FileDao? = null,
+    private val operationStoreOverride: CloudSyncOperationStore? = null,
     private val providerAdapterOverride: CloudProviderAdapter? = null,
     private val authManagerOverride: DriveAuthorizationPort? = null,
     private val transferAllowed: (() -> Boolean)? = null
 ) : CoroutineWorker(appContext, workerParams) {
 
-    @Suppress(
-        "ReturnCount",
-        "LongMethod",
-        "CyclomaticComplexMethod",
-        "NestedBlockDepth"
+    @Suppress("ReturnCount", "LongMethod", "CyclomaticComplexMethod", "NestedBlockDepth")
+    override suspend fun doWork(): Result = executeWithDurableLease(
+        context = applicationContext,
+        worker = this,
+        workName = WORK_NAME,
+        operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
+        block = { runWork() }
     )
-    override suspend fun doWork(): Result {
+
+    private suspend fun runWork(): Result = coroutineScope {
         if (!(transferAllowed?.invoke() ?: CloudSyncPolicy.canTransfer(applicationContext))) {
             Log.i(TAG, "Cloud transfer blocked: explicit opt-in or build provisioning is missing.")
-            return Result.success()
+            return@coroutineScope Result.success()
         }
-        Log.i(TAG, "Starting background CloudSyncWorker with provider adapter contract...")
-        return try {
+
+        val leaseOwner = id.toString()
+        val leaseStore = operationStoreOverride
+            ?: AppDatabase.getDatabase(applicationContext).cloudSyncOperationStore()
+        return@coroutineScope try {
+            Log.i(TAG, "Starting background CloudSyncWorker with provider adapter contract...")
             val dao = daoOverride ?: AppDatabase.getDatabase(applicationContext).fileDao()
+            val nowMs = System.currentTimeMillis()
+            leaseStore.releaseExpiredLeases(nowMs)
 
             val syncItems = dao.getCloudSyncItems().first()
-            val plugins = dao.getAllPlugins().first()
-            val enabledProviders = plugins
+            val enabledProviders = dao.getAllPlugins().first()
                 .filter { it.isEnabled }
                 .mapNotNull { plugin ->
                     when (plugin.pluginId) {
@@ -58,12 +74,12 @@ class CloudSyncWorker @JvmOverloads constructor(
                 }.toSet()
 
             val pendingOrQueued = syncItems
-                .filter { it.status == "PENDING" || it.status == "QUEUED" || it.status == "FAILED" || it.status == "UPLOADING" }
+                .filter { it.status == "PENDING" || it.status == "QUEUED" || it.status == "UPLOADING" }
                 .filter { it.provider in enabledProviders }
 
             if (pendingOrQueued.isEmpty()) {
                 Log.i(TAG, "No pending cloud sync items for enabled plugins.")
-                return Result.success()
+                return@coroutineScope Result.success()
             }
 
             val driveAuthorization = authManagerOverride
@@ -80,51 +96,80 @@ class CloudSyncWorker @JvmOverloads constructor(
             var retryableFailedCount = 0
 
             for (item in pendingOrQueued) {
-                // Update state to UPLOADING to reflect progress
-                val uploadingItem = item.copy(status = "UPLOADING")
-                dao.insertCloudSyncItem(uploadingItem)
+                val operationId = item.operationId.ifBlank { "legacy-${item.id}" }
+                val claimTimeMs = System.currentTimeMillis()
+                val claimed = leaseStore.claim(
+                    operationId = operationId,
+                    leaseOwner = leaseOwner,
+                    nowMs = claimTimeMs,
+                    leaseExpiresAtMs = claimTimeMs + LEASE_DURATION_MS
+                )
+                if (claimed == 0) continue
 
-                val syncResult = syncEngine.syncItem(item)
-                when (syncResult) {
-                    is CloudSyncResult.Success -> {
-                        val updatedItem = item.copy(
-                            status = "SYNCED",
-                            lastSyncedMs = System.currentTimeMillis()
+                val heartbeatJob: Job = launch {
+                    while (isActive) {
+                        delay(HEARTBEAT_INTERVAL_MS)
+                        val heartbeatMs = System.currentTimeMillis()
+                        leaseStore.heartbeat(
+                            operationId = operationId,
+                            leaseOwner = leaseOwner,
+                            nowMs = heartbeatMs,
+                            leaseExpiresAtMs = heartbeatMs + LEASE_DURATION_MS
                         )
-                        dao.insertCloudSyncItem(updatedItem)
-                        syncedCount++
                     }
-                    is CloudSyncResult.Error -> {
-                        val updatedItem = item.copy(
-                            status = "FAILED",
-                            lastSyncedMs = System.currentTimeMillis()
-                        )
-                        dao.insertCloudSyncItem(updatedItem)
-                        failedCount++
-                        if (syncResult.isRetryable) {
-                            retryableFailedCount++
+                }
+
+                try {
+                    val claimedItem = item.copy(
+                        operationId = operationId,
+                        status = "UPLOADING",
+                        leaseOwner = leaseOwner,
+                        heartbeatAtMs = claimTimeMs
+                    )
+                    when (val syncResult = syncEngine.syncItem(claimedItem)) {
+                        is CloudSyncResult.Success -> {
+                            if (leaseStore.markCompleted(operationId, leaseOwner, System.currentTimeMillis()) > 0) {
+                                syncedCount++
+                            } else {
+                                Log.w(TAG, "Completion ignored because the cloud operation lease was lost.")
+                            }
+                        }
+                        is CloudSyncResult.Error -> {
+                            val canRetry = syncResult.isRetryable &&
+                                runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS
+                            val errorCode = syncResult.domainError?.diagnostics?.reasonCode
+                                ?: if (syncResult.isRetryable) "RETRYABLE_TRANSFER_FAILURE" else "TRANSFER_FAILURE"
+                            val nextStatus = if (canRetry) "QUEUED" else "FAILED"
+                            leaseStore.markFailed(
+                                operationId = operationId,
+                                leaseOwner = leaseOwner,
+                                status = nextStatus,
+                                errorCode = errorCode,
+                                nowMs = System.currentTimeMillis()
+                            )
+                            failedCount++
+                            if (canRetry) retryableFailedCount++
+                        }
+                        is CloudSyncResult.NotSupported -> {
+                            leaseStore.markFailed(
+                                operationId = operationId,
+                                leaseOwner = leaseOwner,
+                                status = "FAILED",
+                                errorCode = "PROVIDER_NOT_SUPPORTED",
+                                nowMs = System.currentTimeMillis()
+                            )
+                            failedCount++
                         }
                     }
-                    is CloudSyncResult.NotSupported -> {
-                        val updatedItem = item.copy(
-                            status = "NOT_SUPPORTED",
-                            lastSyncedMs = System.currentTimeMillis()
-                        )
-                        dao.insertCloudSyncItem(updatedItem)
-                        failedCount++
-                    }
+                } finally {
+                    heartbeatJob.cancel()
                 }
             }
 
             Log.i(TAG, "CloudSyncWorker finished. Synced: $syncedCount, Failed: $failedCount (Retryable: $retryableFailedCount)")
             if (retryableFailedCount > 0) {
-                if (runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS) {
-                    Result.retry()
-                } else {
-                    Result.failure()
-                }
+                if (runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS) Result.retry() else Result.failure()
             } else if (failedCount > 0) {
-                // Permanent failure (e.g. missing file) - do not retry
                 Result.failure()
             } else {
                 Result.success()
@@ -142,6 +187,8 @@ class CloudSyncWorker @JvmOverloads constructor(
 
     companion object {
         const val WORK_NAME = "VVF_CLOUD_SYNC_WORK"
+        const val LEASE_DURATION_MS = 120_000L
+        const val HEARTBEAT_INTERVAL_MS = 30_000L
         private const val TAG = "CloudSyncWorker"
     }
 }

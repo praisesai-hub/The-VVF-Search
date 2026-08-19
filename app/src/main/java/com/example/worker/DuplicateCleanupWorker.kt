@@ -15,6 +15,7 @@ import com.example.domain.error.DomainError
 import com.example.domain.error.UserMessage
 import com.example.domain.retry.RetryOperation
 import com.example.domain.retry.RetryPolicy
+import com.example.domain.WorkCoordinator
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
 import kotlinx.coroutines.flow.first
@@ -24,7 +25,15 @@ class DuplicateCleanupWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = executeWithDurableLease(
+        context = applicationContext,
+        worker = this,
+        workName = WORK_NAME,
+        operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
+        block = { runWork() }
+    )
+
+    private suspend fun runWork(): Result {
         Log.i(TAG, "Starting background DuplicateCleanupWorker...")
         return try {
             val prefs = applicationContext.getSharedPreferences("vvf_app_settings", Context.MODE_PRIVATE)

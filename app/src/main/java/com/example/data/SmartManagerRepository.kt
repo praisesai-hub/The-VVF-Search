@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 
 open class SmartManagerRepository(
     private val context: Context,
@@ -370,7 +371,20 @@ open class SmartManagerRepository(
         val keyPath = if (filePath.isNotBlank()) filePath else fileName
         val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
         if (duplicate != null) return@withContext false
-        withRetry(RetryOperation.DATABASE_WRITE) { dao.insertCloudSyncItem(CloudSyncItemEntity(provider = provider, fileName = fileName, filePath = filePath, fileSize = size, status = "QUEUED", lastSyncedMs = System.currentTimeMillis(), isCore = isCore)) }
+        withRetry(RetryOperation.DATABASE_WRITE) {
+            dao.insertCloudSyncItem(
+                CloudSyncItemEntity(
+                    provider = provider,
+                    fileName = fileName,
+                    filePath = filePath,
+                    fileSize = size,
+                    status = "QUEUED",
+                    lastSyncedMs = System.currentTimeMillis(),
+                    isCore = isCore,
+                    operationId = UUID.randomUUID().toString()
+                )
+            )
+        }
         workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
         true
     }
@@ -382,7 +396,19 @@ open class SmartManagerRepository(
             !cloudTransferAllowed(context) ||
             !isProviderEnabled(item.provider)
         ) return@withContext false
-        withRetry(RetryOperation.DATABASE_WRITE) { dao.insertCloudSyncItem(item.copy(status = "QUEUED", lastSyncedMs = System.currentTimeMillis())) }
+        withRetry(RetryOperation.DATABASE_WRITE) {
+            dao.insertCloudSyncItem(
+                item.copy(
+                    status = "QUEUED",
+                    lastSyncedMs = System.currentTimeMillis(),
+                    leaseOwner = null,
+                    leaseExpiresAtMs = 0L,
+                    heartbeatAtMs = 0L,
+                    completedAtMs = 0L,
+                    lastErrorCode = null
+                )
+            )
+        }
         workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
         true
     }

@@ -10,19 +10,23 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 private const val LEGACY_VAULT_FORMAT_VERSION = 1
 private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
+private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
 
 @Database(
     entities = [
         FileItemEntity::class,
         VaultItemEntity::class,
         CloudSyncItemEntity::class,
-        PluginEntity::class
+        PluginEntity::class,
+        WorkOperationEntity::class
     ],
-    version = DATABASE_VERSION_WITH_VAULT_FORMAT,
+    version = DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun fileDao(): FileDao
+    abstract fun cloudSyncOperationStore(): CloudSyncOperationStore
+    abstract fun workOperationStore(): WorkOperationStore
 
     companion object {
         @Volatile
@@ -89,6 +93,39 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(
+            DATABASE_VERSION_WITH_VAULT_FORMAT,
+            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cloud_sync", "operationId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "leaseOwner", "TEXT")
+                addColumnIfNotExists(db, "cloud_sync", "leaseExpiresAtMs", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "attemptCount", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "startedAtMs", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "heartbeatAtMs", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "completedAtMs", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "lastErrorCode", "TEXT")
+                db.execSQL("UPDATE cloud_sync SET operationId = 'legacy-' || id WHERE operationId = ''")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_cloud_sync_operationId` ON `cloud_sync` (`operationId`)")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `work_operations` (
+                        `operationId` TEXT NOT NULL,
+                        `workName` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `leaseOwner` TEXT,
+                        `leaseExpiresAtMs` INTEGER NOT NULL,
+                        `attemptCount` INTEGER NOT NULL,
+                        `startedAtMs` INTEGER NOT NULL,
+                        `heartbeatAtMs` INTEGER NOT NULL,
+                        `completedAtMs` INTEGER NOT NULL,
+                        `lastErrorCode` TEXT,
+                        PRIMARY KEY(`operationId`)
+                    )
+                """.trimIndent())
+            }
+        }
+
         val MIGRATION_4_5 = object : Migration(
             DATABASE_VERSION_BEFORE_VAULT_FORMAT,
             DATABASE_VERSION_WITH_VAULT_FORMAT
@@ -138,7 +175,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 
                 val instance = builder.build()
                 INSTANCE = instance
