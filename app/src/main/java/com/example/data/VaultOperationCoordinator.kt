@@ -219,7 +219,10 @@ class VaultOperationCoordinator(
             VaultOperationState.VAULT_REMOVAL_PENDING -> {
                 if (!destinationExists) {
                     markCompleted(operation)
-                } else if (vaultExists && !PhysicalStorageManager.removeEncryptedVaultFile(operation.encryptedFilePath)) {
+                } else if (
+                    vaultExists &&
+                    !PhysicalStorageManager.removeEncryptedVaultFile(operation.encryptedFilePath)
+                ) {
                     markRecoveryRequired(operation, "Unable to remove encrypted vault file after restore")
                 } else {
                     completeIfMetadataCommitted(
@@ -228,7 +231,9 @@ class VaultOperationCoordinator(
                 }
             }
             VaultOperationState.VAULT_REMOVED -> {
-                if (destinationExists) completeIfMetadataCommitted(commitRestoreMetadata(operation))
+                if (destinationExists) {
+                    completeIfMetadataCommitted(commitRestoreMetadata(operation))
+                }
                 else markRecoveryRequired(operation, "Restored destination is missing after vault removal")
             }
             VaultOperationState.METADATA_COMMITTED -> markCompleted(operation)

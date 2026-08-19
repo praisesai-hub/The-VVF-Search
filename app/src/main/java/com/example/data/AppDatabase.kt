@@ -168,8 +168,14 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_operations_state` ON `vault_operations` (`state`)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS `index_vault_operations_operationType` ON `vault_operations` (`operationType`)")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_vault_operations_state` " +
+                        "ON `vault_operations` (`state`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_vault_operations_operationType` " +
+                        "ON `vault_operations` (`operationType`)"
+                )
             }
         }
 

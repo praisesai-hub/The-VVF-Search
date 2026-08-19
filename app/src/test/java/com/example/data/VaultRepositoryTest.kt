@@ -85,7 +85,9 @@ class VaultRepositoryTest {
                 any()
             )
         } returns Result.success(result)
-        every { PhysicalStorageManager.verifyEncryptedVaultFile(result.vaultFilePath, result.iv, any()) } returns Result.success(Unit)
+        every {
+            PhysicalStorageManager.verifyEncryptedVaultFile(result.vaultFilePath, result.iv, any())
+        } returns Result.success(Unit)
         every { PhysicalStorageManager.removeSourceAfterVaultEncryption(context, file.path) } returns true
         val committedSource = slot<FileItemEntity>()
         val committedVaultItem = slot<VaultItemEntity>()
@@ -105,19 +107,13 @@ class VaultRepositoryTest {
             )
         }
         coEvery { dao.upsertVaultOperation(capture(operations)) } just Runs
-
         repository.encryptToVault(file)
-
-        // The Room transaction applies isVault=true atomically; its input remains the original source.
-        assertFalse(committedSource.captured.isVault)
-        assertEquals(file.id, committedSource.captured.id)
-        assertEquals(file.path, committedSource.captured.path)
-        assertEquals(file.name, committedVaultItem.captured.originalName)
-        assertEquals(result.encryptedFileName, committedVaultItem.captured.encryptedName)
-        assertEquals(result.vaultFilePath, committedVaultItem.captured.encryptedFilePath)
-        assertEquals("AQIDBA==", committedVaultItem.captured.ivBase64)
-        assertEquals(file.category, committedVaultItem.captured.category)
-        assertEquals(file.sizeBytes, committedVaultItem.captured.sizeBytes)
+        assertEncryptionMetadataInput(
+            source = committedSource.captured,
+            vaultItem = committedVaultItem.captured,
+            file = file,
+            result = result
+        )
         assertEquals(
             listOf(
                 VaultOperationState.PREPARED,
@@ -274,4 +270,21 @@ class VaultRepositoryTest {
         encryptedAtMs = 1_700_000_000_000L,
         vaultFormatVersion = 2
     )
+
+    private fun assertEncryptionMetadataInput(
+        source: FileItemEntity,
+        vaultItem: VaultItemEntity,
+        file: FileItemEntity,
+        result: VaultStorageResult
+    ) {
+        assertFalse(source.isVault)
+        assertEquals(file.id, source.id)
+        assertEquals(file.path, source.path)
+        assertEquals(file.name, vaultItem.originalName)
+        assertEquals(result.encryptedFileName, vaultItem.encryptedName)
+        assertEquals(result.vaultFilePath, vaultItem.encryptedFilePath)
+        assertEquals("AQIDBA==", vaultItem.ivBase64)
+        assertEquals(file.category, vaultItem.category)
+        assertEquals(file.sizeBytes, vaultItem.sizeBytes)
+    }
 }

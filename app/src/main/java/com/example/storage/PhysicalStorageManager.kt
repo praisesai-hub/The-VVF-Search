@@ -400,16 +400,16 @@ object PhysicalStorageManager {
         return removed
     }
 
-    fun sourceExists(context: Context, path: String): Result<Boolean> {
-        if (!path.startsWith("content://")) return Result.success(File(path).exists())
-        return try {
+    fun sourceExists(context: Context, path: String): Result<Boolean> = runCatching {
+        if (!path.startsWith("content://")) {
+            File(path).exists()
+        } else {
             val uri = path.toUri()
-            val document = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
-            Result.success(
-                document?.exists() ?: context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
-            )
-        } catch (error: Exception) {
-            Result.failure(error)
+            val document =
+                DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
+            document?.exists()
+                ?: context.contentResolver.openFileDescriptor(uri, "r")?.use { true }
+                ?: false
         }
     }
 
@@ -423,25 +423,34 @@ object PhysicalStorageManager {
         vaultFilePath: String,
         iv: ByteArray,
         session: VaultCryptoSession
-    ): Result<Unit> = try {
+    ): Result<Unit> = runCatching {
         val vaultFile = File(vaultFilePath)
         check(vaultFile.isFile) { "Encrypted vault file is missing" }
+        consumeVerifiedVaultCiphertext(vaultFile, iv, session)
+    }
+
+    private fun consumeVerifiedVaultCiphertext(
+        vaultFile: File,
+        iv: ByteArray,
+        session: VaultCryptoSession
+    ) {
         val buffer = ByteArray(STREAM_BUFFER_BYTES)
         try {
             val cipher = session.getDecryptionCipher(iv)
             FileInputStream(vaultFile).use { input ->
                 javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
-                    while (decrypted.read(buffer) != -1) {
-                        // GCM authentication is checked only after the complete stream is read.
-                    }
+                    consumeDecryptedStream(decrypted, buffer)
                 }
             }
         } finally {
             buffer.fill(0)
         }
-        Result.success(Unit)
-    } catch (error: Exception) {
-        Result.failure(error)
+    }
+
+    private fun consumeDecryptedStream(stream: InputStream, buffer: ByteArray) {
+        while (stream.read(buffer) != -1) {
+            // GCM authentication is checked only after the complete stream is read.
+        }
     }
 
     fun encryptAndWipeSourceStreaming(
