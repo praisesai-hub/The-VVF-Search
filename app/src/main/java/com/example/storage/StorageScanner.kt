@@ -127,6 +127,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     val category = determineCategory(name)
                     val hash = if (computeHashes) computeContentUriHash(child.uri) else ""
                     val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeContentUriDHash(child.uri) else ""
+                    val documentCandidateFingerprint = if (computeHashes && category == FileCategory.DOCUMENTS) computeContentUriDocumentCandidateFingerprint(child.uri) else ""
                     val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeContentUriVideoFingerprint(child.uri) else null
                     emit(FileItemEntity(
                         name = name,
@@ -136,6 +137,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                         dateModifiedMs = child.lastModified(),
                         md5Hash = hash,
                         visualSimilarityHash = visualHash,
+                        documentCandidateFingerprint = documentCandidateFingerprint,
                         videoFingerprintVersion = videoFingerprint?.version ?: 0,
                         videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
                         videoDurationMs = videoFingerprint?.durationMs ?: 0L,
@@ -179,6 +181,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     val category = determineCategory(file.name)
                     val hash = if (computeHashes) computeFileHashQuietly(file) else ""
                     val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeDHashQuietly(file) else ""
+                    val documentCandidateFingerprint = if (computeHashes && category == FileCategory.DOCUMENTS) computeDocumentCandidateFingerprint(file) else ""
                     val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeVideoFingerprint(file) else null
                     onItemDiscovered(FileItemEntity(
                         name = file.name,
@@ -188,6 +191,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                         dateModifiedMs = file.lastModified(),
                         md5Hash = hash,
                         visualSimilarityHash = visualHash,
+                        documentCandidateFingerprint = documentCandidateFingerprint,
                         videoFingerprintVersion = videoFingerprint?.version ?: 0,
                         videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
                         videoDurationMs = videoFingerprint?.durationMs ?: 0L,
@@ -242,6 +246,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                 val category = determineCategory(name)
                 val hash = if (computeHashes) computeContentUriHash(itemUri) else ""
                 val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeContentUriDHash(itemUri) else ""
+                val documentCandidateFingerprint = if (computeHashes && category == FileCategory.DOCUMENTS) computeContentUriDocumentCandidateFingerprint(itemUri) else ""
                 val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeContentUriVideoFingerprint(itemUri) else null
                 onItemDiscovered(FileItemEntity(
                     name = name,
@@ -251,6 +256,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     dateModifiedMs = if (dateSec > 0) dateSec * 1000L else System.currentTimeMillis(),
                     md5Hash = hash,
                     visualSimilarityHash = visualHash,
+                    documentCandidateFingerprint = documentCandidateFingerprint,
                     videoFingerprintVersion = videoFingerprint?.version ?: 0,
                     videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
                     videoDurationMs = videoFingerprint?.durationMs ?: 0L,
@@ -363,6 +369,54 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     } catch (e: Exception) {
         Log.w(TAG, "Content URI dHash failed for $uri: ${e.message}")
         ""
+    }
+
+    /** Content-URI equivalent of the document candidate fingerprint; it is not exact identity. */
+    suspend fun computeContentUriDocumentCandidateFingerprint(uri: Uri): String = withContext(Dispatchers.IO) {
+        val input = try { context.contentResolver.openInputStream(uri) } catch (_: Exception) { null }
+            ?: return@withContext ""
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val first = ByteArray(8192)
+            var firstRead = 0
+            while (firstRead < first.size) {
+                currentCoroutineContext().ensureActive()
+                val read = input.read(first, firstRead, first.size - firstRead)
+                if (read <= 0) break
+                firstRead += read
+            }
+            if (firstRead == 0) return@withContext ""
+            val size = try { context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L } catch (_: Exception) { -1L }
+            digest.update("DOC_SIZE:$size:".toByteArray())
+            if (firstRead <= 8192) {
+                digest.update(first, 0, firstRead)
+            } else {
+                digest.update(first, 0, 4096)
+                digest.update(first, 4096, 4096)
+                val tail = ByteArray(4096)
+                var tailSize = 0
+                val buffer = ByteArray(8192)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    for (index in 0 until read) {
+                        tail[tailSize % tail.size] = buffer[index]
+                        tailSize++
+                    }
+                }
+                if (tailSize > 0) {
+                    val start = tailSize % tail.size
+                    for (index in 0 until tail.size) digest.update(tail[(start + index) % tail.size])
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }.take(16)
+        } catch (e: Exception) {
+            Log.w(TAG, "Content URI document candidate fingerprint failed: ${e.message}")
+            ""
+        } finally {
+            input.close()
+        }
     }
 
     fun determineCategory(fileName: String): FileCategory {
@@ -524,7 +578,12 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     fun isPdfFile(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() == "pdf"
     fun isDocumentFile(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() in listOf("pdf", "doc", "docx", "txt", "rtf", "xls", "xlsx", "ppt", "pptx", "csv")
 
-    suspend fun computeDocumentFingerprint(file: File): String = withContext(Dispatchers.IO) {
+    /**
+     * Computes structural evidence from document size plus boundary bytes.
+     * This is a duplicate candidate fingerprint, not a cryptographic content identity;
+     * changes in the middle of a file are intentionally not detected here.
+     */
+    suspend fun computeDocumentCandidateFingerprint(file: File): String = withContext(Dispatchers.IO) {
         if (!file.exists() || !file.canRead() || !isDocumentFile(file.name)) return@withContext ""
         try {
             ensureActive()

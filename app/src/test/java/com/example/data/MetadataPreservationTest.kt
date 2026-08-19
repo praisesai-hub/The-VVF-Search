@@ -23,6 +23,7 @@ class MetadataPreservationTest {
             isRecycleBin = false,
             deletedTimestampMs = 0L,
             visualSimilarityHash = "phash123456",
+            documentCandidateFingerprint = "candidate123456",
             semanticEmbeddingVersion = 1,
             semanticIndexed = true,
             semanticEmbeddingString = "0.1,0.2,0.3,0.4"
@@ -49,6 +50,7 @@ class MetadataPreservationTest {
             tags = if (freshScanned.tags.isNotBlank()) freshScanned.tags else existing.tags,
             originalPath = if (freshScanned.originalPath.isNotBlank()) freshScanned.originalPath else existing.originalPath,
             visualSimilarityHash = if (freshScanned.visualSimilarityHash.isNotBlank()) freshScanned.visualSimilarityHash else existing.visualSimilarityHash,
+            documentCandidateFingerprint = if (freshScanned.documentCandidateFingerprint.isNotBlank()) freshScanned.documentCandidateFingerprint else existing.documentCandidateFingerprint,
             semanticEmbeddingVersion = if (freshScanned.semanticEmbeddingVersion > 0) freshScanned.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
             semanticIndexed = freshScanned.semanticIndexed || existing.semanticIndexed,
             semanticEmbeddingString = if (freshScanned.semanticEmbeddingString.isNotBlank()) freshScanned.semanticEmbeddingString else existing.semanticEmbeddingString,
@@ -64,6 +66,7 @@ class MetadataPreservationTest {
         assertEquals("finance,work,2026", merged.tags)
         assertTrue(merged.isVault)
         assertEquals("phash123456", merged.visualSimilarityHash)
+        assertEquals("candidate123456", merged.documentCandidateFingerprint)
         assertEquals(1, merged.semanticEmbeddingVersion)
         assertTrue(merged.semanticIndexed)
         assertEquals("0.1,0.2,0.3,0.4", merged.semanticEmbeddingString)

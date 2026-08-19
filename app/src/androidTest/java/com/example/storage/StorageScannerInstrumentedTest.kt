@@ -143,16 +143,16 @@ class StorageScannerInstrumentedTest {
     }
 
     @Test
-    fun computeDocumentFingerprint_handlesEmptySmallUnsupportedAndLargeFiles(): Unit = runBlocking {
+    fun computeDocumentCandidateFingerprint_handlesEmptySmallUnsupportedAndLargeFiles(): Unit = runBlocking {
         val empty = File(testRoot, "empty.txt").apply { createNewFile() }
         val small = File(testRoot, "small.txt").apply { writeText("small document") }
         val large = File(testRoot, "large.txt").apply { writeText("x".repeat(9_000)) }
         val unsupported = File(testRoot, "archive.zip").apply { writeText("archive") }
 
-        assertEquals("", scanner.computeDocumentFingerprint(empty))
-        assertEquals(16, scanner.computeDocumentFingerprint(small).length)
-        assertEquals("", scanner.computeDocumentFingerprint(unsupported))
-        assertEquals(16, scanner.computeDocumentFingerprint(large).length)
+        assertEquals("", scanner.computeDocumentCandidateFingerprint(empty))
+        assertEquals(16, scanner.computeDocumentCandidateFingerprint(small).length)
+        assertEquals("", scanner.computeDocumentCandidateFingerprint(unsupported))
+        assertEquals(16, scanner.computeDocumentCandidateFingerprint(large).length)
     }
 
     @Test
@@ -249,7 +249,7 @@ class StorageScannerInstrumentedTest {
         assertEquals("", scanner.computeFileHash(missing))
         assertEquals("", scanner.computeDHashQuietly(missing))
         assertEquals("", scanner.computeDHash(File(testRoot, "not-image.txt").apply { writeText("payload") }))
-        assertEquals("", scanner.computeDocumentFingerprint(File(testRoot, "not-document.bin").apply { writeText("payload") }))
+        assertEquals("", scanner.computeDocumentCandidateFingerprint(File(testRoot, "not-document.bin").apply { writeText("payload") }))
     }
 
     private fun insertMediaFile(displayName: String, mimeType: String): android.net.Uri {

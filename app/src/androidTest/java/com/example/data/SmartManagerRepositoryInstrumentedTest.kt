@@ -218,7 +218,7 @@ class SmartManagerRepositoryInstrumentedTest {
             val result = fakeDao.updatedFiles.single { it.id == 20L }
             assertEquals("AUTHENTIC OCR CONTENT", result.ocrText)
             assertTrue(result.md5Hash.isNotBlank())
-            assertTrue(result.visualSimilarityHash.isNotBlank())
+            assertTrue(result.documentCandidateFingerprint.isNotBlank())
             assertTrue(result.semanticIndexed)
             assertTrue(result.semanticEmbeddingString.isNotBlank())
             assertTrue(repository.isSemanticSearchAvailable)

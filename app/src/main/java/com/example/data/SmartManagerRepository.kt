@@ -194,12 +194,18 @@ open class SmartManagerRepository(
                                 }
                             }
                         }
-                        if (updated.category == FileCategory.DOCUMENTS.name && updated.visualSimilarityHash.isBlank() && !updated.path.startsWith("content://")) {
-                            val javaFile = File(updated.path)
-                            if (javaFile.exists() && javaFile.canRead()) {
-                                val docFp = withContext(Dispatchers.IO) { storageScanner.computeDocumentFingerprint(javaFile) }
-                                if (docFp.isNotBlank()) updated = updated.copy(visualSimilarityHash = docFp)
+                        if (updated.category == FileCategory.DOCUMENTS.name && updated.documentCandidateFingerprint.isBlank()) {
+                            val docCandidateFp = if (updated.path.startsWith("content://")) {
+                                withContext(Dispatchers.IO) {
+                                    storageScanner.computeContentUriDocumentCandidateFingerprint(Uri.parse(updated.path))
+                                }
+                            } else {
+                                val javaFile = File(updated.path)
+                                if (javaFile.exists() && javaFile.canRead()) {
+                                    withContext(Dispatchers.IO) { storageScanner.computeDocumentCandidateFingerprint(javaFile) }
+                                } else ""
                             }
+                            if (docCandidateFp.isNotBlank()) updated = updated.copy(documentCandidateFingerprint = docCandidateFp)
                         }
                         if (!updated.semanticIndexed) {
                             val textContent = "${updated.name} ${updated.ocrText} ${updated.tags}".trim()
@@ -241,7 +247,7 @@ open class SmartManagerRepository(
         val docs = files.filter { it.category == FileCategory.DOCUMENTS.name && !it.isVault && !it.isRecycleBin }
         val total = docs.size
         val indexed = docs.count {
-            it.visualSimilarityHash.isNotBlank() ||
+            it.documentCandidateFingerprint.isNotBlank() ||
                 it.videoSampleHashes.isNotBlank() ||
                 it.md5Hash.isNotBlank()
         }

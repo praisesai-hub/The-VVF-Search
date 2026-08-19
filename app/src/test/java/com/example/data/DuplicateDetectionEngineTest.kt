@@ -347,10 +347,10 @@ class DuplicateDetectionEngineTest {
             path = "/docs/report-one.pdf",
             category = FileCategory.DOCUMENTS.name,
             sizeBytes = 1L,
-            visualSimilarityHash = "same-fingerprint"
+            documentCandidateFingerprint = "same-fingerprint"
         )
         val second = first.copy(id = 3002L, name = "report-two.pdf", path = "/docs/report-two.pdf")
-        val different = first.copy(id = 3003L, name = "different.pdf", visualSimilarityHash = "different-fingerprint")
+        val different = first.copy(id = 3003L, name = "different.pdf", documentCandidateFingerprint = "different-fingerprint")
         val vaultCopy = first.copy(id = 3004L, name = "vault.pdf", isVault = true)
         val recycledCopy = first.copy(id = 3005L, name = "recycled.pdf", isRecycleBin = true)
         val wrongCategory = first.copy(id = 3006L, name = "photo.jpg", category = FileCategory.IMAGES.name)
@@ -362,7 +362,7 @@ class DuplicateDetectionEngineTest {
         assertEquals(1, groups.size)
         assertEquals(setOf(3001L, 3002L), groups.single().files.map { it.id }.toSet())
         assertEquals(95, groups.single().similarityScore)
-        assertTrue(groups.single().title.contains("Document Structural Fingerprint Match"))
+        assertTrue(groups.single().title.contains("Document Candidate Fingerprint Match"))
     }
 
     @Test

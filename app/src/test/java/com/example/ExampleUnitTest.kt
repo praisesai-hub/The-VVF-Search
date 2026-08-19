@@ -137,10 +137,10 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun computeDocumentFingerprint_nonExistentFile_returnsEmpty() = runBlocking {
+  fun computeDocumentCandidateFingerprint_nonExistentFile_returnsEmpty() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val scanner = StorageScanner(context)
-    val fp = scanner.computeDocumentFingerprint(java.io.File("/non_existent_doc.pdf"))
+    val fp = scanner.computeDocumentCandidateFingerprint(java.io.File("/non_existent_doc.pdf"))
     assertEquals("", fp)
   }
 

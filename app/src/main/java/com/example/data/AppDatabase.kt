@@ -12,6 +12,7 @@ private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
 private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
 private const val DATABASE_VERSION_WITH_VIDEO_EVIDENCE = 7
+private const val DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT = 8
 
 @Database(
     entities = [
@@ -21,7 +22,7 @@ private const val DATABASE_VERSION_WITH_VIDEO_EVIDENCE = 7
         PluginEntity::class,
         WorkOperationEntity::class
     ],
-    version = DATABASE_VERSION_WITH_VIDEO_EVIDENCE,
+    version = DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -142,6 +143,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(
+            DATABASE_VERSION_WITH_VIDEO_EVIDENCE,
+            DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "files", "documentCandidateFingerprint", "TEXT NOT NULL DEFAULT ''")
+                db.execSQL("UPDATE files SET documentCandidateFingerprint = visualSimilarityHash WHERE category = 'DOCUMENTS' AND documentCandidateFingerprint = '' AND visualSimilarityHash IS NOT NULL AND visualSimilarityHash <> ''")
+            }
+        }
+
         val MIGRATION_4_5 = object : Migration(
             DATABASE_VERSION_BEFORE_VAULT_FORMAT,
             DATABASE_VERSION_WITH_VAULT_FORMAT
@@ -191,7 +202,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
 
                 val instance = builder.build()
                 INSTANCE = instance

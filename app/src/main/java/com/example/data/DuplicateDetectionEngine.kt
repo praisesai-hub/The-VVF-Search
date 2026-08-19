@@ -237,20 +237,20 @@ class DuplicateDetectionEngine(
 
     fun getDocumentDuplicates(activeFilesFlow: Flow<List<FileItemEntity>>): Flow<List<DuplicateGroup>> {
         return activeFilesFlow.map { files ->
-            val validDocs = files.filter { 
-                it.category == FileCategory.DOCUMENTS.name && 
-                it.visualSimilarityHash.isNotBlank() && 
-                !it.isVault && 
+            val validDocs = files.filter {
+                it.category == FileCategory.DOCUMENTS.name &&
+                it.documentCandidateFingerprint.isNotBlank() &&
+                !it.isVault &&
                 !it.isRecycleBin 
             }
             if (validDocs.size < 2) {
                 emptyList()
             } else {
-                val groups = validDocs.groupBy { it.visualSimilarityHash }
+                val groups = validDocs.groupBy { it.documentCandidateFingerprint }
                     .filter { it.value.size > 1 && it.key.isNotBlank() }
                     .map { (fp, duplicateList) ->
                         DuplicateGroup(
-                            title = "Document Structural Fingerprint Match: ${duplicateList.first().name}",
+                            title = "Document Candidate Fingerprint Match: ${duplicateList.first().name}",
                             level = 2,
                             similarityScore = 95,
                             files = duplicateList

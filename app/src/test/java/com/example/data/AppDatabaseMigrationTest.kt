@@ -349,6 +349,29 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun testMigrationFrom7To8AddsDocumentCandidateFingerprintColumn() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(7) {
+                override fun onCreate(db: SupportSQLiteDatabase) {}
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+        db.execSQL("CREATE TABLE files (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, path TEXT NOT NULL, category TEXT NOT NULL, sizeBytes INTEGER NOT NULL, visualSimilarityHash TEXT NOT NULL DEFAULT '')")
+        db.execSQL("INSERT INTO files (id, name, path, category, sizeBytes, visualSimilarityHash) VALUES (801, 'report.pdf', '/docs/report.pdf', 'DOCUMENTS', 100, 'legacy-candidate')")
+
+        AppDatabase.MIGRATION_7_8.migrate(db)
+
+        val cursor = db.query("SELECT documentCandidateFingerprint FROM files WHERE id = 801")
+        assertTrue(cursor.moveToFirst())
+        assertEquals("legacy-candidate", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
+        cursor.close()
+        db.close()
+    }
+
+    @Test
     fun testFullMigrationPathFrom1To4PreservesData() {
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
             .name("test_migration_db")

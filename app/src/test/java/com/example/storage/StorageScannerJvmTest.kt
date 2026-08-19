@@ -82,45 +82,45 @@ class StorageScannerJvmTest {
     }
 
     @Test
-    fun computeDocumentFingerprint_isStableAndChangesWhenContentChanges() = runBlocking {
+    fun computeDocumentCandidateFingerprint_isStableAndChangesWhenContentChanges() = runBlocking {
         val file = tempDirectory.resolve("report.pdf").toFile().apply {
             writeText("first document body")
         }
 
-        val first = scanner.computeDocumentFingerprint(file)
+        val first = scanner.computeDocumentCandidateFingerprint(file)
         file.writeText("second document body")
-        val second = scanner.computeDocumentFingerprint(file)
+        val second = scanner.computeDocumentCandidateFingerprint(file)
 
         assertEquals(16, first.length)
         assertEquals(16, second.length)
         assertNotEquals(first, second)
-        assertEquals("", scanner.computeDocumentFingerprint(tempDirectory.resolve("missing.pdf").toFile()))
+        assertEquals("", scanner.computeDocumentCandidateFingerprint(tempDirectory.resolve("missing.pdf").toFile()))
         assertEquals(
             "",
-            scanner.computeDocumentFingerprint(
+            scanner.computeDocumentCandidateFingerprint(
                 tempDirectory.resolve("note.txt").toFile().apply { writeText("") }
             )
         )
     }
 
     @Test
-    fun computeDocumentFingerprint_usesLargeFileHeaderAndTailWithoutRejectingValidDocument() = runBlocking {
+    fun computeDocumentCandidateFingerprint_usesLargeFileHeaderAndTailWithoutRejectingValidDocument() = runBlocking {
         val file = tempDirectory.resolve("large-report.pdf").toFile().apply {
             writeBytes(ByteArray(12_000) { index -> (index % 251).toByte() })
         }
 
-        val first = scanner.computeDocumentFingerprint(file)
+        val first = scanner.computeDocumentCandidateFingerprint(file)
         java.io.RandomAccessFile(file, "rw").use { it.seek(0); it.write(byteArrayOf(99)) }
-        val headerChanged = scanner.computeDocumentFingerprint(file)
+        val headerChanged = scanner.computeDocumentCandidateFingerprint(file)
         java.io.RandomAccessFile(file, "rw").use { it.seek(file.length() - 1); it.write(byteArrayOf(77)) }
-        val tailChanged = scanner.computeDocumentFingerprint(file)
+        val tailChanged = scanner.computeDocumentCandidateFingerprint(file)
 
         assertEquals(16, first.length)
         assertNotEquals(first, headerChanged)
         assertNotEquals(headerChanged, tailChanged)
         assertEquals(
             "",
-            scanner.computeDocumentFingerprint(
+            scanner.computeDocumentCandidateFingerprint(
                 tempDirectory.resolve("not-a-document.mp3").toFile().apply { writeText("payload") }
             )
         )

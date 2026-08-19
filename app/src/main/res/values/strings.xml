@@ -278,4 +278,5 @@
     <string name="pin_error_biometric_crypto_required">Authenticated CryptoObject is required.</string>
     <string name="duplicate_review_only">Review only: visual, semantic, and structural similarity is not proof of duplication.</string>
     <string name="exact_duplicate_auto_cleanup">Automatic cleanup is limited to exact SHA-256 duplicates.</string>
+    <string name="document_candidate_fingerprint_disclaimer">Candidate only: this fingerprint matches file size and boundaries, not full content.</string>
 </resources>

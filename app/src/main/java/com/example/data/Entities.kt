@@ -48,7 +48,8 @@ data class FileItemEntity(
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val videoAudioSignature: String = "",
-    val videoChunkHash: String = ""
+    val videoChunkHash: String = "",
+    val documentCandidateFingerprint: String = "" // head/tail candidate evidence only; never exact identity
 )
 
 @JsonClass(generateAdapter = true)

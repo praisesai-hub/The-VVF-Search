@@ -82,6 +82,17 @@ if storage_scanner.exists():
         if required_symbol not in storage_scanner_text:
             errors.append(f"StorageScanner is missing video evidence primitive: {required_symbol}")
 
+# Document fingerprints are boundary evidence only and must remain explicitly candidate-labelled.
+document_engine = MAIN / "com/example/data/DuplicateDetectionEngine.kt"
+if document_engine.exists():
+    document_engine_text = document_engine.read_text(encoding="utf-8")
+    if "documentCandidateFingerprint" not in document_engine_text:
+        errors.append("Document duplicate grouping does not use documentCandidateFingerprint")
+    if "Document Candidate Fingerprint Match" not in document_engine_text:
+        errors.append("Document duplicate groups are missing the Candidate label")
+    if "Document Structural Fingerprint Match" in document_engine_text:
+        errors.append("Document duplicate groups retain the misleading structural-only title")
+
 # Duplicate cleanup must be exact-cryptographic-only; similarity groups are review-only.
 duplicate_manager = MAIN / "com/example/data/DuplicateManager.kt"
 if duplicate_manager.exists():

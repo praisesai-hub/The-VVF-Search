@@ -58,7 +58,7 @@ class StorageScannerTest {
     }
 
     @Test
-    fun computeDocumentFingerprint_isStableForSameContentAndChangesWithContent() = runBlocking {
+    fun computeDocumentCandidateFingerprint_isStableForSameContentAndChangesWithContent() = runBlocking {
         val first = File.createTempFile("fingerprint-a", ".pdf")
         val second = File.createTempFile("fingerprint-b", ".pdf")
         val unsupported = File.createTempFile("fingerprint", ".jpg")
@@ -67,12 +67,12 @@ class StorageScannerTest {
             second.writeText("document payload changed")
             unsupported.writeText("image payload")
 
-            val firstFingerprint = scanner.computeDocumentFingerprint(first)
-            assertEquals(firstFingerprint, scanner.computeDocumentFingerprint(first))
+            val firstFingerprint = scanner.computeDocumentCandidateFingerprint(first)
+            assertEquals(firstFingerprint, scanner.computeDocumentCandidateFingerprint(first))
             assertEquals(16, firstFingerprint.length)
             assertTrue(firstFingerprint.matches(Regex("[0-9a-f]{16}")))
-            assertNotEquals(firstFingerprint, scanner.computeDocumentFingerprint(second))
-            assertEquals("", scanner.computeDocumentFingerprint(unsupported))
+            assertNotEquals(firstFingerprint, scanner.computeDocumentCandidateFingerprint(second))
+            assertEquals("", scanner.computeDocumentCandidateFingerprint(unsupported))
         } finally {
             first.delete()
             second.delete()
@@ -81,12 +81,12 @@ class StorageScannerTest {
     }
 
     @Test
-    fun computeDocumentFingerprint_usesHeaderAndTailForLargeDocuments() = runBlocking {
+    fun computeDocumentCandidateFingerprint_usesHeaderAndTailForLargeDocuments() = runBlocking {
         val largeDocument = File.createTempFile("fingerprint-large", ".pdf")
         try {
             largeDocument.writeBytes(ByteArray(10_000) { index -> (index % 251).toByte() })
 
-            val fingerprint = scanner.computeDocumentFingerprint(largeDocument)
+            val fingerprint = scanner.computeDocumentCandidateFingerprint(largeDocument)
 
             assertEquals(16, fingerprint.length)
             assertTrue(fingerprint.matches(Regex("[0-9a-f]{16}")))
@@ -97,10 +97,30 @@ class StorageScannerTest {
     }
 
     @Test
-    fun computeDocumentFingerprint_returnsEmptyForEmptyDocument() = runBlocking {
+    fun computeDocumentCandidateFingerprint_middleContentChangesRemainCandidateOnly() = runBlocking {
+        val first = File.createTempFile("candidate-middle-a", ".pdf")
+        val second = File.createTempFile("candidate-middle-b", ".pdf")
+        try {
+            val header = ByteArray(4096) { index -> (index % 251).toByte() }
+            val tail = ByteArray(4096) { index -> ((index + 17) % 251).toByte() }
+            first.writeBytes(header + ByteArray(8192) { 0x11.toByte() } + tail)
+            second.writeBytes(header + ByteArray(8192) { 0x22.toByte() } + tail)
+            assertNotEquals(scanner.computeFileHash(first), scanner.computeFileHash(second))
+            assertEquals(
+                scanner.computeDocumentCandidateFingerprint(first),
+                scanner.computeDocumentCandidateFingerprint(second)
+            )
+        } finally {
+            first.delete()
+            second.delete()
+        }
+    }
+
+    @Test
+    fun computeDocumentCandidateFingerprint_returnsEmptyForEmptyDocument() = runBlocking {
         val emptyDocument = File.createTempFile("fingerprint-empty", ".pdf")
         try {
-            assertEquals("", scanner.computeDocumentFingerprint(emptyDocument))
+            assertEquals("", scanner.computeDocumentCandidateFingerprint(emptyDocument))
         } finally {
             emptyDocument.delete()
         }

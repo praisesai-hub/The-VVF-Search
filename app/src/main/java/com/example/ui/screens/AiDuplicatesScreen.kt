@@ -538,6 +538,11 @@ fun DuplicateCleanerSection(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
+            Text(
+                text = stringResource(R.string.document_candidate_fingerprint_disclaimer),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         if (documentDuplicates.isEmpty()) {
             item {
