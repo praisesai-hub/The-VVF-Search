@@ -108,7 +108,8 @@ class VaultRepositoryTest {
 
         repository.encryptToVault(file)
 
-        assertTrue(committedSource.captured.isVault)
+        // The Room transaction applies isVault=true atomically; its input remains the original source.
+        assertFalse(committedSource.captured.isVault)
         assertEquals(file.id, committedSource.captured.id)
         assertEquals(file.path, committedSource.captured.path)
         assertEquals(file.name, committedVaultItem.captured.originalName)
