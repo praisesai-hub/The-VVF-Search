@@ -7,7 +7,7 @@ import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
-@Dao
+/** Aggregate projection returned by FileDao.getCategoryStats(). */
 data class CategoryStat(val category: String, val count: Int, val totalSize: Long)
 
 @Dao
