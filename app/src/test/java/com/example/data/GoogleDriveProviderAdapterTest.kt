@@ -704,6 +704,149 @@ class GoogleDriveProviderAdapterTest {
         assertFalse(destination.exists())
     }
 
+    @Test
+    fun uploadFile_persistedSession308ResumesAtServerOffsetWithoutRestartingSession() {
+        val firstChunkSize = 256 * 1024
+        val source = File.createTempFile("persisted_resume", ".bin").apply {
+            writeBytes(ByteArray(firstChunkSize + 13) { 0x4B.toByte() })
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var requestCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            requestCount += 1
+            when (requestCount) {
+                1 -> {
+                    assertEquals("PUT", request.method)
+                    assertEquals("bytes */${source.length()}", request.header("Content-Range"))
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(308)
+                        .message("Resume Incomplete")
+                        .header("Range", "bytes=0-${firstChunkSize - 1}")
+                        .body("".toResponseBody())
+                        .build()
+                }
+                2 -> {
+                    assertEquals(
+                        "bytes $firstChunkSize-${source.length() - 1}/${source.length()}",
+                        request.header("Content-Range")
+                    )
+                    assertEquals(13L, request.body?.contentLength())
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("{\"id\":\"resumed-id\"}".toResponseBody("application/json".toMediaTypeOrNull()))
+                        .build()
+                }
+                else -> error("Unexpected request #$requestCount")
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                source = CloudUploadSource.LocalFile(source),
+                remotePath = "persisted.bin",
+                idempotencyKey = "persisted-resume",
+                uploadSessionUri = "https://upload.googleapis.com/resumable/persisted"
+            )
+        }
+
+        assertTrue(result is CloudSyncResult.Success)
+        assertEquals("resumed-id", (result as CloudSyncResult.Success).remoteFileId)
+        assertEquals(2, requestCount)
+    }
+
+    @Test
+    fun uploadFile_persistedSessionHttpFailurePreservesRetryableCheckpoint() {
+        val source = File.createTempFile("recovery_http_failure", ".txt").apply {
+            writeText("content")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { request ->
+            assertEquals("PUT", request.method)
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(429)
+                .message("Too Many Requests")
+                .body("slow down".toResponseBody("text/plain".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                source = CloudUploadSource.LocalFile(source),
+                remotePath = "retry.txt",
+                remoteFileId = "known-id",
+                contentHash = "sha256",
+                idempotencyKey = "retry-identity",
+                uploadSessionUri = "https://upload.googleapis.com/resumable/rate-limited",
+                etag = "known-etag"
+            )
+        }
+
+        assertTrue(result is CloudSyncResult.Error)
+        result as CloudSyncResult.Error
+        assertTrue(result.isRetryable)
+        assertTrue(result.message.contains("HTTP 429"))
+        assertEquals("known-id", result.remoteFileId)
+        assertEquals("https://upload.googleapis.com/resumable/rate-limited", result.uploadSessionUri)
+        assertEquals("retry-identity", result.idempotencyKey)
+    }
+
+    @Test
+    fun uploadFile_completedSessionWithoutAnyRecoverableIdFailsClosedWithCheckpoint() {
+        val source = File.createTempFile("recovery_missing_id", ".txt").apply {
+            writeText("recoverable")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var requestCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            requestCount += 1
+            when (requestCount) {
+                1 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+                2 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"files\":[]}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+                else -> error("Unexpected request #$requestCount")
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                source = CloudUploadSource.LocalFile(source),
+                remotePath = "missing-id.txt",
+                contentHash = "sha256",
+                idempotencyKey = "missing-id-identity",
+                uploadSessionUri = "https://upload.googleapis.com/resumable/completed-without-id"
+            )
+        }
+
+        assertTrue(result is CloudSyncResult.Error)
+        result as CloudSyncResult.Error
+        assertTrue(result.isRetryable)
+        assertTrue(result.message.contains("did not contain a file ID"))
+        assertEquals("https://upload.googleapis.com/resumable/completed-without-id", result.uploadSessionUri)
+        assertEquals("missing-id-identity", result.idempotencyKey)
+        assertEquals(2, requestCount)
+    }
+
     private class FakeInterceptor : Interceptor {
         lateinit var responseProvider: (Request) -> Response
 
