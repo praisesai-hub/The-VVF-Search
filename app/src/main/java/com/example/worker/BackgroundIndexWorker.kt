@@ -6,6 +6,10 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
 import com.example.storage.StorageScanner
+import com.example.domain.error.DiagnosticLogger
+import com.example.domain.error.DomainErrorMapper
+import com.example.domain.retry.RetryOperation
+import com.example.domain.retry.RetryPolicy
 
 class BackgroundIndexWorker(
     appContext: Context,
@@ -45,12 +49,12 @@ class BackgroundIndexWorker(
 
             androidx.work.ListenableWorker.Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "Background storage indexing failed: ${e.message}", e)
-            if (runAttemptCount >= 3) {
-                Log.e(TAG, "Background storage indexing failed after $runAttemptCount attempts. Abandoning retry.")
-                androidx.work.ListenableWorker.Result.failure()
-            } else {
+            val diagnostic = DomainErrorMapper.fromThrowable("BACKGROUND_INDEXING", e)
+            DiagnosticLogger.log(TAG, diagnostic)
+            if (RetryPolicy.shouldRetry(RetryOperation.INDEXING, e, runAttemptCount)) {
                 androidx.work.ListenableWorker.Result.retry()
+            } else {
+                androidx.work.ListenableWorker.Result.failure()
             }
         }
     }

@@ -85,6 +85,23 @@ for path in error_surface_files:
     if re.search(r'message\\s*=\\s*"[^"\\n]*\\$remotePath', text):
         errors.append(f"{path.relative_to(ROOT)} interpolates a remote path into an error message")
 
+# Retry behavior must be operation-specific; generic withRetry calls are forbidden.
+retry_surface_files = [
+    MAIN / "com/example/data/SmartManagerRepository.kt",
+    MAIN / "com/example/worker/BackgroundIndexWorker.kt",
+    MAIN / "com/example/worker/CloudSyncWorker.kt",
+    MAIN / "com/example/worker/DuplicateCleanupWorker.kt",
+    MAIN / "com/example/worker/CacheCleanupWorker.kt",
+]
+for path in retry_surface_files:
+    if not path.exists():
+        continue
+    text = path.read_text(encoding="utf-8")
+    if re.search(r"\bwithRetry\s*\{", text):
+        errors.append(f"{path.relative_to(ROOT)} uses generic withRetry without RetryOperation")
+    if "runAttemptCount >= 3" in text:
+        errors.append(f"{path.relative_to(ROOT)} uses a blind runAttemptCount retry threshold")
+
 # New production code must not silently add another repository compatibility façade.
 for path in MAIN.rglob("*.kt"):
     if path.name.endswith("Compat.kt") and path not in compat_files:

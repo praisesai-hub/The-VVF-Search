@@ -13,6 +13,8 @@ import com.example.domain.error.DiagnosticContext
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainError
 import com.example.domain.error.UserMessage
+import com.example.domain.retry.RetryOperation
+import com.example.domain.retry.RetryPolicy
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
 import kotlinx.coroutines.flow.first
@@ -107,11 +109,10 @@ class DuplicateCleanupWorker(
                 internalCause = e
             )
             DiagnosticLogger.log(TAG, diagnostic)
-            if (runAttemptCount >= 3) {
-                Log.e(TAG, "DuplicateCleanupWorker failed after $runAttemptCount attempts. Abandoning retry.")
-                Result.failure()
-            } else {
+            if (RetryPolicy.shouldRetry(RetryOperation.DUPLICATE_CLEANUP, e, runAttemptCount)) {
                 Result.retry()
+            } else {
+                Result.failure()
             }
         }
     }

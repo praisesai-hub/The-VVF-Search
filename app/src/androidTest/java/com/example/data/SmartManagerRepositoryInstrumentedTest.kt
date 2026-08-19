@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabaseLockedException
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import com.example.domain.retry.RetryOperation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -155,9 +157,9 @@ class SmartManagerRepositoryInstrumentedTest {
     fun withRetry_returnsAfterTransientFailures(): Unit {
         runBlocking {
             var attempts = 0
-            val result = repository.withRetry(maxAttempts = 3, initialDelayMs = 0, factor = 2.0) {
+            val result = repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 3, initialDelayMs = 0, factor = 2.0) {
                 attempts++
-                check(attempts >= 3) { "transient" }
+                if (attempts < 3) throw SQLiteDatabaseLockedException("database locked")
                 "persisted"
             }
 
@@ -167,18 +169,19 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun withRetry_rethrowsFinalFailureAfterAttemptBudget(): Unit {
+    fun withRetry_doesNotRetryPermanentFailure(): Unit {
         runBlocking {
             var attempts = 0
             try {
-                repository.withRetry(maxAttempts = 2, initialDelayMs = 0) {
+                repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 2, initialDelayMs = 0) {
                     attempts++
-                    error("permanent")
+                    throw IllegalStateException("permanent")
                 }
                 throw AssertionError("withRetry should rethrow the final failure")
             } catch (exception: IllegalStateException) {
                 assertEquals("permanent", exception.message)
-                assertEquals(2, attempts)
+                assertEquals(1, attempts)
+
             }
         }
     }

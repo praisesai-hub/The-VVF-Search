@@ -14,6 +14,9 @@ import com.example.context.drive.DriveAuthorizationFactory
 import com.example.context.drive.DriveAuthorizationPort
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
+import com.example.domain.retry.RetryDecision
+import com.example.domain.retry.RetryOperation
+import com.example.domain.retry.RetryPolicy
 import kotlinx.coroutines.flow.first
 import java.io.File
 
@@ -115,11 +118,10 @@ class CloudSyncWorker @JvmOverloads constructor(
 
             Log.i(TAG, "CloudSyncWorker finished. Synced: $syncedCount, Failed: $failedCount (Retryable: $retryableFailedCount)")
             if (retryableFailedCount > 0) {
-                if (runAttemptCount >= 3) {
-                    Log.e(TAG, "CloudSyncWorker failed after $runAttemptCount attempts. Abandoning retry.")
-                    Result.failure()
-                } else {
+                if (runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS) {
                     Result.retry()
+                } else {
+                    Result.failure()
                 }
             } else if (failedCount > 0) {
                 // Permanent failure (e.g. missing file) - do not retry
@@ -130,7 +132,11 @@ class CloudSyncWorker @JvmOverloads constructor(
         } catch (e: Exception) {
             val diagnostic = DomainErrorMapper.fromThrowable("CLOUD_SYNC_WORKER", e)
             DiagnosticLogger.log(TAG, diagnostic)
-            Result.failure()
+            if (RetryPolicy.shouldRetry(RetryOperation.CLOUD_TRANSFER, e, runAttemptCount)) {
+                Result.retry()
+            } else {
+                Result.failure()
+            }
         }
     }
 

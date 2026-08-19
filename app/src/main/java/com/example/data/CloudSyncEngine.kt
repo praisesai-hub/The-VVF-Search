@@ -5,6 +5,8 @@ import android.util.Log
 import com.example.context.cloud.CloudProviderRegistry
 import com.example.context.drive.DriveAuthorizationPort
 import com.example.domain.error.DomainErrorMapper
+import com.example.domain.retry.RetryOperation
+import com.example.domain.retry.RetryPolicy
 import java.io.File
 
 /**
@@ -83,10 +85,6 @@ class CloudSyncEngine(
     private fun getAdapterForProvider(provider: String): CloudProviderAdapter? =
         providerRegistry.adapterFor(provider)
 
-    private fun isExceptionRetryable(e: Exception): Boolean {
-        return e is java.net.UnknownHostException ||
-                e is java.net.ConnectException ||
-                e is java.io.IOException ||
-                e.message?.contains("Unable to resolve host") == true
-    }
+    private fun isExceptionRetryable(e: Exception): Boolean =
+        RetryPolicy.classify(RetryOperation.CLOUD_TRANSFER, e).retryable
 }

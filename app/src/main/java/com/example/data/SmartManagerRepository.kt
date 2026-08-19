@@ -11,6 +11,9 @@ import com.example.ai.FallbackSemanticEmbeddingProvider
 import com.example.ai.TFLiteSemanticEmbeddingProvider
 import com.example.security.KeystoreVaultManager
 import com.example.domain.WorkCoordinator
+import com.example.domain.retry.RetryDecision
+import com.example.domain.retry.RetryOperation
+import com.example.domain.retry.RetryPolicy
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
 import kotlinx.coroutines.CoroutineScope
@@ -225,26 +228,47 @@ open class SmartManagerRepository(
         Triple(indexed, total - indexed, if (total > 0) indexed.toFloat() / total.toFloat() else 1.0f)
     }.flowOn(Dispatchers.Default)
 
-    suspend fun <T> withRetry(maxAttempts: Int = 3, initialDelayMs: Long = 100, factor: Double = 2.0, block: suspend () -> T): T {
-        var currentDelay = initialDelayMs
+    suspend fun <T> withRetry(
+        operation: RetryOperation,
+        maxAttempts: Int = RetryDecision.DEFAULT_MAX_ATTEMPTS,
+        initialDelayMs: Long = RetryPolicy.INITIAL_DELAY_MS,
+        factor: Double = RetryPolicy.BACKOFF_FACTOR,
+        block: suspend () -> T
+    ): T {
         var lastException: Throwable? = null
-        for (attempt in 1..maxAttempts) {
-            try { return block() } catch (e: Exception) {
-                lastException = e
-                Log.w("SmartManagerRepository", "Operation failed on attempt $attempt of $maxAttempts: ${e.message}")
-                if (attempt < maxAttempts) {
-                    kotlinx.coroutines.delay(currentDelay)
-                    currentDelay = (currentDelay * factor).toLong()
-                }
+        for (attempt in 0 until maxAttempts) {
+            try {
+                return block()
+            } catch (error: Exception) {
+                lastException = error
+                val decision = RetryPolicy.classify(operation, error)
+                Log.w(
+                    "SmartManagerRepository",
+                    "Retry decision operation=$operation attempt=${attempt + 1} reason=${decision.reasonCode} retryable=${decision.retryable}"
+                )
+                if (!RetryPolicy.shouldRetry(operation, error, attempt)) throw error
+                kotlinx.coroutines.delay(
+                    if (factor == RetryPolicy.BACKOFF_FACTOR && initialDelayMs == RetryPolicy.INITIAL_DELAY_MS) {
+                        RetryPolicy.delayForAttempt(attempt)
+                    } else {
+                        (initialDelayMs * factor.pow(attempt)).toLong()
+                    }
+                )
             }
         }
-        throw lastException ?: RuntimeException("Operation failed after $maxAttempts attempts")
+        throw lastException ?: IllegalStateException("Operation failed without an exception")
     }
 
-    open suspend fun insertFiles(files: List<FileItemEntity>) = withContext(Dispatchers.IO) { withRetry { dao.insertFiles(files) } }
+    private fun Double.pow(exponent: Int): Double {
+        var result = 1.0
+        repeat(exponent) { result *= this }
+        return result
+    }
+
+    open suspend fun insertFiles(files: List<FileItemEntity>) = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_WRITE) { dao.insertFiles(files) } }
 
     suspend fun rescanPhysicalStorage(): Int = withContext(Dispatchers.IO) {
-        withRetry {
+        withRetry(RetryOperation.INDEXING) {
             var totalCount = 0
             storageScanner.scanDeviceStorageFlow(computeHashes = false).collect { batch ->
                 if (batch.isNotEmpty()) { dao.insertFiles(batch); totalCount += batch.size }
@@ -268,7 +292,7 @@ open class SmartManagerRepository(
     suspend fun moveToRecycleBin(file: FileItemEntity) = withContext(Dispatchers.IO) {
         val currentFile = dao.getFileById(file.id) ?: return@withContext
         if (currentFile.isRecycleBin) return@withContext
-        withRetry {
+        withRetry(RetryOperation.FILE_STORAGE) {
             val trashResult = PhysicalStorageManager.moveToTrash(context, currentFile.path)
             if (trashResult.isFailure) throw trashResult.exceptionOrNull() ?: java.io.IOException("Failed to move file to trash")
             val newPath = trashResult.getOrThrow()
@@ -280,7 +304,7 @@ open class SmartManagerRepository(
     suspend fun restoreFromRecycleBin(file: FileItemEntity) = withContext(Dispatchers.IO) {
         val currentFile = dao.getFileById(file.id) ?: return@withContext
         if (!currentFile.isRecycleBin) return@withContext
-        withRetry {
+        withRetry(RetryOperation.FILE_STORAGE) {
             val targetPath = if (currentFile.originalPath.isNotBlank()) currentFile.originalPath else currentFile.path
             val restoreResult = PhysicalStorageManager.restoreFromTrash(context, currentFile.path, targetPath)
             if (restoreResult.isFailure) throw restoreResult.exceptionOrNull() ?: java.io.IOException("Failed to restore file from trash")
@@ -290,14 +314,14 @@ open class SmartManagerRepository(
 
     suspend fun deletePermanently(file: FileItemEntity) = withContext(Dispatchers.IO) {
         val currentFile = dao.getFileById(file.id) ?: return@withContext
-        withRetry {
+        withRetry(RetryOperation.FILE_STORAGE) {
             if (!PhysicalStorageManager.deleteFile(context, currentFile.path)) throw java.io.IOException("Failed to physically delete file at ${currentFile.path}")
             dao.deleteFileById(currentFile.id)
         }
     }
 
     suspend fun emptyRecycleBin() = withContext(Dispatchers.IO) {
-        withRetry {
+        withRetry(RetryOperation.FILE_STORAGE) {
             val trashFiles = dao.getRecycleBinFiles().first()
             var failedCount = 0
             trashFiles.forEach { if (!PhysicalStorageManager.deleteFile(context, it.path)) failedCount++ }
@@ -324,10 +348,10 @@ open class SmartManagerRepository(
     open fun disableBiometricEnrollment(): Boolean = vaultRepository.disableBiometricEnrollment()
     open fun lockVaultSession() = vaultRepository.lockSession()
 
-    suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = withContext(Dispatchers.IO) { withRetry { fileRepository.getFilteredFilesPaged(category, query, limit, offset) } }
-    suspend fun renameFile(file: FileItemEntity, newName: String) = withContext(Dispatchers.IO) { withRetry { fileRepository.renameFile(file, newName) } }
-    suspend fun addTagToFile(file: FileItemEntity, tag: String) = withContext(Dispatchers.IO) { withRetry { fileRepository.addTagToFile(file, tag) } }
-    suspend fun togglePlugin(pluginId: String, currentEnabled: Boolean) = withContext(Dispatchers.IO) { withRetry { pluginRepository.togglePlugin(pluginId, currentEnabled) } }
+    suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_READ) { fileRepository.getFilteredFilesPaged(category, query, limit, offset) } }
+    suspend fun renameFile(file: FileItemEntity, newName: String) = withContext(Dispatchers.IO) { withRetry(RetryOperation.FILE_STORAGE) { fileRepository.renameFile(file, newName) } }
+    suspend fun addTagToFile(file: FileItemEntity, tag: String) = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_WRITE) { fileRepository.addTagToFile(file, tag) } }
+    suspend fun togglePlugin(pluginId: String, currentEnabled: Boolean) = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_WRITE) { pluginRepository.togglePlugin(pluginId, currentEnabled) } }
     fun observeCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = dao.getCloudSyncItems()
 
     private suspend fun isProviderEnabled(provider: String): Boolean {
@@ -346,7 +370,7 @@ open class SmartManagerRepository(
         val keyPath = if (filePath.isNotBlank()) filePath else fileName
         val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
         if (duplicate != null) return@withContext false
-        withRetry { dao.insertCloudSyncItem(CloudSyncItemEntity(provider = provider, fileName = fileName, filePath = filePath, fileSize = size, status = "QUEUED", lastSyncedMs = System.currentTimeMillis(), isCore = isCore)) }
+        withRetry(RetryOperation.DATABASE_WRITE) { dao.insertCloudSyncItem(CloudSyncItemEntity(provider = provider, fileName = fileName, filePath = filePath, fileSize = size, status = "QUEUED", lastSyncedMs = System.currentTimeMillis(), isCore = isCore)) }
         workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
         true
     }
@@ -358,7 +382,7 @@ open class SmartManagerRepository(
             !cloudTransferAllowed(context) ||
             !isProviderEnabled(item.provider)
         ) return@withContext false
-        withRetry { dao.insertCloudSyncItem(item.copy(status = "QUEUED", lastSyncedMs = System.currentTimeMillis())) }
+        withRetry(RetryOperation.DATABASE_WRITE) { dao.insertCloudSyncItem(item.copy(status = "QUEUED", lastSyncedMs = System.currentTimeMillis())) }
         workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
         true
     }
@@ -366,7 +390,7 @@ open class SmartManagerRepository(
     suspend fun cancelCloudSyncItem(id: Long): Boolean = withContext(Dispatchers.IO) {
         val item = dao.getCloudSyncItems().first().find { it.id == id } ?: return@withContext false
         if (item.status == "SYNCED") return@withContext false
-        withRetry { dao.deleteCloudSyncItem(id) }
+        withRetry(RetryOperation.DATABASE_WRITE) { dao.deleteCloudSyncItem(id) }
         true
     }
 

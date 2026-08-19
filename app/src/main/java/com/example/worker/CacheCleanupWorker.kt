@@ -5,6 +5,10 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import java.io.File
+import com.example.domain.error.DiagnosticLogger
+import com.example.domain.error.DomainErrorMapper
+import com.example.domain.retry.RetryOperation
+import com.example.domain.retry.RetryPolicy
 
 class CacheCleanupWorker(
     appContext: Context,
@@ -39,8 +43,13 @@ class CacheCleanupWorker(
             
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "Error in CacheCleanupWorker: ${e.message}", e)
-            Result.failure()
+            val diagnostic = DomainErrorMapper.fromThrowable("CACHE_CLEANUP", e)
+            DiagnosticLogger.log(TAG, diagnostic)
+            if (RetryPolicy.shouldRetry(RetryOperation.CACHE_CLEANUP, e, runAttemptCount)) {
+                Result.retry()
+            } else {
+                Result.failure()
+            }
         }
     }
 

@@ -19,6 +19,13 @@ import java.util.concurrent.TimeUnit
  * Repositories expose data operations; this coordinator owns WorkManager policy.
  */
 class WorkCoordinator(private val context: Context) {
+    private object BackoffSeconds {
+        const val DUPLICATE_CLEANUP = 30L
+        const val CLOUD_SYNC = 10L
+        const val CACHE_CLEANUP = 30L
+        const val BACKGROUND_INDEXING = 15L
+    }
+
     fun enqueueDuplicateCleanupWork() {
         try {
             val constraints = Constraints.Builder()
@@ -27,7 +34,7 @@ class WorkCoordinator(private val context: Context) {
                 .build()
             val request = OneTimeWorkRequestBuilder<DuplicateCleanupWorker>()
                 .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.DUPLICATE_CLEANUP, TimeUnit.SECONDS)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "DuplicateCleanupWork",
@@ -51,7 +58,7 @@ class WorkCoordinator(private val context: Context) {
                 .build()
             val request = OneTimeWorkRequestBuilder<CloudSyncWorker>()
                 .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.CLOUD_SYNC, TimeUnit.SECONDS)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "CloudSyncWork",
@@ -71,7 +78,7 @@ class WorkCoordinator(private val context: Context) {
                 .build()
             val request = OneTimeWorkRequestBuilder<CacheCleanupWorker>()
                 .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.CACHE_CLEANUP, TimeUnit.SECONDS)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "CacheCleanupWork",
@@ -91,7 +98,7 @@ class WorkCoordinator(private val context: Context) {
                 .build()
             val request = OneTimeWorkRequestBuilder<BackgroundIndexWorker>()
                 .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.BACKGROUND_INDEXING, TimeUnit.SECONDS)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "BackgroundIndexWork",

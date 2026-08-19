@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import com.example.domain.retry.RetryOperation
+import android.database.sqlite.SQLiteDatabaseLockedException
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -445,9 +447,9 @@ class OcrEngineTest {
     fun withRetry_returnsOnFirstSuccessfulAttemptAfterTransientFailures() = runBlocking {
         var attempts = 0
 
-        val result = repository.withRetry(maxAttempts = 3, initialDelayMs = 0, factor = 2.0) {
+        val result = repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 3, initialDelayMs = 0, factor = 2.0) {
             attempts++
-            check(attempts >= 3) { "transient" }
+            if (attempts < 3) throw SQLiteDatabaseLockedException("database locked")
             "persisted"
         }
 
@@ -456,18 +458,18 @@ class OcrEngineTest {
     }
 
     @Test
-    fun withRetry_rethrowsTheFinalFailureAfterAttemptBudgetIsExhausted() = runBlocking {
+    fun withRetry_doesNotRetryPermanentFailure() = runBlocking {
         var attempts = 0
 
         try {
-            repository.withRetry(maxAttempts = 2, initialDelayMs = 0) {
+            repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 2, initialDelayMs = 0) {
                 attempts++
-                error("permanent")
+                throw IllegalStateException("permanent")
             }
             throw AssertionError("withRetry should rethrow the final failure")
         } catch (exception: IllegalStateException) {
             assertEquals("permanent", exception.message)
-            assertEquals(2, attempts)
+            assertEquals(1, attempts)
         }
     }
 }
