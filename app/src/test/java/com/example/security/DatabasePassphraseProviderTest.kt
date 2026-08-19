@@ -2,6 +2,7 @@ package com.example.security
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.fail
 import org.junit.Test
 import java.util.Base64
 
@@ -19,6 +20,32 @@ class DatabasePassphraseProviderTest {
         assertEquals(1, store.values.size)
     }
 
+    @Test
+    fun getOrCreate_failsClosedWhenPersistedPassphraseIsMalformed() {
+        val store = InMemoryStore().apply {
+            values["sqlcipher_passphrase_v1"] = "not-valid-base64"
+        }
+
+        try {
+            DatabasePassphraseProvider(store, JvmPassphraseBase64Codec).getOrCreate()
+            fail("A malformed persisted passphrase must not be replaced silently")
+        } catch (error: IllegalStateException) {
+            assertEquals("Unable to read encrypted database key", error.message)
+        }
+    }
+
+    @Test
+    fun getOrCreate_failsClosedWhenPassphraseWriteIsNotDurable() {
+        val provider = DatabasePassphraseProvider(RejectingStore(), JvmPassphraseBase64Codec)
+
+        try {
+            provider.getOrCreate()
+            fail("A rejected passphrase write must prevent database startup")
+        } catch (error: IllegalStateException) {
+            assertEquals("Unable to create encrypted database key", error.message)
+        }
+    }
+
     private class InMemoryStore : StringKeyValueStore {
         val values = mutableMapOf<String, String>()
 
@@ -31,6 +58,12 @@ class DatabasePassphraseProviderTest {
             }
             return true
         }
+    }
+
+    private class RejectingStore : StringKeyValueStore {
+        override fun getString(key: String, defaultValue: String?): String? = defaultValue
+
+        override fun commit(values: Map<String, String?>): Boolean = false
     }
 
     private object JvmPassphraseBase64Codec : PassphraseBase64Codec {
