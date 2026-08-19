@@ -107,6 +107,16 @@ jobs:
         PYTHONPATH=scripts python3 -m unittest scripts/test_verify_release_runtime_security.py
     - name: Run Unit Tests
       run: ./gradlew :app:testDebugUnitTest
+    - name: Upload JVM Unit Test Diagnostics
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: jvm-unit-test-diagnostics
+        path: |
+          app/build/test-results/testDebugUnitTest
+          app/build/reports/tests/testDebugUnitTest
+          app/build/reports/problems
+        if-no-files-found: warn
     - name: Generate JVM Unit Test Coverage Report
       run: ./gradlew :app:createDebugUnitTestCoverageReport
     - name: Enforce JVM Unit Test Coverage Floor
