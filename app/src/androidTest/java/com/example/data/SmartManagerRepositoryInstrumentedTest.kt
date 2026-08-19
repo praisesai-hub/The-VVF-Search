@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.ai.SemanticEmbeddingProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -106,6 +107,16 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun extractOcrBlocks(filePath: String): List<OcrTextBlock> = emptyList()
     }
 
+    private class DeterministicMultilingualFixtureProvider : SemanticEmbeddingProvider {
+        override val embeddingVersion: Int = 3
+        override fun isModelLoaded(): Boolean = true
+        override suspend fun generateImageEmbedding(file: File): FloatArray? = null
+        override suspend fun generateTextEmbedding(text: String): FloatArray? = floatArrayOf(1f, 0f)
+        override suspend fun generateDocumentEmbedding(title: String, text: String): FloatArray? =
+            floatArrayOf(1f, 0f)
+        override suspend fun generateQueryEmbedding(query: String): FloatArray? = floatArrayOf(1f, 0f)
+    }
+
     @Before
     fun setUp() {
         context = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
@@ -187,9 +198,16 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun incrementalScan_persistsRealHashesOcrAndIndexesWithOnDeviceFallback(): Unit {
+    fun incrementalScan_persistsHashesOcrAndMultilingualIndexWithInjectedProvider(): Unit {
         val file = File.createTempFile("vvf_scan_", ".txt")
         try {
+            val provider = DeterministicMultilingualFixtureProvider()
+            repository = SmartManagerRepository(
+                context = context,
+                dao = fakeDao,
+                ocrEngine = fakeOcr,
+                semanticEmbeddingProvider = provider
+            )
             file.writeText("on-device production scan fixture")
             fakeOcr.text = "AUTHENTIC OCR CONTENT"
             val pending = FileItemEntity(

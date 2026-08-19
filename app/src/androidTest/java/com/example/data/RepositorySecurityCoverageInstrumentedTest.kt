@@ -101,9 +101,9 @@ class RepositorySecurityCoverageInstrumentedTest {
     fun smartRepository_delegatesVaultAndFailClosedSyncPaths(): Unit = runBlocking {
         val facade = SmartManagerRepository(context, dao)
 
-        // The deterministic on-device fallback remains available when the optional
-        // Mobile CLIP assets are absent; an empty fake DAO still yields no results.
-        assertTrue(facade.isSemanticSearchAvailable)
+        // Missing multilingual model assets disable semantic vectors rather than silently
+        // presenting the Latin-only deterministic fallback as production semantic search.
+        assertFalse(facade.isSemanticSearchAvailable)
         assertTrue(facade.searchSemanticFiles("query").first().isEmpty())
         assertTrue(facade.initializeVaultPin("246810"))
         assertTrue(facade.hasVaultPin())
