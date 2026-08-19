@@ -658,7 +658,7 @@ class GoogleDriveProviderAdapterTest {
                     .protocol(Protocol.HTTP_1_1)
                     .code(308)
                     .message("Resume Incomplete")
-                    .header("Range", "bytes=0-0")
+                    .header("Range", "bytes=0-999999")
                     .body("".toResponseBody())
                     .build()
                 else -> error("Unexpected request #$requestCount")
