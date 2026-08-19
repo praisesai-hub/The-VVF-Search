@@ -29,12 +29,14 @@ class InstructionCoverage:
 @dataclass(frozen=True)
 class CoverageScope:
     name: str
+    baseline_instruction_percent: float
     minimum_instruction_percent: float
     selectors: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class CoveragePolicy:
+    aggregate_baseline_instruction_percent: float
     aggregate_minimum_instruction_percent: float
     aggregate_selectors: tuple[str, ...]
     scopes: tuple[CoverageScope, ...]
@@ -69,11 +71,11 @@ def parse_percent(value: object, label: str) -> float:
 def validate_selectors(value: object, label: str) -> tuple[str, ...]:
     if not isinstance(value, list) or not value or not all(
         isinstance(item, str)
-        and item.startswith(("package:", "class:"))
+        and item.startswith(("package:", "class:", "exact:"))
         and len(item.partition(":")[2]) > 0
         for item in value
     ):
-        raise ValueError(f"{label} needs non-empty package: or class: selectors.")
+        raise ValueError(f"{label} needs non-empty package:, class:, or exact: selectors.")
     return tuple(value)
 
 
@@ -85,7 +87,12 @@ def load_policy(policy_path: Path) -> CoveragePolicy:
 
     if not isinstance(parsed, dict):
         raise ValueError("Coverage policy root must be an object.")
-    allowed_root_keys = {"minimum_instruction_percent", "aggregate_selectors", "scopes"}
+    allowed_root_keys = {
+        "baseline_instruction_percent",
+        "minimum_instruction_percent",
+        "aggregate_selectors",
+        "scopes",
+    }
     unexpected_root_keys = set(parsed) - allowed_root_keys
     if unexpected_root_keys:
         raise ValueError(f"Unexpected coverage policy keys: {sorted(unexpected_root_keys)}")
@@ -93,6 +100,15 @@ def load_policy(policy_path: Path) -> CoveragePolicy:
         parsed.get("minimum_instruction_percent"),
         "minimum_instruction_percent",
     )
+    aggregate_baseline = parse_percent(
+        parsed.get("baseline_instruction_percent"),
+        "baseline_instruction_percent",
+    )
+    if aggregate < aggregate_baseline + 5.0:
+        raise ValueError(
+            "minimum_instruction_percent must be at least five percentage points above "
+            "baseline_instruction_percent."
+        )
     aggregate_selectors = validate_selectors(
         parsed.get("aggregate_selectors"),
         "aggregate_selectors",
@@ -106,7 +122,12 @@ def load_policy(policy_path: Path) -> CoveragePolicy:
     for index, raw_scope in enumerate(raw_scopes):
         if not isinstance(raw_scope, dict):
             raise ValueError(f"Coverage scope {index} must be an object.")
-        allowed_scope_keys = {"name", "minimum_instruction_percent", "selectors"}
+        allowed_scope_keys = {
+            "name",
+            "baseline_instruction_percent",
+            "minimum_instruction_percent",
+            "selectors",
+        }
         unexpected_scope_keys = set(raw_scope) - allowed_scope_keys
         if unexpected_scope_keys:
             raise ValueError(
@@ -123,6 +144,10 @@ def load_policy(policy_path: Path) -> CoveragePolicy:
         scopes.append(
             CoverageScope(
                 name=name,
+                baseline_instruction_percent=parse_percent(
+                    raw_scope.get("baseline_instruction_percent"),
+                    f"baseline_instruction_percent for scope {name}",
+                ),
                 minimum_instruction_percent=parse_percent(
                     raw_scope.get("minimum_instruction_percent"),
                     f"minimum_instruction_percent for scope {name}",
@@ -130,7 +155,13 @@ def load_policy(policy_path: Path) -> CoveragePolicy:
                 selectors=validated_selectors,
             )
         )
+        if scopes[-1].minimum_instruction_percent < scopes[-1].baseline_instruction_percent + 5.0:
+            raise ValueError(
+                f"minimum_instruction_percent for scope {name} must be at least five "
+                "percentage points above its baseline_instruction_percent."
+            )
     return CoveragePolicy(
+        aggregate_baseline_instruction_percent=aggregate_baseline,
         aggregate_minimum_instruction_percent=aggregate,
         aggregate_selectors=aggregate_selectors,
         scopes=tuple(scopes),
@@ -143,6 +174,8 @@ def class_matches_scope(class_name: str, selectors: tuple[str, ...]) -> bool:
     for selector in selectors:
         kind, _, prefix = selector.partition(":")
         normalized_prefix = normalize_name(prefix)
+        if kind == "exact" and normalized_class_name == normalized_prefix:
+            return True
         if kind == "class" and normalized_class_name.startswith(normalized_prefix):
             return True
         if kind == "package" and (
@@ -194,6 +227,7 @@ def enforce_policy(
         report_root,
         CoverageScope(
             name="aggregate",
+            baseline_instruction_percent=coverage_policy.aggregate_baseline_instruction_percent,
             minimum_instruction_percent=coverage_policy.aggregate_minimum_instruction_percent,
             selectors=coverage_policy.aggregate_selectors,
         ),
@@ -206,7 +240,8 @@ def enforce_policy(
     print(
             "Aggregate JVM instruction coverage: "
             f"{aggregate.percent:.2f}% ({aggregate.covered}/{aggregate.total}), "
-        f"minimum {coverage_policy.aggregate_minimum_instruction_percent:.2f}%.",
+            f"baseline {coverage_policy.aggregate_baseline_instruction_percent:.2f}%, "
+            f"minimum {coverage_policy.aggregate_minimum_instruction_percent:.2f}%.",
         file=stdout,
     )
     if aggregate.percent < coverage_policy.aggregate_minimum_instruction_percent:
@@ -223,6 +258,7 @@ def enforce_policy(
         print(
             f"Scope {scope.name}: {coverage.percent:.2f}% "
             f"({coverage.covered}/{coverage.total}), "
+            f"baseline {scope.baseline_instruction_percent:.2f}%, "
             f"minimum {scope.minimum_instruction_percent:.2f}%.",
             file=stdout,
         )

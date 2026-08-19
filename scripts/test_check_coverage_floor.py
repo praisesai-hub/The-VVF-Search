@@ -30,14 +30,21 @@ def write_policy(
     aggregate_minimum: float,
     scopes: list[dict[str, object]],
     aggregate_selectors: list[str] | None = None,
+    aggregate_baseline: float | None = None,
 ) -> None:
     selectors = aggregate_selectors or ["package:com.example.security"]
+    baseline = aggregate_baseline if aggregate_baseline is not None else aggregate_minimum - 5.0
+    normalized_scopes = [
+        {"baseline_instruction_percent": float(scope["minimum_instruction_percent"]) - 5.0, **scope}
+        for scope in scopes
+    ]
     path.write_text(
         json.dumps(
             {
+                "baseline_instruction_percent": baseline,
                 "minimum_instruction_percent": aggregate_minimum,
                 "aggregate_selectors": selectors,
-                "scopes": scopes,
+                "scopes": normalized_scopes,
             }
         ),
         encoding="utf-8",
@@ -148,6 +155,39 @@ class CoverageFloorPolicyTest(unittest.TestCase):
             self.assertIn("Aggregate JVM instruction coverage: 60.00% (60/100)", stdout)
             self.assertIn("below 70.00%", stderr)
 
+    def test_exact_selector_excludes_generated_room_and_moshi_class_suffixes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            report = root / "report.xml"
+            policy = root / "policy.json"
+            write_report(
+                report,
+                aggregate=(0, 100),
+                classes=[
+                    ("com/example/data/SearchIndexDao", 100, 0),
+                    ("com/example/data/SearchIndexDao_Impl", 0, 100),
+                    ("com/example/data/VaultItemEntityJsonAdapter", 0, 100),
+                ],
+            )
+            write_policy(
+                policy,
+                90.0,
+                [
+                    {
+                        "name": "dao-contract",
+                        "minimum_instruction_percent": 90.0,
+                        "selectors": ["exact:com.example.data.SearchIndexDao"],
+                    }
+                ],
+                aggregate_selectors=["exact:com.example.data.SearchIndexDao"],
+            )
+
+            result, stdout, stderr = self.enforce(report, policy)
+
+            self.assertEqual(1, result)
+            self.assertIn("Aggregate JVM instruction coverage: 0.00% (0/100)", stdout)
+            self.assertIn("below 90.00%", stderr)
+
     def test_missing_aggregate_selectors_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -155,7 +195,13 @@ class CoverageFloorPolicyTest(unittest.TestCase):
             policy = root / "policy.json"
             write_report(report, aggregate=(0, 100), classes=[])
             policy.write_text(
-                json.dumps({"minimum_instruction_percent": 70, "scopes": []}),
+                json.dumps(
+                    {
+                        "baseline_instruction_percent": 65,
+                        "minimum_instruction_percent": 70,
+                        "scopes": [],
+                    }
+                ),
                 encoding="utf-8",
             )
 
@@ -238,6 +284,7 @@ class CoverageFloorPolicyTest(unittest.TestCase):
             policy.write_text(
                 json.dumps(
                     {
+                        "baseline_instruction_percent": 65,
                         "minimum_instruction_percent": 70,
                         "aggregate_selectors": ["package:com.example.security"],
                         "scopes": [],
@@ -250,6 +297,36 @@ class CoverageFloorPolicyTest(unittest.TestCase):
 
             self.assertEqual(1, result)
             self.assertIn("must declare at least one non-empty scope", stderr)
+
+    def test_policy_rejects_minimum_smaller_than_baseline_plus_five(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            report = root / "report.xml"
+            policy = root / "policy.json"
+            write_report(report, aggregate=(0, 100), classes=[])
+            policy.write_text(
+                json.dumps(
+                    {
+                        "baseline_instruction_percent": 70,
+                        "minimum_instruction_percent": 74.99,
+                        "aggregate_selectors": ["package:com.example.security"],
+                        "scopes": [
+                            {
+                                "name": "security",
+                                "baseline_instruction_percent": 70,
+                                "minimum_instruction_percent": 75,
+                                "selectors": ["package:com.example.security"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result, _, stderr = self.enforce(report, policy)
+
+            self.assertEqual(1, result)
+            self.assertIn("at least five percentage points", stderr)
 
 
 if __name__ == "__main__":

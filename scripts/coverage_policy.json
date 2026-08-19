@@ -1,5 +1,6 @@
 {
-  "minimum_instruction_percent": 70.0,
+  "baseline_instruction_percent": 64.89,
+  "minimum_instruction_percent": 69.89,
   "aggregate_selectors": [
     "class:com.example.data.FileRepository",
     "class:com.example.data.PluginRepository",
@@ -7,7 +8,7 @@
     "class:com.example.data.FtsSearchQueryCompiler",
     "class:com.example.data.SemanticAnnIndex",
     "class:com.example.data.SemanticIndexingPolicy",
-    "class:com.example.data.SearchIndexDao",
+    "exact:com.example.data.SearchIndexDao",
     "class:com.example.data.SearchIndexSchema",
     "class:com.example.data.DuplicateDetectionEngine",
     "class:com.example.data.DuplicateManager",
@@ -18,7 +19,13 @@
     "class:com.example.data.GoogleAuthManager",
     "class:com.example.data.GoogleAuthManagerFactory",
     "class:com.example.data.GoogleDriveProviderAdapter",
-    "class:com.example.data.Vault",
+    "class:com.example.data.VaultRepository",
+    "class:com.example.data.VaultOperationCoordinator",
+    "class:com.example.data.VaultManagerEngine",
+    "class:com.example.data.VaultSecurity",
+    "class:com.example.data.VaultPin",
+    "class:com.example.data.VaultSession",
+    "class:com.example.data.VaultBiometric",
     "class:com.example.security.LegacyEncryptedPreferencesMigration",
     "class:com.example.security.SecureKeyValueStore",
     "class:com.example.security.VaultCryptoSession",
@@ -27,20 +34,34 @@
   "scopes": [
     {
       "name": "security-critical",
-      "minimum_instruction_percent": 90.0,
+      "baseline_instruction_percent": 65.11,
+      "minimum_instruction_percent": 70.11,
       "selectors": [
         "class:com.example.security.LegacyEncryptedPreferencesMigration",
         "class:com.example.security.SecureKeyValueStore",
         "class:com.example.security.VaultCryptoSession",
         "class:com.example.security.VaultKeyEnvelope",
-        "class:com.example.data.Vault"
+        "class:com.example.data.VaultRepository",
+        "class:com.example.data.VaultOperationCoordinator",
+        "class:com.example.data.VaultManagerEngine",
+        "class:com.example.data.VaultSecurity",
+        "class:com.example.data.VaultPin",
+        "class:com.example.data.VaultSession",
+        "class:com.example.data.VaultBiometric"
       ]
     },
     {
       "name": "vault",
-      "minimum_instruction_percent": 95.0,
+      "baseline_instruction_percent": 65.11,
+      "minimum_instruction_percent": 70.11,
       "selectors": [
-        "class:com.example.data.Vault",
+        "class:com.example.data.VaultRepository",
+        "class:com.example.data.VaultOperationCoordinator",
+        "class:com.example.data.VaultManagerEngine",
+        "class:com.example.data.VaultSecurity",
+        "class:com.example.data.VaultPin",
+        "class:com.example.data.VaultSession",
+        "class:com.example.data.VaultBiometric",
         "class:com.example.security.VaultCryptoSession",
         "class:com.example.security.VaultKeyEnvelope",
         "class:com.example.security.SecureKeyValueStore",
@@ -49,7 +70,8 @@
     },
     {
       "name": "cloud-sync",
-      "minimum_instruction_percent": 90.0,
+      "baseline_instruction_percent": 76.73,
+      "minimum_instruction_percent": 81.73,
       "selectors": [
         "class:com.example.data.Cloud",
         "class:com.example.data.GoogleAuthManager",
@@ -62,7 +84,8 @@
     },
     {
       "name": "repository-data",
-      "minimum_instruction_percent": 85.0,
+      "baseline_instruction_percent": 53.87,
+      "minimum_instruction_percent": 58.87,
       "selectors": [
         "class:com.example.data.FileRepository",
         "class:com.example.data.PluginRepository",
@@ -70,7 +93,7 @@
         "class:com.example.data.FtsSearchQueryCompiler",
         "class:com.example.data.SemanticAnnIndex",
         "class:com.example.data.SemanticIndexingPolicy",
-        "class:com.example.data.SearchIndexDao",
+        "exact:com.example.data.SearchIndexDao",
         "class:com.example.data.SearchIndexSchema",
         "class:com.example.data.DuplicateDetectionEngine",
         "class:com.example.data.DuplicateManager"
