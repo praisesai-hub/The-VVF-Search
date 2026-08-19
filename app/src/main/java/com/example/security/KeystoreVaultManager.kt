@@ -33,8 +33,6 @@ class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
         null
     }
 
-    init { ensureSecretKeyExists() }
-
     private fun ensureSecretKeyExists() {
         if (keyStore != null) {
             try {
