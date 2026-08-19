@@ -21,24 +21,25 @@ class BackgroundIndexWorker(
         Log.i(TAG, "Starting background file storage indexing...")
         return try {
             val scanner = StorageScanner(applicationContext)
-            val db = AppDatabase.getDatabase(applicationContext)
             val discoveredPaths = mutableSetOf<String>()
             var totalDiscovered = 0
+            var database: AppDatabase? = null
             scanner.scanDeviceStorageFlow().collect { batch ->
                 if (batch.isNotEmpty()) {
+                    val db = database ?: AppDatabase.getDatabase(applicationContext).also { database = it }
                     db.fileDao().upsertFilesPreservingMetadata(batch)
                     totalDiscovered += batch.size
                     batch.forEach { item -> discoveredPaths.add(item.path) }
                 }
             }
 
-            if (!isStopped) {
-                db.fileDao().reconcileStaleRecords(discoveredPaths)
-                if (totalDiscovered > 0) {
-                    Log.i(TAG, "Successfully indexed and synced $totalDiscovered real storage files into database.")
-                } else {
-                    Log.w(TAG, "Background scan finished with 0 files discovered.")
-                }
+            if (!isStopped && totalDiscovered > 0) {
+                checkNotNull(database).fileDao().reconcileStaleRecords(discoveredPaths)
+                Log.i(TAG, "Successfully indexed and synced $totalDiscovered real storage files into database.")
+            } else if (!isStopped) {
+                // Do not treat an empty or revoked storage capability as proof that every
+                // stored record is stale. This also avoids opening the database unnecessarily.
+                Log.w(TAG, "Background scan finished with 0 files discovered; stale records were retained.")
             } else {
                 Log.w(TAG, "Worker was stopped before stale record reconciliation could run.")
             }

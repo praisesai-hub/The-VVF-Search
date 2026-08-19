@@ -1,8 +1,8 @@
 package com.example.security
 
 import android.content.Context
-import android.util.Base64
 import java.security.SecureRandom
+import java.util.Base64
 
 /**
  * Owns the SQLCipher passphrase envelope. The generated random passphrase is
@@ -23,7 +23,7 @@ class DatabasePassphraseProvider(
         if (existing != null) return decodeExisting(existing)
 
         val passphrase = ByteArray(PASSPHRASE_BYTES).also(random::nextBytes)
-        val encoded = Base64.encodeToString(passphrase, Base64.NO_WRAP)
+        val encoded = Base64.getEncoder().encodeToString(passphrase)
         try {
             check(store.commit(mapOf(PASSPHRASE_KEY to encoded))) {
                 "Unable to durably store database passphrase"
@@ -39,7 +39,7 @@ class DatabasePassphraseProvider(
     }
 
     private fun decodeExisting(encoded: String): ByteArray = try {
-        Base64.decode(encoded, Base64.NO_WRAP).also { passphrase ->
+        Base64.getDecoder().decode(encoded).also { passphrase ->
             require(passphrase.size == PASSPHRASE_BYTES) { "Invalid database passphrase" }
         }
     } catch (error: IllegalArgumentException) {
