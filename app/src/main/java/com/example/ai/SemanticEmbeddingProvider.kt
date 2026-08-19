@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import androidx.core.graphics.get
 import androidx.core.graphics.scale
 import android.util.Log
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.text.textembedder.TextEmbedder
 import org.tensorflow.lite.Interpreter
 import java.io.File
 import java.io.FileInputStream
@@ -23,6 +25,15 @@ interface SemanticEmbeddingProvider {
     fun isModelLoaded(): Boolean
     suspend fun generateImageEmbedding(file: File): FloatArray?
     suspend fun generateTextEmbedding(text: String): FloatArray?
+
+    /** Uses document formatting when the underlying model distinguishes retrieval roles. */
+    suspend fun generateDocumentEmbedding(title: String, text: String): FloatArray? =
+        generateTextEmbedding("$title\n$text".trim())
+
+    /** Uses query formatting when the underlying model distinguishes retrieval roles. */
+    suspend fun generateQueryEmbedding(query: String): FloatArray? = generateTextEmbedding(query)
+
+    fun close() = Unit
 
     /**
      * Calculates cosine similarity between two float vector embeddings (range -1.0 to 1.0).
@@ -156,12 +167,89 @@ class FallbackSemanticEmbeddingProvider : SemanticEmbeddingProvider {
      * licensed TFLite model is not bundled with the app.
      */
     override val embeddingVersion: Int = 2
-    override fun isModelLoaded(): Boolean = true
+    override fun isModelLoaded(): Boolean = false
     override suspend fun generateImageEmbedding(file: File): FloatArray? =
         LightweightEmbeddingEngine.generateImageEmbedding(file)
 
     override suspend fun generateTextEmbedding(text: String): FloatArray? =
         LightweightEmbeddingEngine.generateTextEmbedding(text)
+}
+
+/**
+ * Production multilingual text embedder. Tokenization and tensor preprocessing are supplied by
+ * the verified MediaPipe EmbeddingGemma task asset, not by a Latin-only application tokenizer.
+ */
+class EmbeddingGemmaTextEmbeddingProvider(
+    context: Context,
+    assetName: String = EMBEDDING_GEMMA_ASSET
+) : SemanticEmbeddingProvider {
+    override val embeddingVersion: Int = EMBEDDING_VERSION
+    private val lock = Any()
+    private val textEmbedder: TextEmbedder? = runCatching {
+        val baseOptions = BaseOptions.builder().setModelAssetPath(assetName).build()
+        val options = TextEmbedder.TextEmbedderOptions.builder()
+            .setBaseOptions(baseOptions)
+            .setL2Normalize(false)
+            .setQuantize(false)
+            .build()
+        TextEmbedder.createFromOptions(context, options)
+    }.onFailure { error ->
+        Log.e(TAG, "EmbeddingGemma failed to initialize", error)
+    }.getOrNull()
+
+    override fun isModelLoaded(): Boolean = textEmbedder != null
+
+    override suspend fun generateImageEmbedding(file: File): FloatArray? = null
+
+    override suspend fun generateTextEmbedding(text: String): FloatArray? =
+        generateDocumentEmbedding(DEFAULT_TITLE, text)
+
+    override suspend fun generateDocumentEmbedding(title: String, text: String): FloatArray? {
+        if (text.isBlank() && title.isBlank()) return null
+        val formatContext = TextEmbedder.TextFormatContext.builder()
+            .setTaskType(TextEmbedder.EmbeddingType.RETRIEVAL_DOCUMENT)
+            .setRole(TextEmbedder.TextRole.DOCUMENT)
+            .setTitle(title.ifBlank { DEFAULT_TITLE })
+            .build()
+        return embed("$title\n$text".trim(), formatContext)
+    }
+
+    override suspend fun generateQueryEmbedding(query: String): FloatArray? {
+        if (query.isBlank()) return null
+        val formatContext = TextEmbedder.TextFormatContext.builder()
+            .setTaskType(TextEmbedder.EmbeddingType.RETRIEVAL_QUERY)
+            .setRole(TextEmbedder.TextRole.QUERY)
+            .build()
+        return embed(query, formatContext)
+    }
+
+    private fun embed(
+        text: String,
+        formatContext: TextEmbedder.TextFormatContext
+    ): FloatArray? = synchronized(lock) {
+        val embedder = textEmbedder ?: return@synchronized null
+        runCatching {
+            embedder.embed(text, formatContext)
+                .embeddingResult()
+                .embeddings()
+                .firstOrNull()
+                ?.floatEmbedding()
+                ?.takeIf { it.isNotEmpty() }
+        }.onFailure { error ->
+            Log.w(TAG, "EmbeddingGemma inference failed", error)
+        }.getOrNull()
+    }
+
+    override fun close() = synchronized(lock) {
+        textEmbedder?.close()
+    }
+
+    private companion object {
+        const val EMBEDDING_VERSION = 3
+        const val EMBEDDING_GEMMA_ASSET = "embedding_gemma.task"
+        const val DEFAULT_TITLE = "VVF Smart Manager metadata"
+        const val TAG = "EmbeddingGemma"
+    }
 }
 
 /**
@@ -423,7 +511,7 @@ class TFLiteSemanticEmbeddingProvider(
         return vector
     }
 
-    fun close() {
+    override fun close() {
         try {
             interpreter?.close()
             interpreter = null

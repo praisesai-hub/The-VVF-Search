@@ -52,12 +52,17 @@ class SemanticEmbeddingProviderTest {
     }
 
     @Test
-    fun `test fallback provider remains available without a bundled model`() = runBlocking {
-        assertTrue(provider.isModelLoaded())
+    fun `test fallback provider is not advertised as a production semantic model`() = runBlocking {
+        assertFalse(provider.isModelLoaded())
         assertEquals(2, provider.embeddingVersion)
         val embedding = provider.generateTextEmbedding("local-only semantic search")
         assertNotNull(embedding)
         assertEquals(128, embedding!!.size)
+    }
+
+    @Test
+    fun `test Latin-only fallback does not generate Devanagari embedding`() = runBlocking {
+        assertNull(provider.generateTextEmbedding("बिजली का बिल"))
     }
 
     @Test
@@ -193,4 +198,3 @@ class SemanticEmbeddingProviderTest {
         assertNull(imgEmbedding)
     }
 }
-

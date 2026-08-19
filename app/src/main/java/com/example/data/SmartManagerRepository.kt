@@ -4,6 +4,7 @@ package com.example.data
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.example.ai.EmbeddingGemmaTextEmbeddingProvider
 import com.example.ai.SemanticEmbeddingProvider
 import com.example.ai.FallbackSemanticEmbeddingProvider
 import com.example.ai.TFLiteSemanticEmbeddingProvider
@@ -31,6 +32,7 @@ open class SmartManagerRepository(
     private val context: Context,
     private val dao: FileDao = AppDatabase.getDatabase(context).fileDao(),
     private val ocrEngine: OcrEngine? = null,
+    private val semanticEmbeddingProvider: SemanticEmbeddingProvider? = null,
     // Production remains default-deny. Tests may inject an explicit authorized fixture
     // without changing build provisioning or device-owner consent.
     private val cloudTransferAllowed: (Context) -> Boolean = CloudSyncPolicy::canTransfer,
@@ -51,15 +53,16 @@ open class SmartManagerRepository(
     } catch (_: Exception) { false }
 
     val tfliteProvider: SemanticEmbeddingProvider by lazy {
-        if (isAssetExists("mobile_clip_embedding.tflite") && isAssetExists("mobile_clip_vocab.txt")) {
+        semanticEmbeddingProvider ?: if (isAssetExists("embedding_gemma.task")) {
             try {
-                TFLiteSemanticEmbeddingProvider().apply { loadModelFromAssets(context) }
+                EmbeddingGemmaTextEmbeddingProvider(context).takeIf { it.isModelLoaded() }
+                    ?: FallbackSemanticEmbeddingProvider()
             } catch (e: Throwable) {
-                Log.e("SmartManagerRepository", "TFLite semantic model failed to load", e)
+                Log.e("SmartManagerRepository", "EmbeddingGemma semantic model failed to load", e)
                 FallbackSemanticEmbeddingProvider()
             }
         } else {
-            Log.w("SmartManagerRepository", "Semantic model assets are unavailable")
+            Log.w("SmartManagerRepository", "Multilingual semantic model asset is unavailable")
             FallbackSemanticEmbeddingProvider()
         }
     }
@@ -89,20 +92,22 @@ open class SmartManagerRepository(
         if (!isSemanticSearchAvailable) return kotlinx.coroutines.flow.flowOf(emptyList())
         if (query.isBlank()) return dao.getAllActiveFiles()
         return dao.getAllActiveFiles().map { files ->
-            val queryVec = tfliteProvider.generateTextEmbedding(query)
+            val queryVec = tfliteProvider.generateQueryEmbedding(query)
             if (queryVec == null) {
                 files.filter { file ->
                     file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
                 }
             } else {
                 files.mapNotNull { file ->
-                    val fileVec = tfliteProvider.stringToFloatArray(file.semanticEmbeddingString)
-                        ?: tfliteProvider.generateTextEmbedding("${file.name} ${file.ocrText} ${file.tags}")
+                    val isTextMatch = file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
+                    val fileVec = if (
+                        file.semanticIndexed &&
+                        file.semanticEmbeddingVersion == tfliteProvider.embeddingVersion
+                    ) tfliteProvider.stringToFloatArray(file.semanticEmbeddingString) else null
                     if (fileVec != null) {
                         val sim = tfliteProvider.calculateCosineSimilarity(queryVec, fileVec)
-                        val isTextMatch = file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
                         if (sim > 0.10f || isTextMatch) file to sim else null
-                    } else null
+                    } else if (isTextMatch) file to 1.0f else null
                 }.sortedByDescending { it.second }.map { it.first }
             }
         }
@@ -175,12 +180,9 @@ open class SmartManagerRepository(
                                 if (docFp.isNotBlank()) updated = updated.copy(visualSimilarityHash = docFp)
                             }
                         }
-                        if (!updated.semanticIndexed) {
-                            val textContent = "${updated.name} ${updated.ocrText} ${updated.tags}".trim()
-                            val javaFile = if (!updated.path.startsWith("content://")) File(updated.path) else null
-                            val embedding = if (javaFile != null && javaFile.exists() && javaFile.canRead()) {
-                                tfliteProvider.generateImageEmbedding(javaFile) ?: tfliteProvider.generateTextEmbedding(textContent)
-                            } else tfliteProvider.generateTextEmbedding(textContent)
+                        if (SemanticIndexingPolicy.needsReindex(updated, tfliteProvider)) {
+                            val textContent = "${updated.ocrText}\n${updated.tags}".trim()
+                            val embedding = tfliteProvider.generateDocumentEmbedding(updated.name, textContent)
                             if (embedding != null) {
                                 updated = updated.copy(
                                     semanticEmbeddingVersion = tfliteProvider.embeddingVersion,
@@ -209,7 +211,12 @@ open class SmartManagerRepository(
     fun getVisualDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getVisualDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
     fun getVideoDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getVideoDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
     fun getDocumentDuplicates(): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getDocumentDuplicates(dao.getAllActiveFiles())
-    fun getSemanticDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getSemanticDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
+    fun getSemanticDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> =
+        if (isSemanticSearchAvailable) {
+            duplicateDetectionEngine.getSemanticDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
 
     val documentStats: Flow<Triple<Int, Int, Float>> = dao.getAllActiveFiles().map { files ->
         val docs = files.filter { it.category == FileCategory.DOCUMENTS.name && !it.isVault && !it.isRecycleBin }
@@ -378,9 +385,7 @@ open class SmartManagerRepository(
 
     fun trimMemory() {
         try {
-            if (tfliteProvider is TFLiteSemanticEmbeddingProvider) {
-                (tfliteProvider as TFLiteSemanticEmbeddingProvider).close()
-            }
+            tfliteProvider.close()
         } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to trim memory", e) }
     }
 

@@ -233,13 +233,13 @@ class MainViewModelTest {
     }
 
     @Test
-    fun semanticSettings_updateStateAndExposeRepositoryAvailability() {
+    fun semanticSettings_updateStateAndExposeUnavailableModelState() {
         viewModel.setSemanticQuery("receipt from last month")
         viewModel.setSimilarityThreshold(92.5f)
 
         assertEquals("receipt from last month", viewModel.semanticQuery.value)
         assertEquals(92.5f, viewModel.similarityThreshold.value)
-        assertTrue(viewModel.isSemanticSearchAvailable)
+        assertFalse(viewModel.isSemanticSearchAvailable)
     }
 
     @Test

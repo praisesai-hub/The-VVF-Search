@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import com.example.ai.SemanticEmbeddingProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
@@ -355,7 +356,7 @@ class OcrEngineTest {
     }
 
     @Test
-    fun searchSemanticFiles_usesLocalFallbackWhenModelAssetsAreUnavailable() = runBlocking {
+    fun searchSemanticFiles_doesNotClaimLatinOnlyFallbackAsSemanticSearch() = runBlocking {
         fakeDao.activeFiles += FileItemEntity(
             id = 621L,
             name = "notes.txt",
@@ -364,8 +365,54 @@ class OcrEngineTest {
             sizeBytes = 1L
         )
 
-        assertTrue(repository.isSemanticSearchAvailable)
-        assertFalse(repository.searchSemanticFiles("notes").first().isEmpty())
+        assertFalse(repository.isSemanticSearchAvailable)
+        assertTrue(repository.searchSemanticFiles("notes").first().isEmpty())
+    }
+
+    @Test
+    fun searchSemanticFiles_ranksHindiDocumentWithMultilingualProvider() = runBlocking {
+        val multilingualProvider = HindiFixtureEmbeddingProvider()
+        repository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            ocrEngine = fakeOcrEngine,
+            semanticEmbeddingProvider = multilingualProvider
+        )
+        fakeDao.activeFiles += listOf(
+            FileItemEntity(
+                id = 622L,
+                name = "बिजली का बिल.pdf",
+                path = "content://documents/electricity-bill",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+                semanticIndexed = true,
+                semanticEmbeddingVersion = multilingualProvider.embeddingVersion,
+                semanticEmbeddingString = "1.0,0.0"
+            ),
+            FileItemEntity(
+                id = 623L,
+                name = "रेल टिकट.pdf",
+                path = "content://documents/train-ticket",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+                semanticIndexed = true,
+                semanticEmbeddingVersion = multilingualProvider.embeddingVersion,
+                semanticEmbeddingString = "0.0,1.0"
+            )
+        )
+
+        val results = repository.searchSemanticFiles("इस महीने का बिजली बिल").first()
+
+        assertEquals(listOf(622L), results.map { it.id })
+    }
+
+    private class HindiFixtureEmbeddingProvider : SemanticEmbeddingProvider {
+        override val embeddingVersion: Int = 3
+        override fun isModelLoaded(): Boolean = true
+        override suspend fun generateImageEmbedding(file: File): FloatArray? = null
+        override suspend fun generateTextEmbedding(text: String): FloatArray? = generateQueryEmbedding(text)
+        override suspend fun generateQueryEmbedding(query: String): FloatArray? =
+            if (query.contains("बिजली")) floatArrayOf(1f, 0f) else floatArrayOf(0f, 1f)
     }
 
     @Test
