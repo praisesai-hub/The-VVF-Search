@@ -235,6 +235,104 @@ class VaultOperationCoordinatorTest {
         }
     }
 
+    @Test
+    fun recovery_requiresManualAttentionWhenPreparedSourceOrCiphertextIsMissing() = runBlocking {
+        val preparedWithoutSource = encryptionOperation(
+            state = VaultOperationState.PREPARED,
+            sourcePath = File(testDir, "never-created.txt").absolutePath,
+            encryptedPath = File(testDir, "never-created.vvf").absolutePath
+        )
+        val encryptedWithoutBothFiles = encryptionOperation(
+            state = VaultOperationState.ENCRYPTED,
+            sourcePath = File(testDir, "removed-source.txt").absolutePath,
+            encryptedPath = File(testDir, "removed-ciphertext.vvf").absolutePath
+        ).copy(id = "encrypted-missing-files")
+        coEvery { dao.getIncompleteVaultOperations() } returns listOf(
+            preparedWithoutSource,
+            encryptedWithoutBothFiles
+        )
+        coEvery { dao.upsertVaultOperation(any()) } just Runs
+
+        coordinator.recoverIncompleteOperations()
+
+        coVerify {
+            dao.upsertVaultOperation(
+                match {
+                    it.id == preparedWithoutSource.id &&
+                        it.state == VaultOperationState.RECOVERY_REQUIRED &&
+                        it.recoveryError == "Source disappeared before encryption completed"
+                }
+            )
+        }
+        coVerify {
+            dao.upsertVaultOperation(
+                match {
+                    it.id == encryptedWithoutBothFiles.id &&
+                        it.state == VaultOperationState.RECOVERY_REQUIRED &&
+                        it.recoveryError == "Both source and encrypted vault file are missing"
+                }
+            )
+        }
+    }
+
+    @Test
+    fun recovery_commitsEncryptedIntentWhenSourceWasRemovedBeforeMetadataCommit() = runBlocking {
+        val encrypted = File(testDir, "intent-ciphertext.vvf").apply { writeText("ciphertext") }
+        val source = fileItem(61L, File(testDir, "removed-source.txt").absolutePath)
+        val operation = encryptionOperation(
+            state = VaultOperationState.ENCRYPTED,
+            sourcePath = source.path,
+            encryptedPath = encrypted.absolutePath
+        ).copy(sourceFileId = source.id)
+        coEvery { dao.getIncompleteVaultOperations() } returns listOf(operation)
+        coEvery { dao.getFileById(source.id) } returns source
+        coEvery { dao.getVaultItemByEncryptedPath(encrypted.absolutePath) } returns null
+        coEvery { dao.commitVaultEncryptionMetadata(any(), any(), any()) } just Runs
+        coEvery { dao.upsertVaultOperation(any()) } just Runs
+
+        coordinator.recoverIncompleteOperations()
+
+        coVerify(exactly = 1) {
+            dao.commitVaultEncryptionMetadata(
+                source,
+                match { it.encryptedFilePath == encrypted.absolutePath },
+                match { it.state == VaultOperationState.SOURCE_REMOVED }
+            )
+        }
+        coVerify { dao.upsertVaultOperation(match { it.state == VaultOperationState.COMPLETED }) }
+    }
+
+    @Test
+    fun recovery_reconcilesRestoreWriteAndMissingDestinationBranches() = runBlocking {
+        val destination = File(testDir, "restored.txt").apply { writeText("plaintext") }
+        val target = fileItem(72L, File(testDir, "original.txt").absolutePath)
+        val writePending = restoreOperation(
+            id = "restore-write-pending",
+            state = VaultOperationState.RESTORE_WRITE_PENDING,
+            destination = destination
+        ).copy(sourceFileId = target.id)
+        val noDestination = restoreOperation(
+            id = "restore-missing-destination",
+            state = VaultOperationState.VAULT_REMOVAL_PENDING,
+            destination = File(testDir, "not-restored.txt")
+        )
+        coEvery { dao.getIncompleteVaultOperations() } returns listOf(writePending, noDestination)
+        coEvery { dao.getFileById(target.id) } returns target
+        coEvery { dao.commitVaultRestoreMetadata(any(), writePending.vaultItemId, any()) } just Runs
+        coEvery { dao.upsertVaultOperation(any()) } just Runs
+
+        coordinator.recoverIncompleteOperations()
+
+        coVerify(exactly = 1) {
+            dao.commitVaultRestoreMetadata(
+                match { it.path == destination.absolutePath },
+                writePending.vaultItemId,
+                match { it.state == VaultOperationState.VAULT_REMOVED }
+            )
+        }
+        coVerify(exactly = 2) { dao.upsertVaultOperation(match { it.state == VaultOperationState.COMPLETED }) }
+    }
+
     private fun encryptionOperation(
         state: String,
         sourcePath: String,
@@ -248,6 +346,21 @@ class VaultOperationCoordinatorTest {
         encryptedFilePath = encryptedPath,
         encryptedFileName = "encrypted.vvf",
         originalName = "source.txt",
+        category = "DOCUMENTS",
+        sizeBytes = 9L,
+        ivBase64 = "AQIDBA=="
+    )
+
+    private fun restoreOperation(id: String, state: String, destination: File) = VaultOperationEntity(
+        id = id,
+        operationType = VaultOperationType.RESTORE,
+        state = state,
+        sourceFileId = 71L,
+        vaultItemId = 73L,
+        encryptedFilePath = File(testDir, "$id.vvf").absolutePath,
+        encryptedFileName = "$id.vvf",
+        restoreDestinationPath = destination.absolutePath,
+        originalName = "original.txt",
         category = "DOCUMENTS",
         sizeBytes = 9L,
         ivBase64 = "AQIDBA=="

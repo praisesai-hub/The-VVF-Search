@@ -190,6 +190,35 @@ class SecureKeyValueStoreTest {
         )
     }
 
+    @Test
+    fun `legacy migration keeps an already authoritative secure target untouched`() {
+        val target = store()
+        target.commit(mapOf("access_token" to "current-token"))
+
+        LegacyEncryptedPreferencesMigration.migrateIfNeeded(
+            context = context,
+            legacyName = "missing-legacy-${System.nanoTime()}",
+            target = target,
+            keys = setOf("access_token")
+        )
+
+        assertEquals("current-token", target.getString("access_token"))
+    }
+
+    @Test
+    fun `legacy migration is a no-op when no legacy XML exists`() {
+        val target = store()
+
+        LegacyEncryptedPreferencesMigration.migrateIfNeeded(
+            context = context,
+            legacyName = "missing-legacy-${System.nanoTime()}",
+            target = target,
+            keys = setOf("access_token", "refresh_token")
+        )
+
+        assertFalse(target.containsStoreFile())
+    }
+
     private fun store(): SecureKeyValueStore = SecureKeyValueStore(
         context = context,
         fileName = FILE_NAME,

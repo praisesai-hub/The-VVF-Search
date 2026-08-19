@@ -1,6 +1,10 @@
 package com.example.data
 
 import android.net.Uri
+import android.content.ContentResolver
+import android.content.Context
+import io.mockk.every
+import io.mockk.mockk
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -53,9 +57,15 @@ class CloudSyncContractTest {
 
     @Test
     fun contentUriSource_usesDeclaredLengthAndFailsClosedWhenProviderHasNoStream(): Unit {
+        val uri = Uri.parse("content://unavailable.provider/receipt")
+        val resolver = mockk<ContentResolver>()
+        val context = mockk<Context>()
+        every { context.contentResolver } returns resolver
+        every { resolver.getType(uri) } returns null
+        every { resolver.openInputStream(uri) } returns null
         val source = CloudUploadSource.ContentUri(
-            context = RuntimeEnvironment.getApplication(),
-            uri = Uri.parse("content://unavailable.provider/receipt"),
+            context = context,
+            uri = uri,
             displayName = "receipt.unknown",
             declaredLength = 73L
         )
