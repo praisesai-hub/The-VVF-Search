@@ -10,6 +10,7 @@ import com.example.ai.SemanticEmbeddingProvider
 import com.example.ai.FallbackSemanticEmbeddingProvider
 import com.example.ai.TFLiteSemanticEmbeddingProvider
 import com.example.security.KeystoreVaultManager
+import com.example.domain.WorkCoordinator
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,7 @@ open class SmartManagerRepository(
 ) {
     val keystoreVaultManager: KeystoreVaultManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { KeystoreVaultManager() }
     val storageScanner = StorageScanner(context)
+    val workCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { WorkCoordinator(context) }
     val fileRepository by lazy { FileRepository(context, dao) }
     private val vaultManagerEngine: VaultManagerEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         VaultManagerEngine(context, keystoreVaultManager)
@@ -345,7 +347,7 @@ open class SmartManagerRepository(
         val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
         if (duplicate != null) return@withContext false
         withRetry { dao.insertCloudSyncItem(CloudSyncItemEntity(provider = provider, fileName = fileName, filePath = filePath, fileSize = size, status = "QUEUED", lastSyncedMs = System.currentTimeMillis(), isCore = isCore)) }
-        enqueueCloudSyncWork()
+        workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
         true
     }
 
@@ -357,7 +359,7 @@ open class SmartManagerRepository(
             !isProviderEnabled(item.provider)
         ) return@withContext false
         withRetry { dao.insertCloudSyncItem(item.copy(status = "QUEUED", lastSyncedMs = System.currentTimeMillis())) }
-        enqueueCloudSyncWork()
+        workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
         true
     }
 
@@ -378,42 +380,19 @@ open class SmartManagerRepository(
         } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to trim memory", e) }
     }
 
-    fun enqueueDuplicateCleanupWork() {
-        try {
-            val constraints = androidx.work.Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build()
-            val request = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.DuplicateCleanupWorker>().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()
-            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("DuplicateCleanupWork", androidx.work.ExistingWorkPolicy.KEEP, request)
-        } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to enqueue DuplicateCleanupWorker", e) }
-    }
+    /** @deprecated Use [workCoordinator] from the application/domain boundary. */
+    @Deprecated("Use WorkCoordinator instead of repository scheduling APIs")
+    open fun enqueueDuplicateCleanupWork() = workCoordinator.enqueueDuplicateCleanupWork()
 
-    fun enqueueCloudSyncWork() {
-        if (!cloudTransferAllowed(context)) {
-            Log.i(
-                "SmartManagerRepository",
-                "Cloud sync enqueue blocked: explicit consent or build provisioning is missing."
-            )
-            return
-        }
-        try {
-            val constraints = androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build()
-            val request = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.CloudSyncWorker>().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()
-            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("CloudSyncWork", androidx.work.ExistingWorkPolicy.KEEP, request)
-        } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to enqueue CloudSyncWorker", e) }
-    }
+    /** @deprecated Use [workCoordinator] from the application/domain boundary. */
+    @Deprecated("Use WorkCoordinator instead of repository scheduling APIs")
+    fun enqueueCloudSyncWork() = workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
 
-    fun enqueueCacheCleanupWork() {
-        try {
-            val constraints = androidx.work.Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build()
-            val request = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.CacheCleanupWorker>().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()
-            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("CacheCleanupWork", androidx.work.ExistingWorkPolicy.KEEP, request)
-        } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to enqueue CacheCleanupWorker", e) }
-    }
+    /** @deprecated Use [workCoordinator] from the application/domain boundary. */
+    @Deprecated("Use WorkCoordinator instead of repository scheduling APIs")
+    fun enqueueCacheCleanupWork() = workCoordinator.enqueueCacheCleanupWork()
 
-    open fun enqueueBackgroundIndexWork() {
-        try {
-            val constraints = androidx.work.Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresStorageNotLow(true).build()
-            val request = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.BackgroundIndexWorker>().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()
-            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("BackgroundIndexWork", androidx.work.ExistingWorkPolicy.KEEP, request)
-        } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to enqueue BackgroundIndexWorker", e) }
-    }
+    /** @deprecated Use [workCoordinator] from the application/domain boundary. */
+    @Deprecated("Use WorkCoordinator instead of repository scheduling APIs")
+    open fun enqueueBackgroundIndexWork() = workCoordinator.enqueueBackgroundIndexWork()
 }

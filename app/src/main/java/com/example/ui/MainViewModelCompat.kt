@@ -42,42 +42,67 @@ private fun MainViewModel.compatState(): VmCompatState = synchronized(compatStat
 private fun <T> Flow<T>.stateInCompat(vm: MainViewModel, initial: T): StateFlow<T> =
     stateIn(vm.viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.filteredFiles: StateFlow<List<FileItemEntity>> get() = files
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.categoryStats: StateFlow<List<CategoryStat>> get() = dashboardStats
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.recentFiles: StateFlow<List<FileItemEntity>> get() = repository.recentFiles.stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.recycleBinFiles: StateFlow<List<FileItemEntity>> get() = repository.recycleBinFiles.stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.ocrScannedFiles: StateFlow<List<FileItemEntity>> get() = repository.ocrScannedFiles.stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.level1ExactDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.exactDuplicates.stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.level3VisualDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getVisualDuplicates(similarityThreshold).stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.videoDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getVideoDuplicates(similarityThreshold).stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.semanticDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getSemanticDuplicates(similarityThreshold).stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.documentDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getDocumentDuplicates().stateInCompat(this, emptyList())
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.documentStats: StateFlow<Triple<Int, Int, Float>> get() = repository.documentStats.stateInCompat(this, Triple(0, 0, 1f))
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.selectedDuplicateIds: StateFlow<Set<Long>> get() = compatState().selectedIds
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.isDuplicateScanning: StateFlow<Boolean> get() = repository.isScanning
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.duplicateScanProgress: StateFlow<Float> get() = repository.scanProgress
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.isPageLoading: StateFlow<Boolean> get() = compatState().pageLoading
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.isVaultUnlocked: StateFlow<Boolean> get() = compatState().vaultUnlocked
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.vaultAutoLockTimeoutMs: StateFlow<Long>
     get() = compatState().also { loadVaultAutoLockSettings(it) }.vaultAutoLockTimeoutMs
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.vaultActivityGeneration: StateFlow<Long>
     get() = compatState().vaultActivityGeneration
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.enteredPin: StateFlow<String> get() = compatState().enteredPin
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.pinError: StateFlow<String?> get() = compatState().pinError
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.isVaultPinSetupRequired: Boolean get() = !repository.hasVaultPin()
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.hasBiometricEnrollment: Boolean get() = repository.hasBiometricEnrollment()
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.semanticSearchResults: StateFlow<List<FileItemEntity>> get() =
     semanticQuery.debounce(200).flatMapLatest { repository.searchSemanticFiles(it) }
         .stateInCompat(this, emptyList())
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.startDuplicateScan() { repository.startIncrementalDuplicateScan() }
 
 /**
  * Changes the vault idle timeout. Values are deliberately bounded so the vault cannot be
  * accidentally configured to remain unlocked indefinitely.
  */
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.setVaultAutoLockTimeout(timeoutMs: Long) {
     val state = compatState()
     loadVaultAutoLockSettings(state)
@@ -93,12 +118,14 @@ fun MainViewModel.setVaultAutoLockTimeout(timeoutMs: Long) {
 }
 
 /** Records activity only while an authenticated vault session is active. */
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.recordVaultActivity() {
     val state = compatState()
     if (state.vaultUnlocked.value) state.vaultActivityGeneration.value += 1
 }
 
 /** Immediately clears an authenticated vault session when the app is no longer foregrounded. */
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.lockVaultForBackground() {
     if (compatState().vaultUnlocked.value) lockVault()
 }
@@ -119,6 +146,7 @@ private fun MainViewModel.loadVaultAutoLockSettings(state: VmCompatState) {
     state.vaultAutoLockSettingsLoaded = true
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.toggleDuplicateSelection(id: Long) {
     val state = compatState()
     state.selectedIds.value = state.selectedIds.value.toMutableSet().apply {
@@ -126,11 +154,13 @@ fun MainViewModel.toggleDuplicateSelection(id: Long) {
     }
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.autoSelectExtraDuplicates() {
     val groups = level1ExactDuplicates.value + level3VisualDuplicates.value + videoDuplicates.value + semanticDuplicates.value + documentDuplicates.value
     compatState().selectedIds.value = groups.flatMap { it.files.drop(1).map { file -> file.id } }.toSet()
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.cleanSelectedDuplicates() {
     val ids = selectedDuplicateIds.value
     if (ids.isEmpty()) return
@@ -140,14 +170,22 @@ fun MainViewModel.cleanSelectedDuplicates() {
     }
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.moveToRecycleBin(file: FileItemEntity) { viewModelScope.launch { repository.moveToRecycleBin(file) } }
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.restoreFromRecycleBin(file: FileItemEntity) { viewModelScope.launch { repository.restoreFromRecycleBin(file) } }
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.deletePermanently(file: FileItemEntity) { viewModelScope.launch { repository.deletePermanently(file) } }
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.emptyRecycleBin() { viewModelScope.launch { repository.emptyRecycleBin() } }
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.encryptToVault(file: FileItemEntity) { viewModelScope.launch { repository.encryptToVault(file) } }
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.rescanPhysicalStorage() { viewModelScope.launch { repository.rescanPhysicalStorage() } }
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.loadNextPage() { }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.appendPinDigit(digit: String) {
     val state = compatState()
     val now = SystemClock.elapsedRealtime()
@@ -236,12 +274,14 @@ private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String, now
     }
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.clearPinDigit() {
     val state = compatState()
     state.enteredPin.value = state.enteredPin.value.dropLast(1)
     state.pinError.value = null
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.lockVault() {
     val state = compatState()
     repository.lockVaultSession()
@@ -252,6 +292,7 @@ fun MainViewModel.lockVault() {
     state.pinError.value = null
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResult) {
     val state = compatState()
     try {
@@ -273,6 +314,7 @@ fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResul
     }
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.onBiometricEnrollmentSuccess(result: BiometricPrompt.AuthenticationResult): Boolean {
     return try {
         val success = repository.completeBiometricEnrollment(result)
@@ -289,14 +331,17 @@ fun MainViewModel.onBiometricEnrollmentSuccess(result: BiometricPrompt.Authentic
 
 /** Callback-only unlock is intentionally fail-closed and cannot change vault state. */
 @Deprecated("Use onBiometricSuccess(AuthenticationResult)")
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.onBiometricSuccess() {
     onBiometricError("Authenticated CryptoObject is required.")
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.onBiometricError(message: String) {
     compatState().pinError.value = message
 }
 
+@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.changeVaultPin(oldPin: String, newPin: String): Boolean {
     val state = compatState()
     val success = repository.changeVaultPin(oldPin, newPin)
