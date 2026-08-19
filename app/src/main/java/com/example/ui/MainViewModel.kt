@@ -67,15 +67,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.searchFiles(query, category?.name)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val dashboardStats: StateFlow<List<CategoryStat>> = repository.getCategoryStats()
+    val dashboardStats: StateFlow<List<CategoryStat>> = repository.categoryStats
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val duplicateGroups: StateFlow<List<DuplicateGroup>> = repository.getDuplicateGroups()
+    val duplicateGroups: StateFlow<List<DuplicateGroup>> = repository.exactDuplicates
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val plugins: StateFlow<List<PluginEntity>> = repository.getPlugins()
+    val plugins: StateFlow<List<PluginEntity>> = repository.plugins
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val cloudSyncItems: StateFlow<List<CloudSyncItemEntity>> = repository.getCloudSyncItems()
+    val cloudSyncItems: StateFlow<List<CloudSyncItemEntity>> = repository.cloudSyncItems
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val vaultItems: StateFlow<List<VaultItemEntity>> = repository.getVaultItems()
+    val vaultItems: StateFlow<List<VaultItemEntity>> = repository.vaultItems
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun unlockFromVault(vaultItem: VaultItemEntity) {

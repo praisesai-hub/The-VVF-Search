@@ -79,7 +79,9 @@ interface SearchIndexDao {
     @Transaction
     suspend fun updateFilesAndSemanticAnnIndex(fileDao: FileDao, files: List<FileItemEntity>) {
         fileDao.updateFiles(files)
-        files.forEach(::replaceSemanticAnnBuckets)
+        for (file in files) {
+            replaceSemanticAnnBuckets(file)
+        }
     }
 
     @Transaction
@@ -93,16 +95,16 @@ interface SearchIndexDao {
                 offset = offset
             )
             if (sourceBatch.isEmpty()) break
-            sourceBatch
-                .flatMap { file ->
-                    SemanticAnnIndex.bucketsFor(
-                        fileId = file.id,
-                        embeddingVersion = embeddingVersion,
-                        embedding = file.semanticEmbeddingString
-                    )
-                }
-                .chunked(ANN_BUCKET_INSERT_BATCH_SIZE)
-                .forEach(::insertSemanticAnnBuckets)
+            val buckets = sourceBatch.flatMap { file ->
+                SemanticAnnIndex.bucketsFor(
+                    fileId = file.id,
+                    embeddingVersion = embeddingVersion,
+                    embedding = file.semanticEmbeddingString
+                )
+            }
+            for (bucketBatch in buckets.chunked(ANN_BUCKET_INSERT_BATCH_SIZE)) {
+                insertSemanticAnnBuckets(bucketBatch)
+            }
             offset += sourceBatch.size
         }
         markSemanticAnnIndexBuilt(SemanticAnnIndexStateEntity(embeddingVersion))
