@@ -119,6 +119,7 @@ class VaultRepositoryTest {
                 VaultOperationState.VERIFIED,
                 VaultOperationState.SOURCE_REMOVAL_PENDING,
                 VaultOperationState.SOURCE_REMOVED,
+                VaultOperationState.METADATA_COMMITTED,
                 VaultOperationState.COMPLETED
             ),
             operations.map { it.state }
