@@ -133,15 +133,14 @@ class FileManagerScreenInstrumentedTest {
         val sourceFile = File(app.cacheDir, "$fixturePrefix-report.txt").apply {
             writeText("deterministic FileManagerScreen fixture")
         }
-        val file = FileItemEntity(
-            id = 0L,
+        val file = persistFixtureFile(FileItemEntity(
             name = "$fixturePrefix-report.txt",
             path = sourceFile.absolutePath,
             category = FileCategory.DOCUMENTS.name,
             sizeBytes = sourceFile.length(),
             tags = "fixture",
             ocrText = "fixture OCR text"
-        )
+        ))
 
         composeTestRule.setContent {
             VVFSmartManagerTheme {
@@ -291,5 +290,9 @@ class FileManagerScreenInstrumentedTest {
         check(viewModel.repository.initializeVaultPin("246810"))
         check(viewModel.repository.unlockVaultWithPin("246810"))
         return viewModel
+    }
+
+    private fun persistFixtureFile(file: FileItemEntity): FileItemEntity = runBlocking {
+        file.copy(id = dao.insertFileDirect(file))
     }
 }
