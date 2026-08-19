@@ -209,6 +209,11 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
           script: |
             ./gradlew :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
+      - name: Enforce Instrumented Android Coverage Policy
+        run: |
+          python3 scripts/check_coverage_floor.py \
+            --report app/build/reports/coverage/androidTest/debug/connected/report.xml \
+            --policy scripts/instrumented-coverage-policy.json
       - name: Upload Android Test Reports
         if: always()
         uses: actions/upload-artifact@v7

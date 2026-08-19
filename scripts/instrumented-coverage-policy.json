@@ -1,0 +1,38 @@
+{
+  "aggregate_instruction_percent": 40.0,
+  "package_gates": [
+    {
+      "name": "instrumented UI package",
+      "prefixes": [
+        "com.example.ui"
+      ],
+      "minimum_instruction_percent": 55.0
+    },
+    {
+      "name": "instrumented security package",
+      "prefixes": [
+        "com.example.security"
+      ],
+      "minimum_instruction_percent": 85.0
+    },
+    {
+      "name": "device-specific storage package",
+      "prefixes": [
+        "com.example.storage"
+      ],
+      "minimum_instruction_percent": 75.0
+    }
+  ],
+  "class_gates": [
+    {
+      "name": "instrumented vault paths",
+      "class_name_regex": "(^|\\.)com\\.example\\.(data|security)\\.(Vault|KeystoreVault).*",
+      "minimum_instruction_percent": 85.0
+    },
+    {
+      "name": "instrumented cloud-sync paths",
+      "class_name_regex": "(^|\\.)com\\.example\\.(data|worker)\\..*CloudSync.*",
+      "minimum_instruction_percent": 80.0
+    }
+  ]
+}
