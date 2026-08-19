@@ -37,7 +37,7 @@ Open **Actions**, select **Signed Android Release**, choose the `main` branch, a
 
 Before any signing secret is used, the workflow runs a blocking release dependency gate. It resolves the root and app build environments plus release/debug runtime graphs, validates the checked-out revision and explicit versions, scans the resolved Maven inventory against OSV (including GHSA/CVE aliases), enforces the forbidden-dependency and critical-version policy, applies the runtime security policy, and generates a CycloneDX SBOM. Any vulnerability, license violation, forbidden dependency, outdated critical dependency, unresolved graph, or invalid policy result stops the release.
 
-Only after that gate passes does the workflow validate all four signing secrets, validate the keystore and alias, build `:app:bundleRelease`, verify the resulting AAB signature, generate a GitHub artifact attestation containing SLSA provenance and the SBOM predicate, and upload an artifact containing:
+Only after that gate passes does the workflow run JVM quality checks (`testDebugUnitTest`, lint, and detekt), run Android emulator smoke tests with the connected debug test suite and instrumented coverage gate, validate all four signing secrets, validate the keystore and alias, build `:app:bundleRelease`, verify the resulting AAB signature, generate a GitHub artifact attestation containing SLSA provenance and the SBOM predicate, and upload release artifacts plus a separate evidence bundle containing the runtime reports and digests.
 
 | File | Purpose |
 |---|---|
@@ -45,7 +45,7 @@ Only after that gate passes does the workflow validate all four signing secrets,
 | `app-release-VERSION_NAME-VERSION_CODE.sha256` | SHA-256 integrity checksum. |
 | `dependencies.cdx.json` | CycloneDX 1.5 SBOM for the resolved release dependency graph. |
 
-Artifacts are retained for 30 days. Download the AAB only from the successful workflow run and verify the checksum before uploading it to Play Console.
+Release artifacts are retained for 30 days and the evidence bundle is retained for 90 days. Download the AAB only from the successful workflow run and verify the checksum before uploading it to Play Console. The `release-evidence.json` manifest records the commit, workflow run, version inputs, tool versions, artifact sizes, and SHA-256 digests for the AAB, checksum, SBOM, dependency evidence, test reports, lint/detekt output, and instrumented coverage output.
 
 ## Security Controls
 

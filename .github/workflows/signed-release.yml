@@ -129,6 +129,37 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Run release JVM quality checks
+        run: |
+          ./gradlew --no-daemon --no-build-cache --no-configuration-cache \
+            :app:testDebugUnitTest :app:lintDebug :app:detekt
+
+      - name: Enable KVM for runtime smoke tests
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+
+      - name: Run Android runtime smoke tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
+          script: |
+            ./gradlew --no-daemon --no-build-cache --no-configuration-cache \
+              :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
+
+      - name: Enforce release instrumented coverage policy
+        run: |
+          python3 scripts/check_coverage_floor.py \
+            --report app/build/reports/coverage/androidTest/debug/connected/report.xml \
+            --policy scripts/instrumented-coverage-policy.json
+
       - name: Validate release inputs and required secrets
         env:
           VERSION_NAME: ${{ inputs.version_name }}
@@ -200,6 +231,57 @@ jobs:
             cd "$ARTIFACT_DIR"
             sha256sum "app-release-${VERSION_NAME}-${VERSION_CODE}.aab" > "app-release-${VERSION_NAME}-${VERSION_CODE}.aab.sha256"
           )
+
+      - name: Collect release artifact and runtime evidence
+        if: always()
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          WORKFLOW_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence
+          if [ -d release-security ]; then cp -R release-security release-evidence/dependency-security; fi
+          for source in \
+            app/build/test-results \
+            app/build/reports/tests \
+            app/build/reports/androidTests \
+            app/build/outputs/androidTest-results \
+            app/build/reports/coverage \
+            app/build/reports/lint-results-debug.xml \
+            app/build/reports/detekt; do
+            if [ -e "$source" ]; then
+              destination="release-evidence/${source#app/build/}"
+              mkdir -p "$(dirname "$destination")"
+              cp -R "$source" "$destination"
+            fi
+          done
+          java -version > release-evidence/java-version.txt 2>&1 || true
+          ./gradlew --version > release-evidence/gradle-version.txt 2>&1 || true
+          git rev-parse HEAD > release-evidence/checked-out-commit.txt
+          git status --short > release-evidence/working-tree-status.txt
+          python3 scripts/collect_release_evidence.py \
+            --output-dir release-evidence \
+            --repository "${GITHUB_REPOSITORY}" \
+            --commit "${GITHUB_SHA}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --version-name "$VERSION_NAME" \
+            --version-code "$VERSION_CODE" \
+            --workflow-status "$WORKFLOW_STATUS" \
+            --java-version "$(sed -n '1p' release-evidence/java-version.txt)" \
+            --gradle-version "$(sed -n '1p' release-evidence/gradle-version.txt)" \
+            --artifact "release-artifacts/app-release-${VERSION_NAME}-${VERSION_CODE}.aab" \
+            --artifact "release-artifacts/app-release-${VERSION_NAME}-${VERSION_CODE}.aab.sha256" \
+            --artifact release-artifacts/dependencies.cdx.json
+
+      - name: Upload release evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-evidence-${{ inputs.version_name }}-${{ inputs.version_code }}
+          path: release-evidence
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Generate signed provenance and SBOM attestation
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
