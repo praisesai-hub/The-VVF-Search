@@ -43,6 +43,31 @@ data class FileItemEntity(
     val semanticEmbeddingString: String = "" // comma-separated vector floats
 )
 
+/**
+ * Approximate-nearest-neighbor locality-sensitive-hash buckets for a semantic vector. The file
+ * table remains the source of truth; this table only limits the candidate set before cosine
+ * reranking.
+ */
+@Entity(
+    tableName = "semantic_ann_buckets",
+    primaryKeys = ["fileId", "embeddingVersion", "bucketKey"],
+    indices = [
+        Index(value = ["embeddingVersion", "bucketKey"]),
+        Index(value = ["fileId"])
+    ]
+)
+data class SemanticAnnBucketEntity(
+    val fileId: Long,
+    val embeddingVersion: Int,
+    val bucketKey: String
+)
+
+@Entity(tableName = "semantic_ann_state")
+data class SemanticAnnIndexStateEntity(
+    @PrimaryKey val embeddingVersion: Int,
+    val indexedAtMs: Long = System.currentTimeMillis()
+)
+
 @JsonClass(generateAdapter = true)
 data class DuplicateGroup(
     val title: String,

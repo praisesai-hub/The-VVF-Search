@@ -14,7 +14,8 @@ private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
 private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
 private const val DATABASE_VERSION_WITH_CLOUD_RECOVERY = 7
-internal const val DATABASE_SCHEMA_VERSION = 8
+private const val DATABASE_VERSION_WITH_VAULT_OPERATIONS = 8
+internal const val DATABASE_SCHEMA_VERSION = 9
 
 @Database(
     entities = [
@@ -22,13 +23,16 @@ internal const val DATABASE_SCHEMA_VERSION = 8
         VaultItemEntity::class,
         VaultOperationEntity::class,
         CloudSyncItemEntity::class,
-        PluginEntity::class
+        PluginEntity::class,
+        SemanticAnnBucketEntity::class,
+        SemanticAnnIndexStateEntity::class
     ],
     version = DATABASE_SCHEMA_VERSION,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun fileDao(): FileDao
+    abstract fun searchIndexDao(): SearchIndexDao
 
     companion object {
         @Volatile
@@ -143,7 +147,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_7_8 = object : Migration(
             DATABASE_VERSION_WITH_CLOUD_RECOVERY,
-            DATABASE_SCHEMA_VERSION
+            DATABASE_VERSION_WITH_VAULT_OPERATIONS
         ) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -178,6 +182,44 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_vault_operations_operationType` " +
                         "ON `vault_operations` (`operationType`)"
                 )
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(
+            DATABASE_VERSION_WITH_VAULT_OPERATIONS,
+            DATABASE_SCHEMA_VERSION
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `semantic_ann_buckets` (
+                        `fileId` INTEGER NOT NULL,
+                        `embeddingVersion` INTEGER NOT NULL,
+                        `bucketKey` TEXT NOT NULL,
+                        PRIMARY KEY(`fileId`, `embeddingVersion`, `bucketKey`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `semantic_ann_state` (
+                        `embeddingVersion` INTEGER NOT NULL,
+                        `indexedAtMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`embeddingVersion`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_semantic_ann_buckets_embeddingVersion_bucketKey` " +
+                        "ON `semantic_ann_buckets` (`embeddingVersion`, `bucketKey`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_semantic_ann_buckets_fileId` " +
+                        "ON `semantic_ann_buckets` (`fileId`)"
+                )
+                SearchIndexSchema.createFtsIndex(db)
+                SearchIndexSchema.rebuildFtsIndex(db)
+                SearchIndexSchema.createAnnCleanupTrigger(db)
             }
         }
 
@@ -233,8 +275,16 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
-                        MIGRATION_7_8
+                        MIGRATION_7_8,
+                        MIGRATION_8_9
                     )
+
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            SearchIndexSchema.createFtsIndex(db)
+                            SearchIndexSchema.createAnnCleanupTrigger(db)
+                        }
+                    })
 
                     builder.build().also { INSTANCE = it }
                 } finally {

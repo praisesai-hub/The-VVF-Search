@@ -19,7 +19,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -33,6 +35,7 @@ open class SmartManagerRepository(
     private val dao: FileDao = AppDatabase.getDatabase(context).fileDao(),
     private val ocrEngine: OcrEngine? = null,
     private val semanticEmbeddingProvider: SemanticEmbeddingProvider? = null,
+    private val searchIndexDao: SearchIndexDao? = null,
     // Production remains default-deny. Tests may inject an explicit authorized fixture
     // without changing build provisioning or device-owner consent.
     private val cloudTransferAllowed: (Context) -> Boolean = CloudSyncPolicy::canTransfer,
@@ -70,6 +73,9 @@ open class SmartManagerRepository(
     val isSemanticSearchAvailable: Boolean
         get() = tfliteProvider.isModelLoaded()
 
+    private val activeSearchIndexDao: SearchIndexDao?
+        get() = searchIndexDao
+
     private val duplicateDetectionEngine by lazy { DuplicateDetectionEngine(storageScanner, tfliteProvider) }
     private val repositoryScope = CoroutineScope(Dispatchers.IO + Job() + kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
         Log.e("SmartManagerRepository", "Unhandled exception in background repositoryScope", throwable)
@@ -88,27 +94,58 @@ open class SmartManagerRepository(
     suspend fun getFileById(id: Long) = fileRepository.getFileById(id)
     suspend fun getFileByName(name: String) = dao.getFileByName(name)
 
+    fun searchFiles(query: String, category: String?): Flow<List<FileItemEntity>> {
+        val ftsQuery = FtsSearchQueryCompiler.toPrefixQuery(query)
+        return if (ftsQuery.isBlank()) {
+            dao.getAllActiveFiles().map { files ->
+                files.filter { file -> category == null || file.category == category }
+            }
+        } else {
+            activeSearchIndexDao?.observeFilesByFts(ftsQuery, category, SEARCH_RESULT_LIMIT)
+                ?: dao.searchFiles(ftsQuery).map { files ->
+                    files.filter { file -> category == null || file.category == category }
+                        .take(SEARCH_RESULT_LIMIT)
+                }
+        }
+    }
+
     fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> {
         if (!isSemanticSearchAvailable) return kotlinx.coroutines.flow.flowOf(emptyList())
         if (query.isBlank()) return dao.getAllActiveFiles()
-        return dao.getAllActiveFiles().map { files ->
+        return flow {
             val queryVec = tfliteProvider.generateQueryEmbedding(query)
             if (queryVec == null) {
-                files.filter { file ->
-                    file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
-                }
+                emit(emptyList())
             } else {
-                files.mapNotNull { file ->
-                    val isTextMatch = file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
-                    val fileVec = if (
-                        file.semanticIndexed &&
-                        file.semanticEmbeddingVersion == tfliteProvider.embeddingVersion
-                    ) tfliteProvider.stringToFloatArray(file.semanticEmbeddingString) else null
-                    if (fileVec != null) {
-                        val sim = tfliteProvider.calculateCosineSimilarity(queryVec, fileVec)
-                        if (sim > 0.10f || isTextMatch) file to sim else null
-                    } else if (isTextMatch) file to 1.0f else null
-                }.sortedByDescending { it.second }.map { it.first }
+                val probeKeys = SemanticAnnIndex.probeKeys(queryVec)
+                if (probeKeys.isEmpty()) {
+                    emit(emptyList())
+                    return@flow
+                }
+                val indexDao = activeSearchIndexDao ?: run {
+                    emit(emptyList())
+                    return@flow
+                }
+                indexDao.ensureSemanticAnnIndex(tfliteProvider.embeddingVersion)
+                emitAll(
+                    indexDao.observeSemanticCandidates(
+                        embeddingVersion = tfliteProvider.embeddingVersion,
+                        bucketKeys = probeKeys,
+                        limit = SEMANTIC_CANDIDATE_LIMIT
+                    ).map { files ->
+                        files.mapNotNull { file ->
+                            val fileVec = tfliteProvider.stringToFloatArray(file.semanticEmbeddingString)
+                            val similarity = fileVec?.let {
+                                tfliteProvider.calculateCosineSimilarity(queryVec, it)
+                            }
+                            if (similarity != null && similarity > SEMANTIC_SIMILARITY_THRESHOLD) {
+                                file to similarity
+                            } else {
+                                null
+                            }
+                        }.sortedByDescending { it.second }.map { it.first }
+                    }
+                )
             }
         }
     }
@@ -194,7 +231,10 @@ open class SmartManagerRepository(
                         if (updated != file) updatedChunk.add(updated)
                         processedCount++
                     }
-                    if (updatedChunk.isNotEmpty()) dao.updateFiles(updatedChunk)
+                    if (updatedChunk.isNotEmpty()) {
+                        activeSearchIndexDao?.updateFilesAndSemanticAnnIndex(dao, updatedChunk)
+                            ?: dao.updateFiles(updatedChunk)
+                    }
                     _scanProgress.value = processedCount.toFloat() / totalCount.toFloat()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -426,5 +466,11 @@ open class SmartManagerRepository(
             val request = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.BackgroundIndexWorker>().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()
             androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("BackgroundIndexWork", androidx.work.ExistingWorkPolicy.KEEP, request)
         } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to enqueue BackgroundIndexWorker", e) }
+    }
+
+    private companion object {
+        const val SEARCH_RESULT_LIMIT = 250
+        const val SEMANTIC_CANDIDATE_LIMIT = 400
+        const val SEMANTIC_SIMILARITY_THRESHOLD = 0.10f
     }
 }

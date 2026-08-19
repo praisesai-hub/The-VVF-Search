@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.SkipQueryVerification
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -20,8 +21,7 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND ocrText != '' ORDER BY dateModifiedMs DESC LIMIT 100")
     fun getOcrScannedFiles(): Flow<List<FileItemEntity>>
 
-    @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (name LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%') ORDER BY dateModifiedMs DESC LIMIT 100")
-    fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>>
+    fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = searchFiles(query)
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 ORDER BY dateModifiedMs DESC")
     fun getAllActiveFiles(): Flow<List<FileItemEntity>>
 
@@ -31,15 +31,24 @@ interface FileDao {
     @Query("SELECT category, COUNT(*) as count, SUM(sizeBytes) as totalSize FROM files WHERE isVault = 0 AND isRecycleBin = 0 GROUP BY category")
     fun getCategoryStats(): Flow<List<CategoryStat>>
 
-    @Query("""
-        SELECT * FROM files 
-        WHERE isVault = 0 AND isRecycleBin = 0 
-          AND (:category IS NULL OR category = :category) 
-          AND (:query = '' OR name LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%') 
-        ORDER BY dateModifiedMs DESC 
+    @SkipQueryVerification
+    @Query(
+        """
+        SELECT files.* FROM files
+        JOIN file_search_fts ON file_search_fts.rowid = files.id
+        WHERE (:query = '' OR file_search_fts MATCH :query)
+          AND files.isVault = 0 AND files.isRecycleBin = 0
+          AND (:category IS NULL OR files.category = :category)
+        ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
         LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity>
+        """
+    )
+    suspend fun getFilteredFilesPaged(
+        category: String?,
+        query: String,
+        limit: Int,
+        offset: Int
+    ): List<FileItemEntity>
 
     @Query("SELECT * FROM files WHERE category = :category AND isVault = 0 AND isRecycleBin = 0 ORDER BY dateModifiedMs DESC")
     fun getFilesByCategory(category: String): Flow<List<FileItemEntity>>
@@ -50,7 +59,17 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE isVault = 1")
     fun getVaultFiles(): Flow<List<FileItemEntity>>
 
-    @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (name LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%')")
+    @SkipQueryVerification
+    @Query(
+        """
+        SELECT files.* FROM files
+        JOIN file_search_fts ON file_search_fts.rowid = files.id
+        WHERE file_search_fts MATCH :query
+          AND files.isVault = 0 AND files.isRecycleBin = 0
+        ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
+        LIMIT 100
+        """
+    )
     fun searchFiles(query: String): Flow<List<FileItemEntity>>
 
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (md5Hash IS NULL OR md5Hash = '' OR ((category = 'IMAGES' OR category = 'VIDEO') AND (visualSimilarityHash IS NULL OR visualSimilarityHash = '')) OR semanticIndexed = 0)")

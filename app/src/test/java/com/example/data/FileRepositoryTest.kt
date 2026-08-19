@@ -200,7 +200,7 @@ class FileRepositoryTest {
     }
 
     @Test
-    fun testGetFilteredFilesPaged_delegatesToDaoWithExactParams() = runBlocking {
+    fun testGetFilteredFilesPaged_delegatesCompiledFtsQueryToDao() = runBlocking {
         val expectedList = listOf(
             FileItemEntity(id = 5L, name = "report.pdf", path = "/report.pdf", category = "DOCUMENTS", sizeBytes = 1024L)
         )
@@ -211,7 +211,7 @@ class FileRepositoryTest {
         assertEquals(expectedList, result)
         assertTrue(fakeDao.getFilteredFilesPagedCalled)
         assertEquals("DOCUMENTS", fakeDao.lastCategory)
-        assertEquals("report", fakeDao.lastQuery)
+        assertEquals("\"report\"*", fakeDao.lastQuery)
         assertEquals(10, fakeDao.lastLimit)
         assertEquals(0, fakeDao.lastOffset)
     }
