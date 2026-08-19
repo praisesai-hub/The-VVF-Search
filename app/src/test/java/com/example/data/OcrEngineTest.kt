@@ -99,6 +99,42 @@ class OcrEngineTest {
         override suspend fun insertPlugins(plugins: List<PluginEntity>) {}
     }
 
+    private class FakeSearchIndexDao(
+        private val currentFiles: () -> List<FileItemEntity>
+    ) : SearchIndexDao {
+        override fun observeFilesByFts(
+            ftsQuery: String,
+            category: String?,
+            limit: Int
+        ): Flow<List<FileItemEntity>> = flowOf(
+            currentFiles().filter { file -> category == null || file.category == category }.take(limit)
+        )
+
+        override suspend fun insertSemanticAnnBuckets(buckets: List<SemanticAnnBucketEntity>) = Unit
+
+        override suspend fun deleteSemanticAnnBucketsForFile(fileId: Long) = Unit
+
+        override suspend fun markSemanticAnnIndexBuilt(state: SemanticAnnIndexStateEntity) = Unit
+
+        override suspend fun hasSemanticAnnIndex(embeddingVersion: Int): Boolean = true
+
+        override suspend fun getSemanticRowsForAnnIndex(
+            embeddingVersion: Int,
+            limit: Int,
+            offset: Int
+        ): List<FileItemEntity> = emptyList()
+
+        override fun observeSemanticCandidates(
+            embeddingVersion: Int,
+            bucketKeys: List<String>,
+            limit: Int
+        ): Flow<List<FileItemEntity>> = flowOf(
+            currentFiles().filter {
+                it.semanticIndexed && it.semanticEmbeddingVersion == embeddingVersion
+            }.take(limit)
+        )
+    }
+
     class FakeOcrEngine : OcrEngine {
         var resultText = ""
         var shouldThrowException = false
@@ -376,7 +412,8 @@ class OcrEngineTest {
             context = context,
             dao = fakeDao,
             ocrEngine = fakeOcrEngine,
-            semanticEmbeddingProvider = multilingualProvider
+            semanticEmbeddingProvider = multilingualProvider,
+            searchIndexDao = FakeSearchIndexDao { fakeDao.activeFiles }
         )
         fakeDao.activeFiles += listOf(
             FileItemEntity(
