@@ -46,9 +46,12 @@ jobs:
           build-mode: ${{ matrix.build-mode }}
 
       # CodeQL must observe a fresh Kotlin compilation between init and analyze.
-      # Clean/no-cache/incremental-disabled inputs provide that guarantee without
-      # forcing Kotlin's in-process compiler, which is ABI-incompatible with the
-      # Compose compiler registrar in the current verified Kotlin toolchain.
+      # The hosted extractor currently supports Kotlin versions below 2.4.20,
+      # while the production graph uses the patched Kotlin 2.4.20-RC release.
+      # Prepare a workspace-only compatibility copy; Android CI, dependency
+      # submission, release gates, and shipped artifacts keep the production graph.
+      - name: Prepare CodeQL Kotlin compatibility workspace
+        run: python3 scripts/prepare_codeql_compatibility.py --supported-version 2.3.21
       - name: Build for CodeQL analysis
         run: |
           ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleDebug \
