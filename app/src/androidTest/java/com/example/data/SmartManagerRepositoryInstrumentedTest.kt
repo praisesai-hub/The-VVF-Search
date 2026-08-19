@@ -81,6 +81,9 @@ class SmartManagerRepositoryInstrumentedTest {
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = item.id
         override suspend fun deleteVaultItemById(id: Long) = Unit
+        override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+        override suspend fun upsertVaultOperation(operation: VaultOperationEntity) = Unit
+        override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
         override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flow { emit(cloudSyncItems.toList()) }
         override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
             cloudSyncItems.removeAll { it.id == item.id }

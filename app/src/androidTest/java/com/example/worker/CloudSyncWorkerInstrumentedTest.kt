@@ -86,6 +86,9 @@ private class InstrumentedWorkerFileDao : FileDao {
     override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
     override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
     override suspend fun deleteVaultItemById(id: Long): Unit = Unit
+    override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+    override suspend fun upsertVaultOperation(operation: com.example.data.VaultOperationEntity): Unit = Unit
+    override suspend fun getIncompleteVaultOperations(): List<com.example.data.VaultOperationEntity> = emptyList()
     override suspend fun setPluginEnabled(id: String, enabled: Boolean): Unit = Unit
     override suspend fun insertPlugins(plugins: List<PluginEntity>): Unit = Unit
 }

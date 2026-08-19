@@ -12,6 +12,7 @@ import com.example.data.FileItemEntity
 import com.example.data.GoogleAuthManager
 import com.example.data.PluginEntity
 import com.example.data.VaultItemEntity
+import com.example.data.VaultOperationEntity
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncResult
 import kotlinx.coroutines.flow.Flow
@@ -88,6 +89,9 @@ class FakeFileDao : FileDao {
     override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
     override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
     override suspend fun deleteVaultItemById(id: Long) {}
+    override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+    override suspend fun upsertVaultOperation(operation: VaultOperationEntity) {}
+    override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
     val pluginsList = mutableListOf<PluginEntity>()
 
     override fun getAllPlugins(): Flow<List<PluginEntity>> = flowOf(pluginsList)

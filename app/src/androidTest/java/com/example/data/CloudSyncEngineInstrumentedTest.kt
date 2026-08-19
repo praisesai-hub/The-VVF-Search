@@ -265,6 +265,9 @@ private class InstrumentedCloudSyncDao : FileDao {
     override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
     override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
     override suspend fun deleteVaultItemById(id: Long): Unit = Unit
+    override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+    override suspend fun upsertVaultOperation(operation: VaultOperationEntity): Unit = Unit
+    override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
     override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(emptyList())
     override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long = 0L
     override suspend fun deleteCloudSyncItem(id: Long): Unit = Unit

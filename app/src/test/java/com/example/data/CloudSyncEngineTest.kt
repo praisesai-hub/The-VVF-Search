@@ -298,6 +298,9 @@ private class FakeFileDaoForCloudSyncEngine : FileDao {
     override fun getAllVaultItems() = kotlinx.coroutines.flow.flowOf(emptyList<VaultItemEntity>())
     override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
     override suspend fun deleteVaultItemById(id: Long) = Unit
+    override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+    override suspend fun upsertVaultOperation(operation: VaultOperationEntity) = Unit
+    override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
     override fun getCloudSyncItems() = kotlinx.coroutines.flow.flowOf(emptyList<CloudSyncItemEntity>())
     override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
         lastCloudSyncItem = item
