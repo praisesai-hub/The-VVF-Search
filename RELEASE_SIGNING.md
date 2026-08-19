@@ -35,15 +35,18 @@ keytool -list -keystore upload-key.jks -alias YOUR_KEY_ALIAS
 
 Open **Actions**, select **Signed Android Release**, choose the `main` branch, and select **Run workflow**. Provide the intended version name, for example `1.0.42`, and a new positive version code, for example `42`.
 
-The workflow validates all four signing secrets, validates the keystore and alias, builds `:app:bundleRelease`, verifies the resulting AAB signature, and uploads an artifact containing:
+Before any signing secret is used, the workflow runs a blocking release dependency gate. It resolves the root and app build environments plus release/debug runtime graphs, validates the checked-out revision and explicit versions, scans the resolved Maven inventory against OSV (including GHSA/CVE aliases), enforces the forbidden-dependency and critical-version policy, applies the runtime security policy, and generates a CycloneDX SBOM. Any vulnerability, license violation, forbidden dependency, outdated critical dependency, unresolved graph, or invalid policy result stops the release.
+
+Only after that gate passes does the workflow validate all four signing secrets, validate the keystore and alias, build `:app:bundleRelease`, verify the resulting AAB signature, generate a GitHub artifact attestation containing SLSA provenance and the SBOM predicate, and upload an artifact containing:
 
 | File | Purpose |
 |---|---|
 | `app-release-VERSION_NAME-VERSION_CODE.aab` | Signed Android App Bundle for Play Console upload. |
-| `app-release-VERSION_NAME-VERSION_CODE.aab.sha256` | SHA-256 integrity checksum. |
+| `app-release-VERSION_NAME-VERSION_CODE.sha256` | SHA-256 integrity checksum. |
+| `dependencies.cdx.json` | CycloneDX 1.5 SBOM for the resolved release dependency graph. |
 
 Artifacts are retained for 30 days. Download the AAB only from the successful workflow run and verify the checksum before uploading it to Play Console.
 
 ## Security Controls
 
-The workflow uses `contents: read` only, disables persisted checkout credentials, permits one release at a time, and cleans up the decoded keystore and local artifact directory even if a build step fails. The repository `.gitignore` blocks keystores and local release artifacts from being tracked.
+The workflow uses read-only repository access plus the minimal `id-token: write` and `attestations: write` permissions required for GitHub's signed provenance attestation. It disables persisted checkout credentials, permits one release at a time, and cleans up the decoded keystore and local artifact directory even if a build step fails. The repository `.gitignore` blocks keystores and local release artifacts from being tracked.

@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-COORDINATE = re.compile(r"(?P<group>[A-Za-z0-9_.-]+):(?P<name>[A-Za-z0-9_.-]+):(?P<version>[A-Za-z0-9_.+\-]+)")
+from gradle_dependency_parser import load_coordinates
 
 
 @dataclass(frozen=True)
@@ -54,22 +54,12 @@ def load_rules(path: Path) -> list[Rule]:
     return rules
 
 
-def load_coordinates(report: Path) -> dict[str, list[str]]:
-    if not report.is_file() or report.stat().st_size == 0:
-        fail(f"missing or empty runtime report: {report}")
-    coordinates: dict[str, list[str]] = {}
-    for line in report.read_text(encoding="utf-8", errors="replace").splitlines():
-        matches = list(COORDINATE.finditer(line))
-        if not matches:
-            continue
-        # Gradle may print requested -> resolved versions. The final occurrence is
-        # the selected artifact and is therefore the one used for policy checks.
-        match = matches[-1]
-        coordinate = f"{match.group('group')}:{match.group('name')}"
-        coordinates.setdefault(coordinate, []).append(match.group("version"))
-    if not coordinates:
-        fail(f"no Maven coordinates found in runtime report: {report}")
-    return coordinates
+def load_runtime_coordinates(report: Path) -> dict[str, list[str]]:
+    try:
+        coordinates = load_coordinates([report])
+    except ValueError as error:
+        fail(str(error))
+    return {coordinate: sorted(versions) for coordinate, versions in coordinates.items()}
 
 
 def version_tuple(version: str) -> tuple[int, ...]:
@@ -106,7 +96,7 @@ def find_violations(rules: list[Rule], coordinates: dict[str, list[str]]) -> lis
 def main() -> None:
     args = parse_args()
     rules = load_rules(args.policy)
-    coordinates = load_coordinates(args.report)
+    coordinates = load_runtime_coordinates(args.report)
     violations = find_violations(rules, coordinates)
 
     if violations:

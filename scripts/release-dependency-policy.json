@@ -1,0 +1,53 @@
+{
+  "forbidden_prefixes": [
+    {
+      "prefix": "org.apache.logging.log4j",
+      "reason": "Log4j is not approved for this Android release and must not enter the build or runtime graph."
+    },
+    {
+      "prefix": "org.yaml:snakeyaml",
+      "reason": "SnakeYAML is not approved for this Android release and must not enter the build or runtime graph."
+    },
+    {
+      "prefix": "com.h2database:h2",
+      "reason": "The H2 database is test/development-only and must not enter a production release graph."
+    }
+  ],
+  "critical_minimum_versions": [
+    {
+      "coordinate": "org.jetbrains.kotlin:kotlin-gradle-plugin",
+      "minimum_version": "2.4.20-Beta1",
+      "reason": "CVE-2026-53914 / GHSA-r937-wjx7-w2jp build-cache deserialization fix."
+    },
+    {
+      "coordinate": "org.bouncycastle:bcprov-jdk18on",
+      "minimum_version": "1.85.2",
+      "reason": "Keep the cryptographic provider at the repository's patched security floor."
+    },
+    {
+      "coordinate": "org.bouncycastle:bcpkix-jdk18on",
+      "minimum_version": "1.85",
+      "reason": "Keep the PKIX provider at the repository's patched security floor."
+    },
+    {
+      "coordinate": "org.jdom:jdom2",
+      "minimum_version": "2.0.6.1",
+      "reason": "Keep the build-tool XML parser at the repository's patched security floor."
+    },
+    {
+      "coordinate": "org.apache.commons:commons-lang3",
+      "minimum_version": "3.18.0",
+      "reason": "Keep the build-tool utility library at the repository's patched security floor."
+    },
+    {
+      "coordinate": "org.apache.httpcomponents:httpclient",
+      "minimum_version": "4.5.14",
+      "reason": "Keep the HTTP client at the repository's patched security floor."
+    },
+    {
+      "coordinate": "org.bitbucket.b_c:jose4j",
+      "minimum_version": "0.9.6",
+      "reason": "Keep the JOSE implementation at the repository's patched security floor."
+    }
+  ]
+}

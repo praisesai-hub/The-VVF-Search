@@ -19,6 +19,8 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 defaults:
   run:
@@ -49,9 +51,83 @@ jobs:
         with:
           validate-wrappers: true
           # Release signing must not restore or save Gradle User Home state from other jobs.
-          # This keeps the job hermetic while the Kotlin build-cache CVE remains unresolved.
+          # Keep the release job hermetic and independent from mutable Gradle User Home state.
           cache-disabled: true
           add-job-summary: on-failure
+
+      - name: Test release dependency gate scripts
+        run: |
+          PYTHONPATH=scripts python3 -m unittest \
+            scripts/test_release_dependency_gate.py \
+            scripts/test_verify_release_runtime_security.py
+
+      - name: Resolve release dependency graphs
+        run: |
+          set -euo pipefail
+          mkdir -p release-security
+          printf 'revision=%s\n' "$GITHUB_SHA" > release-security/metadata.txt
+          ./gradlew --no-daemon --no-build-cache --no-configuration-cache buildEnvironment \
+            > release-security/rootBuildEnvironment.txt
+          ./gradlew --no-daemon --no-build-cache --no-configuration-cache :app:buildEnvironment \
+            > release-security/appBuildEnvironment.txt
+          ./gradlew --no-daemon --no-build-cache --no-configuration-cache \
+            :app:dependencies --configuration releaseRuntimeClasspath \
+            > release-security/releaseRuntimeClasspath.txt
+          ./gradlew --no-daemon --no-build-cache --no-configuration-cache \
+            :app:dependencies --configuration debugRuntimeClasspath \
+            > release-security/debugRuntimeClasspath.txt
+
+      - name: Validate resolved dependency graphs
+        run: |
+          python3 scripts/verify_dependency_compatibility.py \
+            --reports-dir release-security \
+            --expected-revision "$GITHUB_SHA" \
+            --manifest gradle/libs.versions.toml \
+            --manifest build.gradle.kts \
+            --manifest app/build.gradle.kts
+
+      - name: Enforce forbidden and critical dependency policy
+        run: |
+          python3 scripts/check_release_dependency_policy.py \
+            --report release-security/rootBuildEnvironment.txt \
+            --report release-security/appBuildEnvironment.txt \
+            --report release-security/releaseRuntimeClasspath.txt \
+            --policy scripts/release-dependency-policy.json
+          python3 scripts/verify_release_runtime_security.py \
+            --report release-security/releaseRuntimeClasspath.txt \
+            --policy scripts/release-runtime-security-policy.txt
+
+      - name: Build resolved dependency inventory and SBOM
+        run: |
+          python3 scripts/build_release_osv_inventory.py \
+            --report release-security/rootBuildEnvironment.txt \
+            --report release-security/appBuildEnvironment.txt \
+            --report release-security/releaseRuntimeClasspath.txt \
+            --output release-security/osv-scanner.json
+          python3 scripts/build_release_sbom.py \
+            --report release-security/rootBuildEnvironment.txt \
+            --report release-security/appBuildEnvironment.txt \
+            --report release-security/releaseRuntimeClasspath.txt \
+            --output release-security/dependencies.cdx.json
+
+      - name: Scan resolved dependencies with OSV and license policy
+        uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1
+        with:
+          scan-args: |-
+            --lockfile=osv-scanner:release-security/osv-scanner.json
+            --format=json
+            --output-file=release-security/osv-results.json
+            --all-packages
+            --licenses=Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,CC0-1.0,EDL-1.0,EPL-1.0,EPL-2.0,CDDL-1.0,CDDL-1.1,MPL-1.1,MPL-2.0,LGPL-2.1-only,Zlib
+
+      - name: Upload dependency security evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-dependency-security-${{ github.run_id }}
+          path: release-security
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Validate release inputs and required secrets
         env:
@@ -119,10 +195,17 @@ jobs:
           ARTIFACT_DIR="release-artifacts"
           mkdir -p "$ARTIFACT_DIR"
           cp "$AAB_PATH" "$ARTIFACT_DIR/app-release-${VERSION_NAME}-${VERSION_CODE}.aab"
+          cp release-security/dependencies.cdx.json "$ARTIFACT_DIR/dependencies.cdx.json"
           (
             cd "$ARTIFACT_DIR"
             sha256sum "app-release-${VERSION_NAME}-${VERSION_CODE}.aab" > "app-release-${VERSION_NAME}-${VERSION_CODE}.aab.sha256"
           )
+
+      - name: Generate signed provenance and SBOM attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: release-artifacts/app-release-${{ inputs.version_name }}-${{ inputs.version_code }}.aab
+          sbom-path: release-artifacts/dependencies.cdx.json
 
       - name: Upload signed release AAB
         uses: actions/upload-artifact@v7
