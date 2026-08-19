@@ -14,6 +14,7 @@ import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
+@Suppress("LargeClass")
 class GoogleDriveProviderAdapterTest {
 
     private lateinit var authManager: GoogleAuthManager
@@ -504,6 +505,203 @@ class GoogleDriveProviderAdapterTest {
         val error = result as CloudSyncResult.Error
         assertTrue(error.isRetryable)
         assertEquals("no network", error.message)
+    }
+
+    @Test
+    fun uploadFile_completedPersistedSessionWithoutId_recoversEscapedSyncIdentity() {
+        val source = File.createTempFile("recovery_escaped_identity", ".txt").apply {
+            writeText("recoverable")
+            deleteOnExit()
+        }
+        val identity = "owner's\\stable-id"
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var requestCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            requestCount += 1
+            when (requestCount) {
+                1 -> {
+                    assertEquals("PUT", request.method)
+                    assertEquals("bytes */${source.length()}", request.header("Content-Range"))
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body("{}".toResponseBody("application/json".toMediaTypeOrNull()))
+                        .build()
+                }
+                2 -> {
+                    assertEquals("GET", request.method)
+                    assertTrue(request.url.queryParameter("q").orEmpty().contains("owner\\'s\\\\stable-id"))
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(
+                            "{\"files\":[{\"id\":\"recovered-id\"}]}"
+                                .toResponseBody("application/json".toMediaTypeOrNull())
+                        )
+                        .build()
+                }
+                else -> error("Unexpected request #$requestCount")
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                source = CloudUploadSource.LocalFile(source),
+                remotePath = "recoverable.txt",
+                idempotencyKey = identity,
+                contentHash = "content-hash",
+                uploadSessionUri = "https://upload.googleapis.com/resumable/completed"
+            )
+        }
+
+        assertTrue(result is CloudSyncResult.Success)
+        assertEquals("recovered-id", (result as CloudSyncResult.Success).remoteFileId)
+        assertEquals(2, requestCount)
+    }
+
+    @Test
+    @Suppress("LongMethod")
+    fun uploadFile_stalePersistedSessionClearsCheckpointThenReplacesKnownRemoteFile() {
+        val source = File.createTempFile("stale_session", ".txt").apply {
+            writeText("replacement")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        val checkpoints = mutableListOf<CloudSyncCheckpoint>()
+        var requestCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            requestCount += 1
+            when (requestCount) {
+                1 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(404)
+                    .message("Expired")
+                    .body("expired".toResponseBody())
+                    .build()
+                2 -> {
+                    assertEquals("PATCH", request.method)
+                    assertTrue(request.url.encodedPath.endsWith("/drive/v3/files/known-id"))
+                    Response.Builder()
+                        .request(request)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .header("Location", "https://upload.googleapis.com/resumable/replacement")
+                        .body("".toResponseBody())
+                        .build()
+                }
+                3 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(
+                        "{\"id\":\"known-id\",\"headRevisionId\":\"revision-2\"}"
+                            .toResponseBody("application/json".toMediaTypeOrNull())
+                    )
+                    .build()
+                else -> error("Unexpected request #$requestCount")
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                source = CloudUploadSource.LocalFile(source),
+                remotePath = "replacement.txt",
+                remoteFileId = "known-id",
+                idempotencyKey = "known-identity",
+                uploadSessionUri = "https://upload.googleapis.com/resumable/expired",
+                onCheckpoint = { checkpoints += it }
+            )
+        }
+
+        assertTrue(result is CloudSyncResult.Success)
+        assertEquals("known-id", (result as CloudSyncResult.Success).remoteFileId)
+        assertEquals(3, requestCount)
+        assertEquals("", checkpoints.first().uploadSessionUri)
+        assertEquals("https://upload.googleapis.com/resumable/replacement", checkpoints.last().uploadSessionUri)
+    }
+
+    @Test
+    fun uploadFile_invalid308AcknowledgementFailsClosedWithPersistedSession() {
+        val source = File.createTempFile("invalid_308", ".txt").apply {
+            writeText("content")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        var requestCount = 0
+        fakeInterceptor.responseProvider = { request ->
+            requestCount += 1
+            when (requestCount) {
+                1 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body("{\"files\":[]}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+                2 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .header("Location", "https://upload.googleapis.com/resumable/invalid-range")
+                    .body("".toResponseBody())
+                    .build()
+                3 -> Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(308)
+                    .message("Resume Incomplete")
+                    .header("Range", "bytes=0-0")
+                    .body("".toResponseBody())
+                    .build()
+                else -> error("Unexpected request #$requestCount")
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                source = CloudUploadSource.LocalFile(source),
+                remotePath = "invalid-range.txt",
+                idempotencyKey = "invalid-range"
+            )
+        }
+
+        assertTrue(result is CloudSyncResult.Error)
+        result as CloudSyncResult.Error
+        assertTrue(result.message.contains("Invalid resumable upload range acknowledgement"))
+        assertTrue(result.isRetryable)
+        assertEquals("https://upload.googleapis.com/resumable/invalid-range", result.uploadSessionUri)
+    }
+
+    @Test
+    fun downloadFile_emptyBodyFailsClosedWithoutCreatingDestination() {
+        val destination = File.createTempFile("download_empty", ".txt").apply {
+            delete()
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { request ->
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("".toResponseBody("text/plain".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("empty-file", destination) }
+
+        assertTrue(result is CloudSyncResult.Error)
+        assertTrue((result as CloudSyncResult.Error).message.contains("response body was empty"))
+        assertFalse(destination.exists())
     }
 
     private class FakeInterceptor : Interceptor {
