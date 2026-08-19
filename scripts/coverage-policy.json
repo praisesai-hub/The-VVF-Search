@@ -1,0 +1,32 @@
+{
+  "aggregate_instruction_percent": 70.0,
+  "package_gates": [
+    {
+      "name": "security-critical packages",
+      "prefixes": [
+        "com.example.security",
+        "com.example.auth"
+      ],
+      "minimum_instruction_percent": 90.0
+    },
+    {
+      "name": "repository/data layer",
+      "prefixes": [
+        "com.example.data"
+      ],
+      "minimum_instruction_percent": 85.0
+    }
+  ],
+  "class_gates": [
+    {
+      "name": "vault",
+      "class_name_regex": "(^|\\.)com\\.example\\.(data|security)\\.(Vault|KeystoreVault).*",
+      "minimum_instruction_percent": 95.0
+    },
+    {
+      "name": "cloud sync",
+      "class_name_regex": "(^|\\.)com\\.example\\.(data|worker)\\..*CloudSync.*",
+      "minimum_instruction_percent": 90.0
+    }
+  ]
+}
