@@ -240,8 +240,10 @@ class EmbeddingGemmaTextEmbeddingProvider(
         }.getOrNull()
     }
 
-    override fun close() = synchronized(lock) {
-        textEmbedder?.close()
+    override fun close() {
+        synchronized(lock) {
+            textEmbedder?.close()
+        }
     }
 
     private companion object {
