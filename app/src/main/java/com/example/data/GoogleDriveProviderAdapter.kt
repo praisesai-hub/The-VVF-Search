@@ -25,7 +25,7 @@ class GoogleDriveProviderAdapter(
     override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
         if (!file.exists() || !file.isFile) {
             return CloudSyncResult.Error(
-                message = "File does not exist or is invalid: ${file.absolutePath}",
+                message = "The selected file is unavailable.",
                 isRetryable = false
             )
         }
@@ -60,7 +60,7 @@ class GoogleDriveProviderAdapter(
                 }
 
                 val uploadUrl = initResponse.header("Location") ?: return CloudSyncResult.Error(
-                    message = "Resumable upload preparation failed: Missing 'Location' header in Google Drive response",
+                    message = "Cloud upload could not be initialized.",
                     isRetryable = false
                 )
 
@@ -118,7 +118,7 @@ class GoogleDriveProviderAdapter(
 
                 val searchBody = searchResponse.body?.string() ?: ""
                 val fileId = extractFileIdFromJson(searchBody) ?: return CloudSyncResult.Error(
-                    message = "File not found on Google Drive: $remotePath",
+                    message = "The requested cloud file was not found.",
                     isRetryable = false
                 )
 
@@ -177,11 +177,16 @@ class GoogleDriveProviderAdapter(
     }
 
     private fun classifyHttpError(context: String, code: Int, errorBody: String?): CloudSyncResult.Error {
-        val message = "$context: HTTP $code - ${errorBody ?: "No details provided"}"
+        val safeMessage = "$context: HTTP $code"
         val isRetryable = code == 408 || code == 429 || code >= 500
         return CloudSyncResult.Error(
-            message = message,
-            isRetryable = isRetryable
+            message = safeMessage,
+            isRetryable = isRetryable,
+            domainError = com.example.domain.error.DomainErrorMapper.fromThrowable(
+                operation = "DRIVE_HTTP_REQUEST",
+                cause = IOException("HTTP $code"),
+                provider = providerId
+            )
         )
     }
 
@@ -190,10 +195,17 @@ class GoogleDriveProviderAdapter(
                 e is java.net.ConnectException ||
                 e is IOException ||
                 e.message?.contains("Unable to resolve host") == true
+        val domainError = com.example.domain.error.DomainErrorMapper.fromThrowable(
+            operation = "DRIVE_TRANSFER",
+            cause = e,
+            provider = providerId
+        )
+        com.example.domain.error.DiagnosticLogger.log("GoogleDriveProviderAdapter", domainError)
         return CloudSyncResult.Error(
-            message = e.message ?: "Google Drive operation failed",
+            message = domainError.userMessage.value,
             isRetryable = isRetryable,
-            cause = e
+            cause = e,
+            domainError = domainError
         )
     }
 }

@@ -262,4 +262,11 @@
     <string name="semantic_search_results">Semantic Search परिणाम</string>
     <string name="no_semantic_search_results">Semantic Search के परिणाम नहीं मिले।</string>
     <string name="score_96">स्कोर 96%%</string>
+    <string name="pin_error_too_many_attempts">बहुत अधिक गलत प्रयास। 30 सेकंड बाद फिर प्रयास करें।</string>
+    <string name="pin_error_reenter">पुष्टि करने के लिए नया PIN फिर से दर्ज करें।</string>
+    <string name="pin_error_mismatch">PIN मेल नहीं खाते। फिर प्रयास करें।</string>
+    <string name="pin_error_session">वॉल्ट सत्र बनाया नहीं जा सका।</string>
+    <string name="pin_error_incorrect">गलत PIN। फिर प्रयास करें।</string>
+    <string name="pin_error_biometric_session">प्रमाणित वॉल्ट सत्र बनाया नहीं जा सका।</string>
+    <string name="pin_error_biometric_unlock">बायोमेट्रिक वॉल्ट अनलॉक विफल रहा।</string>
 </resources>

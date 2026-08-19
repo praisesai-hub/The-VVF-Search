@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.biometric.BiometricPrompt
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
+import com.example.R
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
@@ -34,6 +35,9 @@ private const val MAX_VAULT_AUTO_LOCK_TIMEOUT_MS = 15 * 60_000L
 private const val VAULT_AUTO_LOCK_TIMEOUT_PREF = "vault_auto_lock_timeout_ms"
 private const val APP_SETTINGS_PREF = "vvf_app_settings"
 private val compatStates = WeakHashMap<MainViewModel, VmCompatState>()
+private fun MainViewModel.compatMessage(resId: Int): String =
+    getApplication<Application>().getString(resId)
+
 private fun MainViewModel.compatState(): VmCompatState = synchronized(compatStates) {
     compatStates.getOrPut(this) { VmCompatState() }
 }
@@ -189,7 +193,7 @@ fun MainViewModel.loadNextPage() { }
 fun MainViewModel.appendPinDigit(digit: String) {
     val state = compatState()
     val now = SystemClock.elapsedRealtime()
-    if (state.isPinCooldownActive(now)) return
+    if (state.isPinCooldownActive(now, compatMessage(R.string.pin_error_too_many_attempts))) return
     state.clearExpiredPinCooldown()
     processPinDigit(state, digit, now)
 }
@@ -207,10 +211,10 @@ private fun MainViewModel.processPinDigit(state: VmCompatState, digit: String, n
     }
 }
 
-private fun VmCompatState.isPinCooldownActive(now: Long): Boolean {
+private fun VmCompatState.isPinCooldownActive(now: Long, cooldownMessage: String): Boolean {
     if (pinLockedUntilElapsedMs <= now) return false
     enteredPin.value = ""
-    pinError.value = "Too many incorrect attempts. Try again in 30 seconds."
+    pinError.value = cooldownMessage
     return true
 }
 
@@ -229,13 +233,13 @@ private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
     if (firstEntry == null) {
         state.setupPinFirstEntry.value = pin
         state.enteredPin.value = ""
-        state.pinError.value = "Re-enter the new PIN to confirm."
+        state.pinError.value = compatMessage(R.string.pin_error_reenter)
         return
     }
     if (firstEntry != pin || !repository.initializeVaultPin(pin)) {
         state.setupPinFirstEntry.value = null
         state.enteredPin.value = ""
-        state.pinError.value = "PINs did not match. Try again."
+        state.pinError.value = compatMessage(R.string.pin_error_mismatch)
         return
     }
     state.setupPinFirstEntry.value = null
@@ -248,7 +252,7 @@ private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
         state.pinError.value = null
     } else {
         state.vaultUnlocked.value = false
-        state.pinError.value = "Vault session could not be created."
+        state.pinError.value = compatMessage(R.string.pin_error_session)
     }
 }
 
@@ -268,9 +272,9 @@ private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String, now
     state.enteredPin.value = ""
     state.pinError.value = if (state.failedPinAttempts >= PIN_LOCKOUT_THRESHOLD) {
         state.pinLockedUntilElapsedMs = now + PIN_LOCKOUT_DURATION_MS
-        "Too many incorrect attempts. Try again in 30 seconds."
+        compatMessage(R.string.pin_error_too_many_attempts)
     } else {
-        "Incorrect PIN. Try again."
+        compatMessage(R.string.pin_error_incorrect)
     }
 }
 
@@ -297,7 +301,8 @@ fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResul
     val state = compatState()
     try {
         if (!repository.completeBiometricUnlock(result)) {
-            state.pinError.value = "Authenticated vault session could not be created."
+            state.pinError.value = compatMessage(R.string.pin_error_biometric_session)
+
             return
         }
         state.failedPinAttempts = 0
@@ -307,10 +312,10 @@ fun MainViewModel.onBiometricSuccess(result: BiometricPrompt.AuthenticationResul
         state.pinError.value = null
     } catch (_: java.security.GeneralSecurityException) {
         state.vaultUnlocked.value = false
-        state.pinError.value = "Biometric vault unlock failed."
+        state.pinError.value = compatMessage(R.string.pin_error_biometric_unlock)
     } catch (_: SecurityException) {
         state.vaultUnlocked.value = false
-        state.pinError.value = "Biometric vault unlock failed."
+        state.pinError.value = compatMessage(R.string.pin_error_biometric_unlock)
     }
 }
 

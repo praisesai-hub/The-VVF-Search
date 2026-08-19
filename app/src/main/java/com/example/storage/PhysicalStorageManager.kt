@@ -9,6 +9,11 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.example.security.VaultCryptoSession
+import com.example.domain.error.DiagnosticContext
+import com.example.domain.error.DiagnosticLogger
+import com.example.domain.error.DomainError
+import com.example.domain.error.UserMessage
+import com.example.domain.error.UserSafeException
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -32,6 +37,20 @@ data class VaultRestoreRequest(
 @Suppress("LargeClass")
 object PhysicalStorageManager {
     private const val TAG = "PhysicalStorageManager"
+
+    private fun <T> sanitizedFailure(
+        operation: String,
+        cause: Throwable,
+        userMessage: String = "The file operation could not be completed."
+    ): Result<T> {
+        val error = DomainError.OperationFailed(
+            userMessage = UserMessage(userMessage),
+            diagnostics = DiagnosticContext(operation = operation, reasonCode = cause::class.simpleName ?: "FAILURE"),
+            internalCause = cause
+        )
+        DiagnosticLogger.log(TAG, error)
+        return Result.failure(UserSafeException(error))
+    }
 
     fun safeTrashFileName(name: String): String {
         val basename = File(name).name
@@ -129,14 +148,14 @@ object PhysicalStorageManager {
                     if (context.contentResolver.update(uri, values, null, null) > 0) {
                         Result.success(uri.toString())
                     } else if (doc == null || !doc.exists()) {
-                        Result.failure(java.io.FileNotFoundException("Document not found for URI $oldPath"))
+                        sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.FileNotFoundException("document unavailable"))
                     } else {
-                        Result.failure(java.io.IOException("SAF and content resolver rename failed for $oldPath"))
+                        sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.IOException("rename failed"))
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error renaming content URI $oldPath: ${e.message}", e)
-                Result.failure(e)
+                sanitizedFailure("PHYSICAL_STORAGE", e)
             }
         }
         return try {
@@ -155,16 +174,16 @@ object PhysicalStorageManager {
                         try { if (newFile.exists()) newFile.delete() } catch (_: Exception) {}
                     }
                 }
-            } else return Result.failure(java.io.FileNotFoundException("Source file not found at $oldPath"))
+            } else return sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.FileNotFoundException("source unavailable"))
             updateMediaStoreDisplayName(context, oldPath, newName)
             val finalPath = if (newFile.exists()) newFile.absolutePath else if (success) newFile.absolutePath else oldPath
             if (success || newFile.exists()) {
                 notifyMediaStoreFileChanged(context, oldPath, finalPath)
                 Result.success(finalPath)
-            } else Result.failure(java.io.IOException("Failed to physically rename file $oldPath to $newName"))
+            } else sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.IOException("rename failed"))
         } catch (e: Exception) {
             Log.e(TAG, "Error renaming file physically: ${e.message}", e)
-            Result.failure(e)
+            sanitizedFailure("PHYSICAL_STORAGE", e)
         }
     }
 
@@ -202,14 +221,14 @@ object PhysicalStorageManager {
             val trashFile = File(trashDir, "${System.currentTimeMillis()}_${safeTrashFileName(docName)}")
             return try {
                 val copied = context.contentResolver.openInputStream(uri)?.use { input -> trashFile.outputStream().use { output -> input.copyTo(output) }; true } ?: false
-                if (!copied) { try { trashFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to copy content URI to trash: $path")) }
+                if (!copied) { try { trashFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("copy failed")) }
                 val originalDeleted = deleteContentUri(context, uri)
                 if (originalDeleted) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) }
-                else { try { trashFile.delete() } catch (_: Exception) {}; Result.failure(java.io.IOException("Failed to delete original content URI after trash copy: $path")) }
-            } catch (e: Exception) { try { trashFile.delete() } catch (_: Exception) {}; Result.failure(e) }
+                else { try { trashFile.delete() } catch (_: Exception) {}; sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("delete failed")) }
+            } catch (e: Exception) { try { trashFile.delete() } catch (_: Exception) {}; sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         val srcFile = File(path)
-        if (!srcFile.exists()) return Result.failure(java.io.FileNotFoundException("Source file not found at $path"))
+        if (!srcFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.FileNotFoundException("source unavailable"))
         val trashFile = File(getRecycleBinDir(context), "${System.currentTimeMillis()}_${srcFile.name}")
         var moved = false
         try { moved = srcFile.renameTo(trashFile) } catch (e: Exception) { Log.w(TAG, "Direct rename to trash failed: ${e.message}") }
@@ -219,13 +238,13 @@ object PhysicalStorageManager {
                 if (srcFile.delete() || deleteFromMediaStore(context, path)) moved = true else try { trashFile.delete() } catch (_: Exception) {}
             } catch (e: Exception) { Log.e(TAG, "Copy to trash failed: ${e.message}"); try { trashFile.delete() } catch (_: Exception) {} }
         }
-        return if (moved && trashFile.exists()) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) } else Result.failure(java.io.IOException("Failed to move file to trash: $path"))
+        return if (moved && trashFile.exists()) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) } else sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("move failed"))
     }
 
     fun restoreFromTrash(context: Context, trashPath: String, originalPath: String): Result<String> {
         if (originalPath.startsWith("content://")) {
             val trashFile = File(trashPath)
-            if (!trashFile.exists()) return Result.failure(java.io.FileNotFoundException("Trash file not found at $trashPath"))
+            if (!trashFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.FileNotFoundException("trash file unavailable"))
             return try {
                 val uri = originalPath.toUri()
                 var writtenToOriginal = false
@@ -236,14 +255,14 @@ object PhysicalStorageManager {
                 }
                 val restoredFile = File(getRestoredDir(context), getFileNameFromTrashPathOrUri(context, trashFile.name, uri))
                 trashFile.copyTo(restoredFile, overwrite = true)
-                if (!restoredFile.exists() || restoredFile.length() == 0L) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to write restored file at ${restoredFile.absolutePath}")) }
+                if (!restoredFile.exists() || restoredFile.length() == 0L) { try { restoredFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.IOException("write failed")) }
                 if (!trashFile.delete() && trashFile.exists()) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete trash file after restoration.")) }
                 notifyMediaStoreFileChanged(context, "", restoredFile.absolutePath)
                 Result.success(restoredFile.absolutePath)
-            } catch (e: Exception) { Result.failure(e) }
+            } catch (e: Exception) { sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         val trashFile = File(trashPath)
-        if (!trashFile.exists()) return Result.failure(java.io.FileNotFoundException("Trash file not found at $trashPath"))
+        if (!trashFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.FileNotFoundException("trash file unavailable"))
         val targetFile = File(originalPath)
         targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
         var restored = false
@@ -251,14 +270,14 @@ object PhysicalStorageManager {
         if (!restored) {
             try { trashFile.copyTo(targetFile, overwrite = true); if (trashFile.delete()) restored = true else try { targetFile.delete() } catch (_: Exception) {} } catch (e: Exception) { Log.e(TAG, "Restore copy from trash failed: ${e.message}"); try { targetFile.delete() } catch (_: Exception) {} }
         }
-        return if (restored && targetFile.exists()) { notifyMediaStoreFileChanged(context, "", targetFile.absolutePath); Result.success(targetFile.absolutePath) } else Result.failure(java.io.IOException("Failed to restore file from trash: $trashPath"))
+        return if (restored && targetFile.exists()) { notifyMediaStoreFileChanged(context, "", targetFile.absolutePath); Result.success(targetFile.absolutePath) } else sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.IOException("restore failed"))
     }
 
     fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -> ByteArray): Result<String> {
         if (originalPath.startsWith("content://")) {
             return try {
                 val vaultFile = File(vaultFilePath)
-                if (!vaultFile.exists()) return Result.failure(java.io.FileNotFoundException("Vault file not found at $vaultFilePath"))
+                if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
                 if (vaultFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("Vault file exceeds the maximum secure vault limit of 50MB."))
                 val decryptedBytes = decryptAction(vaultFile.readBytes())
                 val uri = originalPath.toUri()
@@ -276,12 +295,12 @@ object PhysicalStorageManager {
                     Result.success(restoredFile.absolutePath)
                 }
             } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-            catch (e: OutOfMemoryError) { System.gc(); Result.failure(e) }
-            catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); Result.failure(e) }
+            catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+            catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         return try {
             val vaultFile = File(vaultFilePath)
-            if (!vaultFile.exists()) return Result.failure(java.io.FileNotFoundException("Vault file not found at $vaultFilePath"))
+            if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
             if (vaultFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("Vault file exceeds the maximum secure vault limit of 50MB."))
             val targetFile = File(originalPath)
             targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
@@ -291,15 +310,15 @@ object PhysicalStorageManager {
             notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
             Result.success(targetFile.absolutePath)
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); Result.failure(e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); Result.failure(e) }
+        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
     fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result<String> {
         if (originalPath.startsWith("content://")) {
             return try {
                 val vaultFile = File(vaultFilePath)
-                if (!vaultFile.exists()) return Result.failure(java.io.FileNotFoundException("Vault file not found at $vaultFilePath"))
+                if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
                 val uri = originalPath.toUri()
                 fun decryptTo(output: java.io.OutputStream) {
                     val cipher = keystoreVaultManager.getDecryptionCipher(iv)
@@ -325,12 +344,12 @@ object PhysicalStorageManager {
                     Result.success(restoredFile.absolutePath)
                 }
             } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-            catch (e: OutOfMemoryError) { System.gc(); Result.failure(e) }
-            catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); Result.failure(e) }
+            catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+            catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         return try {
             val vaultFile = File(vaultFilePath)
-            if (!vaultFile.exists()) return Result.failure(java.io.FileNotFoundException("Vault file not found at $vaultFilePath"))
+            if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
             val targetFile = File(originalPath)
             targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
             val cipher = keystoreVaultManager.getDecryptionCipher(iv)
@@ -347,8 +366,8 @@ object PhysicalStorageManager {
             notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
             Result.success(targetFile.absolutePath)
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); Result.failure(e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); Result.failure(e) }
+        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
     /**
@@ -371,7 +390,7 @@ object PhysicalStorageManager {
         } else {
             val source = File(srcPath)
             if (!source.exists() || !source.canRead()) {
-                return Result.failure(java.io.FileNotFoundException("Source file not found or unreadable at $srcPath"))
+                return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("source unavailable"))
             }
             FileInputStream(source)
         }
@@ -395,7 +414,7 @@ object PhysicalStorageManager {
         Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
     } catch (e: Exception) {
         Log.e(TAG, "Streaming vault encryption failed: ${e.message}", e)
-        Result.failure(e)
+        sanitizedFailure("PHYSICAL_STORAGE", e)
     }
 
     /**
@@ -446,7 +465,7 @@ object PhysicalStorageManager {
         )
     } catch (e: Exception) {
         Log.e(TAG, "Streaming vault restore failed: ${e.message}", e)
-        Result.failure(e)
+        sanitizedFailure("PHYSICAL_STORAGE", e)
     }
 
     @Suppress("NestedBlockDepth")
@@ -526,7 +545,7 @@ object PhysicalStorageManager {
         if (srcPath.startsWith("content://")) {
             return try {
                 val uri = srcPath.toUri()
-                val fileBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return Result.failure(java.io.FileNotFoundException("Unable to open stream for content URI: $srcPath"))
+                val fileBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("content unavailable"))
                 if (fileBytes.size > 50 * 1024 * 1024) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))
                 val docName = getFileNameFromContentUri(context, uri)
                 val (encryptedBytes, iv) = encryptAction(fileBytes)
@@ -535,21 +554,21 @@ object PhysicalStorageManager {
                 if (!vaultFile.exists() || vaultFile.length() == 0L) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Vault file creation failed.")) }
                 val originalDeleted = deleteContentUri(context, uri)
                 if (originalDeleted) { notifyMediaStoreFileDeleted(context, srcPath); Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv)) }
-                else { try { vaultFile.delete() } catch (_: Exception) {}; Result.failure(java.io.IOException("Failed to delete original content URI after vault encryption: $srcPath")) }
-            } catch (e: Exception) { Log.e(TAG, "Error encrypting content URI $srcPath: ${e.message}", e); Result.failure(e) }
+                else { try { vaultFile.delete() } catch (_: Exception) {}; sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
+            } catch (e: Exception) { Log.e(TAG, "Error encrypting content URI $srcPath: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         val srcFile = File(srcPath)
         return try {
-            if (!srcFile.exists() || !srcFile.canRead()) return Result.failure(java.io.FileNotFoundException("Source file not found or unreadable at $srcPath"))
+            if (!srcFile.exists() || !srcFile.canRead()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("source unavailable"))
             if (srcFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))
             val (encryptedBytes, iv) = encryptAction(srcFile.readBytes())
             val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
             try { FileOutputStream(vaultFile).use { it.write(encryptedBytes) } } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
-            if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to securely remove source file after vault encryption: $srcPath")) }
+            if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
             Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); Result.failure(e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source: ${e.message}", e); Result.failure(e) }
+        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
     fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result<VaultStorageResult> {
@@ -560,7 +579,7 @@ object PhysicalStorageManager {
                 val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${docName}.vvf")
                 val cipher = keystoreVaultManager.getEncryptionCipher()
                 val iv = cipher.iv
-                val inputStream = context.contentResolver.openInputStream(uri) ?: return Result.failure(java.io.FileNotFoundException("Unable to open stream for content URI: $srcPath"))
+                val inputStream = context.contentResolver.openInputStream(uri) ?: return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("content unavailable"))
                 try {
                     inputStream.use { fis ->
                         FileOutputStream(vaultFile).use { fos ->
@@ -575,12 +594,12 @@ object PhysicalStorageManager {
                 if (!vaultFile.exists() || vaultFile.length() == 0L) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Vault file creation failed or empty.")) }
                 val originalDeleted = deleteContentUri(context, uri)
                 if (originalDeleted) { notifyMediaStoreFileDeleted(context, srcPath); Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv)) }
-                else { try { vaultFile.delete() } catch (_: Exception) {}; Result.failure(java.io.IOException("Failed to delete original content URI after vault encryption: $srcPath")) }
-            } catch (e: Exception) { Log.e(TAG, "Error encrypting content URI $srcPath: ${e.message}", e); Result.failure(e) }
+                else { try { vaultFile.delete() } catch (_: Exception) {}; sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
+            } catch (e: Exception) { Log.e(TAG, "Error encrypting content URI $srcPath: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         val srcFile = File(srcPath)
         return try {
-            if (!srcFile.exists() || !srcFile.canRead()) return Result.failure(java.io.FileNotFoundException("Source file not found or unreadable at $srcPath"))
+            if (!srcFile.exists() || !srcFile.canRead()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("source unavailable"))
             val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
             val cipher = keystoreVaultManager.getEncryptionCipher()
             val iv = cipher.iv
@@ -595,11 +614,11 @@ object PhysicalStorageManager {
                     }
                 }
             } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
-            if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to securely remove source file after vault encryption: $srcPath")) }
+            if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
             Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); Result.failure(e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source Stream: ${e.message}", e); Result.failure(e) }
+        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
     private fun secureWipeFile(context: Context, file: File): Boolean {

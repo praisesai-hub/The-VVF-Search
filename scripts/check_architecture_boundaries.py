@@ -68,6 +68,23 @@ for path in cloud_transfer_files:
         if symbol in text:
             errors.append(f"{path.relative_to(ROOT)} (CloudTransfer) references forbidden {symbol}")
 
+# User-facing error channels must not interpolate filesystem paths, URIs, or raw exception text.
+error_surface_files = [
+    MAIN / "com/example/data/GoogleDriveProviderAdapter.kt",
+    MAIN / "com/example/data/CloudSyncEngine.kt",
+    MAIN / "com/example/ui/MainViewModel.kt",
+]
+for path in error_surface_files:
+    if not path.exists():
+        continue
+    text = path.read_text(encoding="utf-8")
+    if "_globalError.value = throwable.localizedMessage" in text:
+        errors.append(f"{path.relative_to(ROOT)} exposes throwable.localizedMessage to UI")
+    if re.search(r'message\\s*=\\s*"[^"\\n]*\\$\\{[^}]*\\.(?:path|absolutePath)[^}]*\\}', text):
+        errors.append(f"{path.relative_to(ROOT)} interpolates a filesystem path into an error message")
+    if re.search(r'message\\s*=\\s*"[^"\\n]*\\$remotePath', text):
+        errors.append(f"{path.relative_to(ROOT)} interpolates a remote path into an error message")
+
 # New production code must not silently add another repository compatibility façade.
 for path in MAIN.rglob("*.kt"):
     if path.name.endswith("Compat.kt") and path not in compat_files:

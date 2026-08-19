@@ -9,6 +9,10 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
+import com.example.domain.error.DiagnosticContext
+import com.example.domain.error.DiagnosticLogger
+import com.example.domain.error.DomainError
+import com.example.domain.error.UserMessage
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
 import kotlinx.coroutines.flow.first
@@ -68,7 +72,16 @@ class DuplicateCleanupWorker(
                         duplicatesFound++
                         bytesCleaned += file.sizeBytes
                     } else {
-                        Log.w(TAG, "Physical move to trash failed for duplicate file ${file.path}: ${trashResult.exceptionOrNull()?.message}")
+                        val diagnostic = DomainError.OperationFailed(
+                            userMessage = UserMessage("The duplicate file could not be moved."),
+                            diagnostics = DiagnosticContext(
+                                operation = "DUPLICATE_MOVE_TO_TRASH",
+                                fileId = file.id,
+                                reasonCode = "PHYSICAL_MOVE_FAILED"
+                            ),
+                            internalCause = trashResult.exceptionOrNull()
+                        )
+                        DiagnosticLogger.log(TAG, diagnostic, DiagnosticLogger.Level.WARN)
                     }
                 }
             }
@@ -85,7 +98,15 @@ class DuplicateCleanupWorker(
 
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "Error in DuplicateCleanupWorker: ${e.message}", e)
+            val diagnostic = DomainError.OperationFailed(
+                userMessage = UserMessage("Duplicate cleanup could not be completed."),
+                diagnostics = DiagnosticContext(
+                    operation = "DUPLICATE_CLEANUP",
+                    reasonCode = "UNEXPECTED_FAILURE"
+                ),
+                internalCause = e
+            )
+            DiagnosticLogger.log(TAG, diagnostic)
             if (runAttemptCount >= 3) {
                 Log.e(TAG, "DuplicateCleanupWorker failed after $runAttemptCount attempts. Abandoning retry.")
                 Result.failure()

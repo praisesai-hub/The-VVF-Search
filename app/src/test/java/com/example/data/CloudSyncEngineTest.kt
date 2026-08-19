@@ -141,7 +141,8 @@ class CloudSyncEngineTest {
         result as CloudSyncResult.Error
         assertEquals(true, result.isRetryable)
         assertSame(failure, result.cause)
-        assertEquals("host unavailable", result.message)
+        assertEquals("Network connection is unavailable.", result.message)
+        assertFalse(result.message.contains("host unavailable"))
     }
 
     @Test
@@ -157,7 +158,8 @@ class CloudSyncEngineTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(true, result.isRetryable)
-        assertEquals("Unable to resolve host storage.example", result.message)
+        assertEquals("The operation could not be completed.", result.message)
+        assertFalse(result.message.contains("storage.example"))
     }
 }
 

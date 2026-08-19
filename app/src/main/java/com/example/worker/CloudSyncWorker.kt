@@ -12,6 +12,8 @@ import com.example.data.CloudSyncResult
 import com.example.data.CloudSyncPolicy
 import com.example.context.drive.DriveAuthorizationFactory
 import com.example.context.drive.DriveAuthorizationPort
+import com.example.domain.error.DiagnosticLogger
+import com.example.domain.error.DomainErrorMapper
 import kotlinx.coroutines.flow.first
 import java.io.File
 
@@ -126,7 +128,8 @@ class CloudSyncWorker @JvmOverloads constructor(
                 Result.success()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Fatal error in CloudSyncWorker: ${e.message}", e)
+            val diagnostic = DomainErrorMapper.fromThrowable("CLOUD_SYNC_WORKER", e)
+            DiagnosticLogger.log(TAG, diagnostic)
             Result.failure()
         }
     }

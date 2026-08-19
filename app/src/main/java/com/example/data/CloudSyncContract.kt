@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.domain.error.DomainError
 import java.io.File
 
 /**
@@ -10,7 +11,8 @@ sealed class CloudSyncResult {
     data class Error(
         val message: String,
         val isRetryable: Boolean,
-        val cause: Throwable? = null
+        val cause: Throwable? = null,
+        val domainError: DomainError? = null
     ) : CloudSyncResult()
     object NotSupported : CloudSyncResult()
 }

@@ -39,7 +39,9 @@ class GoogleDriveProviderAdapterTest {
             adapter.uploadFile(nonExistentFile, "remote.txt")
         }
         assertTrue(result is CloudSyncResult.Error)
-        assertEquals("File does not exist or is invalid: ${nonExistentFile.absolutePath}", (result as CloudSyncResult.Error).message)
+        val error = result as CloudSyncResult.Error
+        assertEquals("The selected file is unavailable.", error.message)
+        assertFalse(error.message.contains(nonExistentFile.absolutePath))
     }
 
     @Test

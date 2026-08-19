@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.context.cloud.CloudProviderRegistry
 import com.example.context.drive.DriveAuthorizationPort
+import com.example.domain.error.DomainErrorMapper
 import java.io.File
 
 /**
@@ -28,27 +29,50 @@ class CloudSyncEngine(
     suspend fun syncItem(item: CloudSyncItemEntity): CloudSyncResult {
         val file = File(item.filePath)
         if (!file.exists() || !file.isFile) {
+            val error = DomainErrorMapper.fromThrowable(
+                operation = "CLOUD_TRANSFER",
+                cause = java.io.IOException("source file unavailable"),
+                fileId = item.id,
+                provider = item.provider
+            )
             return CloudSyncResult.Error(
-                message = "File does not exist or is invalid: ${file.absolutePath}",
-                isRetryable = false
+                message = error.userMessage.value,
+                isRetryable = false,
+                domainError = error
             )
         }
 
         val adapter = getAdapterForProvider(item.provider)
-            ?: return CloudSyncResult.Error(
-                message = "No supported provider adapter found for ${item.provider}",
-                isRetryable = false
-            )
+            ?: run {
+                val error = DomainErrorMapper.fromThrowable(
+                    operation = "CLOUD_PROVIDER_RESOLUTION",
+                    cause = IllegalArgumentException("unsupported provider"),
+                    fileId = item.id,
+                    provider = item.provider
+                )
+                return CloudSyncResult.Error(
+                    message = error.userMessage.value,
+                    isRetryable = false,
+                    domainError = error
+                )
+            }
 
         Log.i(TAG, "Starting sync for item ${item.id} (${item.fileName}) with provider ${item.provider}...")
         return try {
             adapter.uploadFile(file, item.fileName)
         } catch (e: Exception) {
-            Log.e(TAG, "Exception during upload for item ${item.id}", e)
+            val error = DomainErrorMapper.fromThrowable(
+                operation = "CLOUD_TRANSFER",
+                cause = e,
+                fileId = item.id,
+                provider = item.provider
+            )
+            com.example.domain.error.DiagnosticLogger.log(TAG, error)
             CloudSyncResult.Error(
-                message = e.message ?: "Upload failed",
+                message = error.userMessage.value,
                 isRetryable = isExceptionRetryable(e),
-                cause = e
+                cause = e,
+                domainError = error
             )
         }
     }

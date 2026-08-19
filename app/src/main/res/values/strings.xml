@@ -266,4 +266,11 @@
     <string name="semantic_search_results">Semantic Search Results</string>
     <string name="no_semantic_search_results">No semantic search results found.</string>
     <string name="score_96">Score 96%%</string>
+    <string name="pin_error_too_many_attempts">Too many incorrect attempts. Try again in 30 seconds.</string>
+    <string name="pin_error_reenter">Re-enter the new PIN to confirm.</string>
+    <string name="pin_error_mismatch">PINs did not match. Try again.</string>
+    <string name="pin_error_session">Vault session could not be created.</string>
+    <string name="pin_error_incorrect">Incorrect PIN. Try again.</string>
+    <string name="pin_error_biometric_session">Authenticated vault session could not be created.</string>
+    <string name="pin_error_biometric_unlock">Biometric vault unlock failed.</string>
 </resources>

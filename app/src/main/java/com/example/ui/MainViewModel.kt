@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import com.example.ui.components.PickableLocalFile
 import com.example.storage.PhysicalStorageManager
+import com.example.domain.error.DiagnosticLogger
+import com.example.domain.error.DomainErrorMapper
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,9 +35,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val globalError: StateFlow<String?> = _globalError.asStateFlow()
     fun clearGlobalError() { _globalError.value = null }
     private val coroutineExceptionHandler = CoroutineExceptionHandler { _, throwable ->
-        android.util.Log.e("MainViewModel", "Unhandled coroutine exception", throwable)
-        _globalError.value = throwable.localizedMessage
-            ?: getApplication<Application>().getString(R.string.background_operation_failed)
+        val error = DomainErrorMapper.fromThrowable("UI_BACKGROUND_OPERATION", throwable)
+        DiagnosticLogger.log("MainViewModel", error)
+        _globalError.value = error.userMessage.value
     }
 
     private val _selectedTabIndex = MutableStateFlow(0)
@@ -201,7 +203,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                     android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             )
-        } catch (e: Exception) { android.util.Log.e("MainViewModel", "Error releasing persistable permission for $uri: ${e.message}", e) }
+        } catch (e: Exception) {
+            DiagnosticLogger.log("MainViewModel", DomainErrorMapper.fromThrowable("SAF_PERMISSION_RELEASE", e))
+        }
         val newSet = (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()).toMutableSet().apply { remove(uri) }
         appPrefs.edit { putStringSet("persisted_saf_folders", newSet) }
         _persistedFolderUris.value = newSet
@@ -213,7 +217,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     discovered += repository.scanSafTree(uriStr.toUri())
                 } catch (e: Exception) {
-                    android.util.Log.e("MainViewModel", "Error scanning persisted SAF folder: ${e.message}", e)
+                    DiagnosticLogger.log("MainViewModel", DomainErrorMapper.fromThrowable("SAF_FOLDER_SCAN", e))
                 }
             }
             if (discovered > 0) { resetPagination(); repository.enqueueBackgroundIndexWork() }
@@ -227,7 +231,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 context.contentResolver.takePersistableUriPermission(uri, takeFlags); savePersistedFolderUri(uri.toString())
                 val discovered = repository.scanSafTree(uri)
                 if (discovered > 0) { resetPagination(); repository.enqueueBackgroundIndexWork() }
-            } catch (e: Exception) { android.util.Log.e("MainViewModel", "Error taking persistable permission/scanning SAF tree: ${e.message}", e) }
+            } catch (e: Exception) {
+                DiagnosticLogger.log("MainViewModel", DomainErrorMapper.fromThrowable("SAF_FOLDER_PERMISSION_OR_SCAN", e))
+            }
         }
     }
 
