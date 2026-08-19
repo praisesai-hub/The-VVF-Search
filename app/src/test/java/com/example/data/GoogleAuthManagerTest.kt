@@ -38,8 +38,8 @@ class GoogleAuthManagerTest {
         val signedInState = state as GoogleAuthState.SignedIn
         assertEquals("test@example.com", signedInState.email)
         assertEquals("Test User", signedInState.displayName)
-        assertEquals("mock_access_token", signedInState.accessToken)
         assertTrue(authManager.isAuthorized())
+        assertEquals("Bearer mock_access_token", authManager.authorizationHeader())
     }
 
     @Test
@@ -57,7 +57,6 @@ class GoogleAuthManagerTest {
         assertTrue(state is GoogleAuthState.SignedIn)
         val signedInState = state as GoogleAuthState.SignedIn
         assertEquals("user@example.com", signedInState.email)
-        assertEquals("new_access_token", signedInState.accessToken)
     }
 
     @Test

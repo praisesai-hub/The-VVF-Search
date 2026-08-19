@@ -10,7 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.data.AppDatabase
 import com.example.data.SmartManagerRepository
-import com.example.security.CrashReportingPolicy
+import com.example.context.telemetry.CrashlyticsTelemetry
 import com.example.worker.BackgroundIndexWorker
 import com.example.worker.CacheCleanupWorker
 import com.example.worker.CloudSyncWorker
@@ -54,7 +54,7 @@ class VVFApplication : Application(), Configuration.Provider {
         instance = this
         Log.i("VVFApplication", "Initializing VVF Smart Manager Application Foundation...")
 
-        initCrashlytics()
+        CrashlyticsTelemetry.initialize(this)
 
         setupBackgroundFileManagementTasks()
     }
@@ -111,19 +111,6 @@ class VVFApplication : Application(), Configuration.Provider {
             Log.i("VVFApplication", "All WorkManager background file management tasks successfully enqueued.")
         } catch (e: Exception) {
             Log.e("VVFApplication", "Failed to enqueue WorkManager background tasks: ${e.message}", e)
-        }
-    }
-
-    private fun initCrashlytics() {
-        try {
-            com.google.firebase.FirebaseApp.initializeApp(this)
-            val crashlytics = com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
-            val consented = !BuildConfig.DEBUG && CrashReportingPolicy.hasConsent(this)
-            crashlytics.setCrashlyticsCollectionEnabled(consented)
-            if (consented) crashlytics.setCustomKey("app_version", BuildConfig.VERSION_NAME)
-            Log.i("VVFApplication", "Firebase Crashlytics initialized with explicit user consent=$consented.")
-        } catch (e: Exception) {
-            Log.w("VVFApplication", "Firebase Crashlytics initialization pending (app/google-services.json required from Firebase Console): ${e.message}")
         }
     }
 

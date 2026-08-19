@@ -7,6 +7,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import com.example.context.drive.DriveAuthorizationPort
 import java.io.IOException
 
 /**
@@ -14,7 +15,7 @@ import java.io.IOException
  * metadata creation, resumable upload preparation, secure upload, and remote file ID handling.
  */
 class GoogleDriveProviderAdapter(
-    private val authManager: GoogleAuthManager,
+    private val driveAuthorization: DriveAuthorizationPort,
     private val httpClient: OkHttpClient = OkHttpClient()
 ) : CloudProviderAdapter {
 
@@ -29,7 +30,7 @@ class GoogleDriveProviderAdapter(
             )
         }
 
-        val token = authManager.getAccessToken() ?: return CloudSyncResult.Error(
+        val authorization = driveAuthorization.authorizationHeader() ?: return CloudSyncResult.Error(
             message = "Upload failed: user is not authenticated with Google Drive.",
             isRetryable = false
         )
@@ -46,7 +47,7 @@ class GoogleDriveProviderAdapter(
             // 1. Prepare Resumable Upload
             val initRequest = Request.Builder()
                 .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable")
-                .header("Authorization", "Bearer $token")
+                .header("Authorization", authorization)
                 .header("Content-Type", "application/json; charset=UTF-8")
                 .header("X-Upload-Content-Type", mimeType)
                 .header("X-Upload-Content-Length", file.length().toString())
@@ -97,7 +98,7 @@ class GoogleDriveProviderAdapter(
 
     @Suppress("NestedBlockDepth", "ReturnCount")
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult {
-        val token = authManager.getAccessToken() ?: return CloudSyncResult.Error(
+        val authorization = driveAuthorization.authorizationHeader() ?: return CloudSyncResult.Error(
             message = "Download failed: user is not authenticated with Google Drive.",
             isRetryable = false
         )
@@ -106,7 +107,7 @@ class GoogleDriveProviderAdapter(
             // 1. Search for file ID matching remotePath name
             val searchRequest = Request.Builder()
                 .url("https://www.googleapis.com/drive/v3/files?q=name='$remotePath' and trashed=false")
-                .header("Authorization", "Bearer $token")
+                .header("Authorization", authorization)
                 .get()
                 .build()
 
@@ -124,7 +125,7 @@ class GoogleDriveProviderAdapter(
                 // 2. Download media content
                 val downloadRequest = Request.Builder()
                     .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
-                    .header("Authorization", "Bearer $token")
+                    .header("Authorization", authorization)
                     .get()
                     .build()
 

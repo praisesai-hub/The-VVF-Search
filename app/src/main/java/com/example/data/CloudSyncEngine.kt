@@ -2,6 +2,8 @@ package com.example.data
 
 import android.content.Context
 import android.util.Log
+import com.example.context.cloud.CloudProviderRegistry
+import com.example.context.drive.DriveAuthorizationPort
 import java.io.File
 
 /**
@@ -11,9 +13,10 @@ import java.io.File
 class CloudSyncEngine(
     private val context: Context,
     private val dao: FileDao,
-    private val authManager: GoogleAuthManager,
+    private val authManager: DriveAuthorizationPort,
     private val providerAdapterOverride: CloudProviderAdapter? = null
 ) {
+    private val providerRegistry = CloudProviderRegistry(authManager, providerAdapterOverride)
     companion object {
         private const val TAG = "CloudSyncEngine"
     }
@@ -53,15 +56,8 @@ class CloudSyncEngine(
     /**
      * Resolves the correct [CloudProviderAdapter] based on the provider string.
      */
-    private fun getAdapterForProvider(provider: String): CloudProviderAdapter? {
-        if (providerAdapterOverride != null) {
-            return providerAdapterOverride
-        }
-        return when (provider.uppercase()) {
-            "GOOGLE_DRIVE" -> GoogleDriveProviderAdapter(authManager)
-            else -> null
-        }
-    }
+    private fun getAdapterForProvider(provider: String): CloudProviderAdapter? =
+        providerRegistry.adapterFor(provider)
 
     private fun isExceptionRetryable(e: Exception): Boolean {
         return e is java.net.UnknownHostException ||

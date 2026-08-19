@@ -29,6 +29,45 @@ for path in (MAIN / "com/example/data").rglob("*.kt"):
     if "WorkManager" in text or "OneTimeWorkRequestBuilder" in text:
         errors.append(f"{path.relative_to(ROOT)} contains direct WorkManager orchestration")
 
+# Bounded-context rules prevent identity, Drive authorization, transfer, and telemetry from collapsing.
+context_rules = {
+    "drive": (
+        MAIN / "com/example/context/drive",
+        {"FirebaseAuthManager", "FirebaseAuth", "FirebaseCrashlytics", "CredentialManager"},
+    ),
+    "cloud": (
+        MAIN / "com/example/context/cloud",
+        {"FirebaseAuthManager", "FirebaseAuth", "FirebaseCrashlytics", "GoogleAuthManagerFactory"},
+    ),
+}
+for context_name, (directory, forbidden_symbols) in context_rules.items():
+    if not directory.exists():
+        continue
+    for path in directory.rglob("*.kt"):
+        text = path.read_text(encoding="utf-8")
+        for symbol in forbidden_symbols:
+            if symbol in text:
+                errors.append(f"{path.relative_to(ROOT)} ({context_name}) references forbidden {symbol}")
+
+application_bootstrap = MAIN / "com/example/VVFApplication.kt"
+if application_bootstrap.exists():
+    application_text = application_bootstrap.read_text(encoding="utf-8")
+    if "FirebaseCrashlytics" in application_text or "FirebaseApp.initializeApp" in application_text:
+        errors.append(f"{application_bootstrap.relative_to(ROOT)} contains direct telemetry provider bootstrap")
+
+cloud_transfer_files = [
+    MAIN / "com/example/data/CloudSyncEngine.kt",
+    MAIN / "com/example/data/GoogleDriveProviderAdapter.kt",
+    MAIN / "com/example/worker/CloudSyncWorker.kt",
+]
+for path in cloud_transfer_files:
+    if not path.exists():
+        continue
+    text = path.read_text(encoding="utf-8")
+    for symbol in ("FirebaseAuthManager", "FirebaseAuth", "FirebaseCrashlytics", "GoogleAuthManagerFactory"):
+        if symbol in text:
+            errors.append(f"{path.relative_to(ROOT)} (CloudTransfer) references forbidden {symbol}")
+
 # New production code must not silently add another repository compatibility façade.
 for path in MAIN.rglob("*.kt"):
     if path.name.endswith("Compat.kt") and path not in compat_files:

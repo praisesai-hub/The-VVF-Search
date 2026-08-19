@@ -10,7 +10,8 @@ import com.example.data.FileDao
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncResult
 import com.example.data.CloudSyncPolicy
-import com.example.data.GoogleAuthManager
+import com.example.context.drive.DriveAuthorizationFactory
+import com.example.context.drive.DriveAuthorizationPort
 import kotlinx.coroutines.flow.first
 import java.io.File
 
@@ -19,7 +20,7 @@ class CloudSyncWorker @JvmOverloads constructor(
     workerParams: WorkerParameters,
     private val daoOverride: FileDao? = null,
     private val providerAdapterOverride: CloudProviderAdapter? = null,
-    private val authManagerOverride: GoogleAuthManager? = null,
+    private val authManagerOverride: DriveAuthorizationPort? = null,
     private val transferAllowed: (() -> Boolean)? = null
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -60,12 +61,12 @@ class CloudSyncWorker @JvmOverloads constructor(
                 return Result.success()
             }
 
-            val authManager = authManagerOverride
-                ?: com.example.data.GoogleAuthManagerFactory.getInstance(applicationContext)
+            val driveAuthorization = authManagerOverride
+                ?: DriveAuthorizationFactory.getInstance(applicationContext)
             val syncEngine = com.example.data.CloudSyncEngine(
                 context = applicationContext,
                 dao = dao,
-                authManager = authManager,
+                authManager = driveAuthorization,
                 providerAdapterOverride = providerAdapterOverride
             )
 
