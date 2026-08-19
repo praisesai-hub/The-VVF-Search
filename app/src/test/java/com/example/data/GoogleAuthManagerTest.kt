@@ -179,6 +179,42 @@ class GoogleAuthManagerTest {
         assertNull(sharedPrefs.getString(GoogleAuthManager.KEY_DISPLAY_NAME, null))
     }
 
+    @Test
+    fun clearSession_reportsErrorWhenSecureCredentialRemovalIsNotDurable() {
+        val store = FakeStringKeyValueStore(commitSucceeds = false)
+        val productionManager = GoogleAuthManager(store)
+
+        productionManager.clearSession()
+
+        val state = productionManager.authState.value
+        assertTrue(state is GoogleAuthState.Error)
+        assertEquals("Failed to clear authentication locally", (state as GoogleAuthState.Error).message)
+        assertFalse(productionManager.isAuthorized())
+    }
+
+    @Suppress("DEPRECATION")
+    @Test
+    fun productionManager_rejectedRawSessionReportsCleanupFailureWithoutAuthorizing() {
+        val store = FakeStringKeyValueStore(commitSucceeds = false)
+        val productionManager = GoogleAuthManager(store)
+
+        productionManager.saveSession(
+            accessToken = "opaque-token",
+            refreshToken = "opaque-refresh",
+            email = "user@example.com",
+            displayName = "User"
+        )
+
+        val state = productionManager.authState.value
+        assertTrue(state is GoogleAuthState.Error)
+        assertEquals(
+            "Failed to clear rejected authentication material",
+            (state as GoogleAuthState.Error).message
+        )
+        assertFalse(productionManager.isAuthorized())
+        assertNull(productionManager.accessTokenOrNull())
+    }
+
     // High performance Fake implementation of Android SharedPreferences
     private class FakeSharedPreferences : SharedPreferences {
         private val map = mutableMapOf<String, Any?>()
@@ -261,7 +297,10 @@ class GoogleAuthManagerTest {
         }
     }
 
-    private class FakeStringKeyValueStore(initialValues: Map<String, String> = emptyMap()) :
+    private class FakeStringKeyValueStore(
+        initialValues: Map<String, String> = emptyMap(),
+        private val commitSucceeds: Boolean = true
+    ) :
         StringKeyValueStore {
         private val values = initialValues.toMutableMap()
 
@@ -269,6 +308,7 @@ class GoogleAuthManagerTest {
             values[key] ?: defaultValue
 
         override fun commit(values: Map<String, String?>): Boolean {
+            if (!commitSucceeds) return false
             values.forEach { (key, value) ->
                 if (value == null) this.values.remove(key) else this.values[key] = value
             }

@@ -37,12 +37,20 @@ interface FileDao {
     @SkipQueryVerification
     @Query(
         """
-        SELECT files.* FROM files
-        JOIN file_search_fts ON file_search_fts.rowid = files.id
-        WHERE (:query = '' OR file_search_fts MATCH :query)
-          AND files.isVault = 0 AND files.isRecycleBin = 0
-          AND (:category IS NULL OR files.category = :category)
-        ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
+        SELECT * FROM (
+            SELECT files.*, 0.0 AS search_rank FROM files
+            WHERE :query = ''
+              AND files.isVault = 0 AND files.isRecycleBin = 0
+              AND (:category IS NULL OR files.category = :category)
+            UNION ALL
+            SELECT files.*, bm25(file_search_fts) AS search_rank FROM files
+            JOIN file_search_fts ON file_search_fts.rowid = files.id
+            WHERE :query != ''
+              AND file_search_fts MATCH :query
+              AND files.isVault = 0 AND files.isRecycleBin = 0
+              AND (:category IS NULL OR files.category = :category)
+        )
+        ORDER BY search_rank, dateModifiedMs DESC
         LIMIT :limit OFFSET :offset
         """
     )

@@ -32,5 +32,5 @@ object CloudProviderCapabilities {
         forProvider(providerId)?.isImplemented == true
 
     fun isImplementedPlugin(pluginId: String): Boolean =
-        forPlugin(pluginId)?.isImplemented != false
+        forPlugin(pluginId)?.isImplemented == true
 }
