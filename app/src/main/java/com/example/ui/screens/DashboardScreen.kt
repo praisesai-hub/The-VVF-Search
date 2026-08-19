@@ -98,9 +98,7 @@ fun DashboardScreen(
 ) {
     var showRoadmapModal by rememberSaveable { mutableStateOf(false) }
     var showFilePickerSheet by remember { mutableStateOf(false) }
-    val totalSize = remember(categoryStats) { categoryStats.sumOf { it.totalSize } }
-    val totalFileCount = remember(categoryStats) { categoryStats.sumOf { it.count } }
-    val formattedTotalSize = remember(totalSize) { formatFileSize(totalSize) }
+    val storageSummary = remember(categoryStats) { dashboardStorageSummary(categoryStats) }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -186,13 +184,13 @@ fun DashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Indexed storage: $formattedTotalSize",
+                                text = storageSummary.indexedStorageLabel,
                                 fontSize = 14.sp,
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "$totalFileCount files across ${categoryStats.size} categories",
+                                text = storageSummary.detailLabel,
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
