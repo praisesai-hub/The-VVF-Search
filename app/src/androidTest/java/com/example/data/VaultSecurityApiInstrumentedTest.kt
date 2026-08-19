@@ -42,8 +42,8 @@ class VaultSecurityApiInstrumentedTest {
     @Test
     fun sessionLifecycle_requiresAuthentication_andClosesKeyMaterial() {
         assertThrows(SecurityException::class.java) { security.requireAuthenticatedSession() }
-        assertTrue(security.initializeVaultPin("2468"))
-        assertTrue(security.unlockWithPin("2468"))
+        assertTrue(security.initializeVaultPin("246810"))
+        assertTrue(security.unlockWithPin("246810"))
 
         val session = security.requireAuthenticatedSession()
         val encrypted = session.encryptBytes("authenticated payload".toByteArray())
@@ -62,8 +62,8 @@ class VaultSecurityApiInstrumentedTest {
 
     @Test
     fun invalidPin_doesNotCreateAuthenticatedSession() {
-        assertTrue(security.initializeVaultPin("2468"))
-        assertThrows(IllegalStateException::class.java) { security.unlockWithPin("0000") }
+        assertTrue(security.initializeVaultPin("246810"))
+        assertThrows(SecurityException::class.java) { security.unlockWithPin("000000") }
         assertThrows(SecurityException::class.java) { security.requireAuthenticatedSession() }
         assertFalse(security.hasBiometricEnrollment())
     }
@@ -86,8 +86,8 @@ class VaultSecurityApiInstrumentedTest {
 
     @Test
     fun biometricEnrollment_persistsWrappedSessionKey_fromCryptoObjectCipher() {
-        assertTrue(security.initializeVaultPin("2468"))
-        assertTrue(security.unlockWithPin("2468"))
+        assertTrue(security.initializeVaultPin("246810"))
+        assertTrue(security.unlockWithPin("246810"))
 
         val wrapKey = SecretKeySpec(ByteArray(32) { 7 }, "AES")
         val wrappingCipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
@@ -108,21 +108,21 @@ class VaultSecurityApiInstrumentedTest {
     @Test
     fun keyEnvelope_andSession_validation_failClosed() {
         val dek = ByteArray(32) { 9 }
-        val wrapped = VaultKeyEnvelope.wrapWithPin(dek, "2468")
-        assertArrayEquals(dek, VaultKeyEnvelope.unwrapWithPin(wrapped, "2468"))
+        val wrapped = VaultKeyEnvelope.wrapWithPin(dek, "246810")
+        assertArrayEquals(dek, VaultKeyEnvelope.unwrapWithPin(wrapped, "246810"))
         assertThrows(GeneralSecurityException::class.java) {
-            VaultKeyEnvelope.unwrapWithPin(wrapped, "0000")
+            VaultKeyEnvelope.unwrapWithPin(wrapped, "000000")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            VaultKeyEnvelope.wrapWithPin(ByteArray(31), "2468")
+            VaultKeyEnvelope.wrapWithPin(ByteArray(31), "246810")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            VaultKeyEnvelope.wrapWithPin(dek, "24a8")
+            VaultKeyEnvelope.wrapWithPin(dek, "246a10")
         }
         assertThrows(IllegalArgumentException::class.java) {
             VaultKeyEnvelope.unwrapWithPin(
                 VaultKeyEnvelope.PinWrap(ByteArray(15), wrapped.iv, wrapped.ciphertext),
-                "2468"
+                "246810"
             )
         }
 

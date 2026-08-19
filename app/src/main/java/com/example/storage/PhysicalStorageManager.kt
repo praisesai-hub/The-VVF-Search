@@ -26,7 +26,8 @@ data class VaultRestoreRequest(
     val vaultFilePath: String,
     val originalPath: String,
     val originalName: String,
-    val iv: ByteArray
+    val iv: ByteArray,
+    val restoreDestinationPath: String = ""
 )
 
 @Suppress("LargeClass")
@@ -355,7 +356,7 @@ object PhysicalStorageManager {
      * Encrypts a source into the app-private vault using bounded buffers. The encrypted file is
      * made visible only after GCM finalisation succeeds; the source is removed only afterwards.
      */
-    fun encryptAndWipeSourceStreaming(
+    fun encryptSourceStreaming(
         context: Context,
         srcPath: String,
         session: VaultCryptoSession
@@ -382,20 +383,93 @@ object PhysicalStorageManager {
         if (!temporaryFile.renameTo(vaultFile)) {
             throw java.io.IOException("Unable to atomically finalize encrypted vault file")
         }
-        val sourceRemoved = if (srcPath.startsWith("content://")) {
-            deleteFile(context, srcPath)
-        } else {
-            secureWipeFile(context, File(srcPath))
-        }
-        if (!sourceRemoved) {
-            vaultFile.delete()
-            return Result.failure(java.io.IOException("Failed to remove plaintext source after encryption"))
-        }
-        notifyMediaStoreFileDeleted(context, srcPath)
         Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
     } catch (e: Exception) {
         Log.e(TAG, "Streaming vault encryption failed: ${e.message}", e)
         Result.failure(e)
+    }
+
+    /** Removes plaintext only after the repository persisted the corresponding operation intent. */
+    fun removeSourceAfterVaultEncryption(context: Context, srcPath: String): Boolean {
+        val removed = if (srcPath.startsWith("content://")) {
+            deleteFile(context, srcPath)
+        } else {
+            secureWipeFile(context, File(srcPath))
+        }
+        if (removed) notifyMediaStoreFileDeleted(context, srcPath)
+        return removed
+    }
+
+    fun sourceExists(context: Context, path: String): Result<Boolean> = runCatching {
+        if (!path.startsWith("content://")) {
+            File(path).exists()
+        } else {
+            val uri = path.toUri()
+            val document =
+                DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
+            document?.exists()
+                ?: context.contentResolver.openFileDescriptor(uri, "r")?.use { true }
+                ?: false
+        }
+    }
+
+    fun removeEncryptedVaultFile(vaultFilePath: String): Boolean {
+        val vaultFile = File(vaultFilePath)
+        return !vaultFile.exists() || vaultFile.delete() || !vaultFile.exists()
+    }
+
+    /** Reads the complete authenticated ciphertext before plaintext source removal is permitted. */
+    fun verifyEncryptedVaultFile(
+        vaultFilePath: String,
+        iv: ByteArray,
+        session: VaultCryptoSession
+    ): Result<Unit> = runCatching {
+        val vaultFile = File(vaultFilePath)
+        check(vaultFile.isFile) { "Encrypted vault file is missing" }
+        consumeVerifiedVaultCiphertext(vaultFile, iv, session)
+    }
+
+    private fun consumeVerifiedVaultCiphertext(
+        vaultFile: File,
+        iv: ByteArray,
+        session: VaultCryptoSession
+    ) {
+        val buffer = ByteArray(STREAM_BUFFER_BYTES)
+        try {
+            val cipher = session.getDecryptionCipher(iv)
+            FileInputStream(vaultFile).use { input ->
+                javax.crypto.CipherInputStream(input, cipher).use { decrypted ->
+                    consumeDecryptedStream(decrypted, buffer)
+                }
+            }
+        } finally {
+            buffer.fill(0)
+        }
+    }
+
+    private fun consumeDecryptedStream(stream: InputStream, buffer: ByteArray) {
+        while (stream.read(buffer) != -1) {
+            // GCM authentication is checked only after the complete stream is read.
+        }
+    }
+
+    fun encryptAndWipeSourceStreaming(
+        context: Context,
+        srcPath: String,
+        session: VaultCryptoSession
+    ): Result<VaultStorageResult> {
+        val encrypted = encryptSourceStreaming(context, srcPath, session)
+        return encrypted.fold(
+            onSuccess = { result ->
+                if (removeSourceAfterVaultEncryption(context, srcPath)) {
+                    Result.success(result)
+                } else {
+                    removeEncryptedVaultFile(result.vaultFilePath)
+                    Result.failure(java.io.IOException("Failed to remove plaintext source after encryption"))
+                }
+            },
+            onFailure = { Result.failure(it) }
+        )
     }
 
     /**
@@ -403,18 +477,20 @@ object PhysicalStorageManager {
      * plaintext. Content URI sources are restored to the app-controlled Restored directory,
      * because the original URI was intentionally deleted during vault import.
      */
-    fun decryptAndRestoreStreaming(
+    fun decryptToRestoreDestinationStreaming(
         context: Context,
         request: VaultRestoreRequest,
         session: VaultCryptoSession
     ): Result<String> = try {
         val vaultFile = File(request.vaultFilePath)
         if (!vaultFile.isFile) return Result.failure(java.io.FileNotFoundException("Vault file not found"))
-        val destination = if (request.originalPath.startsWith("content://")) {
+        val destination = when {
+            request.restoreDestinationPath.isNotBlank() -> File(request.restoreDestinationPath)
+            request.originalPath.startsWith("content://") -> {
             val restoredName = safeTrashFileName(request.originalName)
             File(getRestoredDir(context), "RESTORED_${System.currentTimeMillis()}_$restoredName")
-        } else {
-            File(request.originalPath)
+            }
+            else -> File(request.originalPath)
         }
         destination.parentFile?.let { parent ->
             if (!parent.exists()) check(parent.mkdirs()) { "Unable to create restore directory" }
@@ -423,17 +499,13 @@ object PhysicalStorageManager {
         val temporaryFile = File(destination.parentFile, temporaryName)
         streamDecryptToFile(vaultFile, temporaryFile, request.iv, session)
         check(temporaryFile.isFile) { "Vault restore temporary file was not written" }
-        if (destination.exists() && !destination.delete()) {
+        if (destination.exists()) {
             temporaryFile.delete()
-            return Result.failure(java.io.IOException("Unable to replace existing restored file"))
+            return Result.failure(java.io.IOException("Restore destination already exists"))
         }
         if (!temporaryFile.renameTo(destination)) {
             temporaryFile.delete()
             return Result.failure(java.io.IOException("Unable to atomically finalize restored file"))
-        }
-        if (!vaultFile.delete() && vaultFile.exists()) {
-            destination.delete()
-            return Result.failure(java.io.IOException("Unable to delete encrypted vault file after restoration"))
         }
         notifyMediaStoreFileChanged(context, "", destination.absolutePath)
         Result.success(destination.absolutePath)
@@ -447,6 +519,25 @@ object PhysicalStorageManager {
     } catch (e: Exception) {
         Log.e(TAG, "Streaming vault restore failed: ${e.message}", e)
         Result.failure(e)
+    }
+
+    fun decryptAndRestoreStreaming(
+        context: Context,
+        request: VaultRestoreRequest,
+        session: VaultCryptoSession
+    ): Result<String> {
+        val restored = decryptToRestoreDestinationStreaming(context, request, session)
+        return restored.fold(
+            onSuccess = { destination ->
+                if (removeEncryptedVaultFile(request.vaultFilePath)) {
+                    Result.success(destination)
+                } else {
+                    File(destination).delete()
+                    Result.failure(java.io.IOException("Unable to delete encrypted vault file after restoration"))
+                }
+            },
+            onFailure = { Result.failure(it) }
+        )
     }
 
     @Suppress("NestedBlockDepth")

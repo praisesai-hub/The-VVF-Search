@@ -10,6 +10,7 @@ class PluginRepository(
     fun getAllPlugins(): Flow<List<PluginEntity>> = dao.getAllPlugins()
 
     suspend fun togglePlugin(pluginId: String, currentEnabled: Boolean) = withContext(Dispatchers.IO) {
+        if (!CloudProviderCapabilities.isImplementedPlugin(pluginId)) return@withContext
         dao.setPluginEnabled(pluginId, !currentEnabled)
     }
 }

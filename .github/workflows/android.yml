@@ -67,6 +67,8 @@ jobs:
       run: python3 scripts/check_no_secrets.py
     - name: Test weekly security health policy
       run: PYTHONPATH=scripts python3 -m unittest scripts/test_weekly_security_health.py
+    - name: Test JVM coverage policy checker
+      run: PYTHONPATH=scripts python3 -m unittest scripts/test_check_coverage_floor.py
     - name: Write google-services.json from secret (if set)
       run: |
         if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
@@ -107,14 +109,25 @@ jobs:
         PYTHONPATH=scripts python3 -m unittest scripts/test_verify_release_runtime_security.py
     - name: Run Unit Tests
       run: ./gradlew :app:testDebugUnitTest
+    - name: Upload JVM Unit Test Diagnostics
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: jvm-unit-test-diagnostics
+        path: |
+          app/build/test-results/testDebugUnitTest
+          app/build/reports/tests/testDebugUnitTest
+          app/build/reports/problems
+        if-no-files-found: warn
     - name: Generate JVM Unit Test Coverage Report
       run: ./gradlew :app:createDebugUnitTestCoverageReport
     - name: Enforce JVM Unit Test Coverage Floor
       run: |
         python3 scripts/check_coverage_floor.py \
           --report app/build/reports/coverage/test/debug/report.xml \
-          --minimum-instruction-percent 5.0
+          --policy scripts/coverage_policy.json
     - name: Upload JVM Unit Test Coverage Report
+      if: always()
       uses: actions/upload-artifact@v7
       with:
         name: jvm-unit-test-coverage
@@ -203,8 +216,10 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          ram-size: 4096M
+          heap-size: 512M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
             ./gradlew :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
       - name: Upload Android Test Reports

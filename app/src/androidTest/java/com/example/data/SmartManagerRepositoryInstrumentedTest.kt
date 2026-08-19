@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.ai.SemanticEmbeddingProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -60,7 +61,7 @@ class SmartManagerRepositoryInstrumentedTest {
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flow { emit(recycleBinFiles.toList()) }
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun observeSearchFiles(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flow { emit(duplicateFiles.toList()) }
         override suspend fun insertFile(file: FileItemEntity): Long = file.id
         override suspend fun insertFiles(files: List<FileItemEntity>) = Unit
@@ -81,6 +82,9 @@ class SmartManagerRepositoryInstrumentedTest {
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = item.id
         override suspend fun deleteVaultItemById(id: Long) = Unit
+        override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+        override suspend fun upsertVaultOperation(operation: VaultOperationEntity) = Unit
+        override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
         override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flow { emit(cloudSyncItems.toList()) }
         override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
             cloudSyncItems.removeAll { it.id == item.id }
@@ -101,6 +105,16 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun extractRealOcrText(filePath: String): String = text
 
         override suspend fun extractOcrBlocks(filePath: String): List<OcrTextBlock> = emptyList()
+    }
+
+    private class DeterministicMultilingualFixtureProvider : SemanticEmbeddingProvider {
+        override val embeddingVersion: Int = 3
+        override fun isModelLoaded(): Boolean = true
+        override suspend fun generateImageEmbedding(file: File): FloatArray? = null
+        override suspend fun generateTextEmbedding(text: String): FloatArray? = floatArrayOf(1f, 0f)
+        override suspend fun generateDocumentEmbedding(title: String, text: String): FloatArray? =
+            floatArrayOf(1f, 0f)
+        override suspend fun generateQueryEmbedding(query: String): FloatArray? = floatArrayOf(1f, 0f)
     }
 
     @Before
@@ -184,9 +198,16 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun incrementalScan_persistsRealHashesOcrAndIndexesWithOnDeviceFallback(): Unit {
+    fun incrementalScan_persistsHashesOcrAndMultilingualIndexWithInjectedProvider(): Unit {
         val file = File.createTempFile("vvf_scan_", ".txt")
         try {
+            val provider = DeterministicMultilingualFixtureProvider()
+            repository = SmartManagerRepository(
+                context = context,
+                dao = fakeDao,
+                ocrEngine = fakeOcr,
+                semanticEmbeddingProvider = provider
+            )
             file.writeText("on-device production scan fixture")
             fakeOcr.text = "AUTHENTIC OCR CONTENT"
             val pending = FileItemEntity(
@@ -361,22 +382,24 @@ class SmartManagerRepositoryInstrumentedTest {
     }
 
     @Test
-    fun cloudSyncSuccesses_coverProviderMappingEnqueueRetryAndCancelWhenExplicitlyAuthorized(): Unit = runBlocking {
+    fun cloudSyncOnlyQueuesImplementedProviderWhenExplicitlyAuthorized(): Unit = runBlocking {
         val consentedRepository = SmartManagerRepository(
             context = context,
             dao = fakeDao,
             ocrEngine = fakeOcr,
             cloudTransferAllowed = { true },
         )
+        fakeDao.plugins += PluginEntity("gdrive_sync", "Google Drive", "CLOUD", "Sync", true, false)
         fakeDao.plugins += PluginEntity("onedrive_sync", "OneDrive", "CLOUD", "Sync", true, false)
         fakeDao.plugins += PluginEntity("dropbox_sync", "Dropbox", "CLOUD", "Sync", true, false)
 
-        assertTrue(consentedRepository.enqueueCloudSyncItem("ONEDRIVE", "one.txt", 12L))
-        assertTrue(consentedRepository.enqueueCloudSyncItem("DROPBOX", "two.txt", 24L))
+        assertTrue(consentedRepository.enqueueCloudSyncItem("GOOGLE_DRIVE", "drive.txt", 8L))
+        assertFalse(consentedRepository.enqueueCloudSyncItem("ONEDRIVE", "one.txt", 12L))
+        assertFalse(consentedRepository.enqueueCloudSyncItem("DROPBOX", "two.txt", 24L))
         assertFalse(consentedRepository.enqueueCloudSyncItem("UNKNOWN_PROVIDER", "three.txt", 36L))
 
         val queued = fakeDao.cloudSyncItems.single()
-        assertEquals("DROPBOX", queued.provider)
+        assertEquals("GOOGLE_DRIVE", queued.provider)
         assertEquals("QUEUED", queued.status)
         assertTrue(consentedRepository.retryCloudSyncItem(queued.id))
         assertEquals("QUEUED", fakeDao.cloudSyncItems.single().status)

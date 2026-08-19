@@ -8,7 +8,7 @@ VVF Smart Manager is **local-first**. File metadata, duplicate hashes, OCR text,
 
 The encrypted vault uses AES-256-GCM with an authenticated in-memory session key. Key material is created only after vault authentication and is backed by Android Keystore protections. Vault container filenames are opaque identifiers and do not repeat the source filename. App backups and device-transfer extraction are disabled because vault and authentication state must not be restored outside their original key lifecycle.
 
-> **Storage limitation:** app-private storage and Android file-based encryption protect local records under the normal Android security model. A rooted, compromised, or physically forensically acquired device is a stronger threat model. The app does not claim that overwrite/delete operations guarantee physical erasure on flash storage.
+> **Storage limitation:** app-private storage and Android file-based encryption protect local records under the normal Android security model. A rooted, compromised, or physically forensically acquired device is a stronger threat model. Neither the app's three-pass software overwrite nor delete operation is a secure-erase guarantee. On Android devices and modern flash or SSD storage, wear-leveling and storage-controller behavior mean the app cannot guarantee permanent, unrecoverable, or forensic erasure.
 
 ## 2. Default network and telemetry posture
 
@@ -46,6 +46,12 @@ The following answers apply only while cloud transfer and crash reporting remain
 | Is data encrypted at rest? | Vault files and secure stores use authenticated encryption with Android Keystore-protected keys. General local metadata relies on Android app sandbox and device encryption. |
 | Can users request deletion? | Yes. Users can delete app data through Android system settings and can remove managed content within the app. |
 
-## 5. Release checklist
+## 5. Cloud transfer security boundary
+
+The current default build keeps cloud transfer disabled. If a future approved build enables Google Drive transfer, the app sends the selected source bytes to Google Drive over HTTPS. The app **does not** apply client-side end-to-end encryption, zero-knowledge encryption, or an app-managed encrypted cloud manifest before that upload. Any provider at-rest encryption or storage-access control is a provider control, not a VVF client-side encryption guarantee.
+
+Vault encryption and cloud transfer are separate security boundaries. The vault encrypts vault content locally with authenticated encryption and Android Keystore-protected key material. It does not automatically transform a generic cloud upload into an end-to-end encrypted transfer. Product copy, onboarding, and Play Data Safety declarations must not describe Google Drive transfer as end-to-end encrypted, zero-knowledge, or client-side encrypted unless an independently reviewed implementation adds a per-file encryption key lifecycle, authenticated encrypted blob format, encrypted metadata manifest, key recovery model, and decrypt-on-download roundtrip coverage.
+
+## 6. Release checklist
 
 Before each production release, verify that backups remain disabled, no hardcoded secrets are present, Lint and Detekt are clean, tests pass, the signed release is built, and this document matches the actual release configuration. Any enabled telemetry or cloud-transfer capability requires a separate privacy review and an updated Play Data Safety form.

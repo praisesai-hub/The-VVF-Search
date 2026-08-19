@@ -67,7 +67,7 @@ private class InstrumentedWorkerFileDao : FileDao {
     override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-    override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+    override fun observeSearchFiles(query: androidx.sqlite.db.SupportSQLiteQuery): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override suspend fun getUnhashedFiles(): List<FileItemEntity> = emptyList()
     override suspend fun updateFiles(files: List<FileItemEntity>): Unit = Unit
     override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null
@@ -86,6 +86,9 @@ private class InstrumentedWorkerFileDao : FileDao {
     override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
     override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
     override suspend fun deleteVaultItemById(id: Long): Unit = Unit
+    override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+    override suspend fun upsertVaultOperation(operation: com.example.data.VaultOperationEntity): Unit = Unit
+    override suspend fun getIncompleteVaultOperations(): List<com.example.data.VaultOperationEntity> = emptyList()
     override suspend fun setPluginEnabled(id: String, enabled: Boolean): Unit = Unit
     override suspend fun insertPlugins(plugins: List<PluginEntity>): Unit = Unit
 }
@@ -158,7 +161,7 @@ class CloudSyncWorkerInstrumentedTest {
                 workerParameters,
                 daoOverride = fakeDao,
                 providerAdapterOverride = fakeAdapter,
-                authManagerOverride = GoogleAuthManager(
+                tokenProviderOverride = GoogleAuthManager(
                     appContext.getSharedPreferences("cloud_sync_worker_instrumented_auth", Context.MODE_PRIVATE)
                 ),
                 // Production is default-deny; this fixture explicitly authorizes the

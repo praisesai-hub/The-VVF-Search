@@ -1,5 +1,6 @@
 package com.example.ui.screens
 import com.example.R
+import com.example.security.VaultKeyEnvelope
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,12 +76,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.VaultItemEntity
+import com.example.data.VaultBiometricReenrollmentRequiredException
 import com.example.ui.MainViewModel
 import com.example.ui.appendPinDigit
 import com.example.ui.changeVaultPin
 import com.example.ui.clearPinDigit
 import com.example.ui.lockVault
 import com.example.ui.isVaultPinSetupRequired
+import com.example.ui.isVaultPinUpgradeRequired
 import com.example.ui.onBiometricError
 import com.example.ui.onBiometricSuccess
 import com.example.ui.onBiometricEnrollmentSuccess
@@ -99,6 +102,7 @@ private const val ONE_MINUTE_MS = 60_000L
 private const val FIVE_MINUTES_MS = 5 * ONE_MINUTE_MS
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+@Suppress("MaxLineLength", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun VaultScreen(
     viewModel: MainViewModel,
@@ -143,6 +147,12 @@ fun VaultScreen(
                     if (enrollment) viewModel.repository.prepareBiometricEnrollmentCipher()
                     else if (!isUnlocked && biometricKeyReady) viewModel.repository.prepareBiometricUnlockCipher()
                     else null
+                } catch (_: VaultBiometricReenrollmentRequiredException) {
+                    biometricKeyReady = false
+                    viewModel.onBiometricError(
+                        "Biometric settings changed. Unlock with your six-digit PIN, then enroll biometrics again."
+                    )
+                    null
                 } catch (_: Exception) {
                     null
                 }
@@ -216,7 +226,7 @@ fun VaultScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = changePinOld, onValueChange = { changePinOld = it }, label = { Text(stringResource(R.string.current_pin)) }, singleLine = true)
-                    OutlinedTextField(value = changePinNew, onValueChange = { changePinNew = it }, label = { Text(stringResource(R.string.new_4_digit_pin)) }, singleLine = true)
+                    OutlinedTextField(value = changePinNew, onValueChange = { changePinNew = it }, label = { Text(stringResource(R.string.new_6_digit_pin)) }, singleLine = true)
                     OutlinedTextField(value = changePinConfirm, onValueChange = { changePinConfirm = it }, label = { Text(stringResource(R.string.confirm_new_pin)) }, singleLine = true)
                     if (changePinError != null) Text(text = changePinError!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
@@ -224,7 +234,7 @@ fun VaultScreen(
             confirmButton = {
                 Button(onClick = {
                     if (changePinNew != changePinConfirm) changePinError = "New PIN and confirmation do not match."
-                    else if (changePinNew.length != 4 || !changePinNew.all { it.isDigit() }) changePinError = "New PIN must be exactly 4 digits."
+                    else if (changePinNew.length != VaultKeyEnvelope.PIN_LENGTH || !changePinNew.all { it.isDigit() }) changePinError = "New PIN must be exactly 6 digits."
                     else {
                         val success = viewModel.changeVaultPin(changePinOld, changePinNew)
                         if (success) {
@@ -247,16 +257,21 @@ fun VaultScreen(
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = "Secure Encrypted Vault", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             Text(
-                text = if (viewModel.isVaultPinSetupRequired) "Create a 4-Digit Master PIN" else "Enter 4-Digit Master PIN",
+                text = if (viewModel.isVaultPinSetupRequired) "Create a 6-Digit Master PIN" else "Enter 6-Digit Master PIN",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                repeat(4) { index -> Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index < enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }
+                repeat(VaultKeyEnvelope.PIN_LENGTH) { index -> Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index < enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }
             }
             if (pinError != null) { Spacer(modifier = Modifier.height(12.dp)); Text(text = pinError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+            if (viewModel.isVaultPinUpgradeRequired) {
+                TextButton(onClick = { showChangePinDialog = true }, modifier = Modifier.testTag("upgrade_legacy_pin_button")) {
+                    Text("Upgrade existing PIN")
+                }
+            }
             Spacer(modifier = Modifier.height(32.dp))
             val keypadDigits = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "BIO", "0", "DEL")
             LazyVerticalGrid(columns = GridCells.Fixed(3), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.width(280.dp)) {
@@ -352,7 +367,7 @@ fun VaultScreen(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column { Text(text = stringResource(R.string.change_master_pin), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.update_your_4_digit_security_p), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            Column { Text(text = stringResource(R.string.change_master_pin), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.update_your_6_digit_security_p), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             OutlinedButton(onClick = { showChangePinDialog = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = BhagwaOrange), modifier = Modifier.testTag("change_pin_button")) { Text(stringResource(R.string.change), fontSize = 12.sp) }
                         }
                     }
@@ -361,11 +376,16 @@ fun VaultScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f))) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(imageVector = Icons.Default.Shield, contentDescription = "Best-Effort Overwrite Disclaimer", tint = BhagwaOrange, modifier = Modifier.size(24.dp))
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = "Source removal limitation: not a secure erase guarantee",
+                            tint = BhagwaOrange,
+                            modifier = Modifier.size(24.dp)
+                        )
                         Column {
-                            Text(text = "Best-Effort Source Overwrite", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(text = "Source Removal Is Best-Effort", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = "When encrypting a file to the Vault, the original source is overwritten matching its exact file size (3-pass random/zeros data) before deletion.\n\nDisclaimer: Modern flash/SSD storage utilizes physical Wear-Leveling controllers. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                            Text(text = "The app attempts a three-pass software overwrite (random, zeros, random) before deleting the original source. This is best-effort source removal, not guaranteed secure erase.\n\nAndroid devices and modern flash or SSD storage may use wear-leveling and storage controllers. Software overwrite and deletion cannot guarantee permanent, unrecoverable, or forensic erasure.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
                         }
                     }
                 }

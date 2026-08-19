@@ -15,7 +15,12 @@ class FileRepository(
     suspend fun getFileById(id: Long): FileItemEntity? = dao.getFileById(id)
 
     suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> =
-        dao.getFilteredFilesPaged(category, query, limit, offset)
+        dao.getFilteredFilesPaged(
+            category,
+            FtsSearchQueryCompiler.toPrefixQuery(query),
+            limit,
+            offset
+        )
 
     suspend fun renameFile(file: FileItemEntity, newName: String): FileItemEntity = withContext(Dispatchers.IO) {
         val renameResult = PhysicalStorageManager.renameFile(context, file.path, newName)
@@ -23,14 +28,25 @@ class FileRepository(
             throw renameResult.exceptionOrNull() ?: java.io.IOException("Failed to physically rename file")
         }
         val newPath = renameResult.getOrThrow()
-        val updatedFile = file.copy(name = newName, path = newPath)
+        val updatedFile = file.copy(
+            name = newName,
+            path = newPath,
+            semanticIndexed = false,
+            semanticEmbeddingVersion = 0,
+            semanticEmbeddingString = ""
+        )
         dao.updateFile(updatedFile)
         updatedFile
     }
 
     suspend fun addTagToFile(file: FileItemEntity, tag: String): FileItemEntity = withContext(Dispatchers.IO) {
         val currentTags = if (file.tags.isBlank()) tag else "${file.tags}, $tag"
-        val updatedFile = file.copy(tags = currentTags)
+        val updatedFile = file.copy(
+            tags = currentTags,
+            semanticIndexed = false,
+            semanticEmbeddingVersion = 0,
+            semanticEmbeddingString = ""
+        )
         dao.updateFile(updatedFile)
         updatedFile
     }

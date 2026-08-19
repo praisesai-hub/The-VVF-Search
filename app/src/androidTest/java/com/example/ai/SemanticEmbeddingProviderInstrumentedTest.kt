@@ -107,10 +107,10 @@ class SemanticEmbeddingProviderInstrumentedTest {
     }
 
     @Test
-    fun fallbackProvider_usesDeterministicOnDeviceEmbeddingsWithoutModelAssets() = runBlocking {
+    fun fallbackProvider_keepsDeterministicUtilityVectorsWithoutClaimingModelAvailability() = runBlocking {
         val provider = FallbackSemanticEmbeddingProvider()
 
-        assertTrue(provider.isModelLoaded())
+        assertFalse(provider.isModelLoaded())
         val textEmbedding = provider.generateTextEmbedding("sensitive query")
         assertNotNull(textEmbedding)
         assertEquals(128, textEmbedding!!.size)

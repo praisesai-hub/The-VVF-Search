@@ -4,6 +4,7 @@ package com.example.data
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.example.ai.EmbeddingGemmaTextEmbeddingProvider
 import com.example.ai.SemanticEmbeddingProvider
 import com.example.ai.FallbackSemanticEmbeddingProvider
 import com.example.ai.TFLiteSemanticEmbeddingProvider
@@ -18,17 +19,23 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 open class SmartManagerRepository(
     private val context: Context,
     private val dao: FileDao = AppDatabase.getDatabase(context).fileDao(),
     private val ocrEngine: OcrEngine? = null,
+    private val semanticEmbeddingProvider: SemanticEmbeddingProvider? = null,
+    private val searchIndexDao: SearchIndexDao? = null,
     // Production remains default-deny. Tests may inject an explicit authorized fixture
     // without changing build provisioning or device-owner consent.
     private val cloudTransferAllowed: (Context) -> Boolean = CloudSyncPolicy::canTransfer,
@@ -49,21 +56,25 @@ open class SmartManagerRepository(
     } catch (_: Exception) { false }
 
     val tfliteProvider: SemanticEmbeddingProvider by lazy {
-        if (isAssetExists("mobile_clip_embedding.tflite") && isAssetExists("mobile_clip_vocab.txt")) {
+        semanticEmbeddingProvider ?: if (isAssetExists("embedding_gemma.task")) {
             try {
-                TFLiteSemanticEmbeddingProvider().apply { loadModelFromAssets(context) }
+                EmbeddingGemmaTextEmbeddingProvider(context).takeIf { it.isModelLoaded() }
+                    ?: FallbackSemanticEmbeddingProvider()
             } catch (e: Throwable) {
-                Log.e("SmartManagerRepository", "TFLite semantic model failed to load", e)
+                Log.e("SmartManagerRepository", "EmbeddingGemma semantic model failed to load", e)
                 FallbackSemanticEmbeddingProvider()
             }
         } else {
-            Log.w("SmartManagerRepository", "Semantic model assets are unavailable")
+            Log.w("SmartManagerRepository", "Multilingual semantic model asset is unavailable")
             FallbackSemanticEmbeddingProvider()
         }
     }
 
     val isSemanticSearchAvailable: Boolean
         get() = tfliteProvider.isModelLoaded()
+
+    private val activeSearchIndexDao: SearchIndexDao?
+        get() = searchIndexDao
 
     private val duplicateDetectionEngine by lazy { DuplicateDetectionEngine(storageScanner, tfliteProvider) }
     private val repositoryScope = CoroutineScope(Dispatchers.IO + Job() + kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
@@ -83,25 +94,58 @@ open class SmartManagerRepository(
     suspend fun getFileById(id: Long) = fileRepository.getFileById(id)
     suspend fun getFileByName(name: String) = dao.getFileByName(name)
 
+    fun searchFiles(query: String, category: String?): Flow<List<FileItemEntity>> {
+        val ftsQuery = FtsSearchQueryCompiler.toPrefixQuery(query)
+        return if (ftsQuery.isBlank()) {
+            dao.getAllActiveFiles().map { files ->
+                files.filter { file -> category == null || file.category == category }
+            }
+        } else {
+            activeSearchIndexDao?.observeFilesByFts(ftsQuery, category, SEARCH_RESULT_LIMIT)
+                ?: dao.searchFiles(ftsQuery).map { files ->
+                    files.filter { file -> category == null || file.category == category }
+                        .take(SEARCH_RESULT_LIMIT)
+                }
+        }
+    }
+
     fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> {
         if (!isSemanticSearchAvailable) return kotlinx.coroutines.flow.flowOf(emptyList())
         if (query.isBlank()) return dao.getAllActiveFiles()
-        return dao.getAllActiveFiles().map { files ->
-            val queryVec = tfliteProvider.generateTextEmbedding(query)
+        return flow {
+            val queryVec = tfliteProvider.generateQueryEmbedding(query)
             if (queryVec == null) {
-                files.filter { file ->
-                    file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
-                }
+                emit(emptyList())
             } else {
-                files.mapNotNull { file ->
-                    val fileVec = tfliteProvider.stringToFloatArray(file.semanticEmbeddingString)
-                        ?: tfliteProvider.generateTextEmbedding("${file.name} ${file.ocrText} ${file.tags}")
-                    if (fileVec != null) {
-                        val sim = tfliteProvider.calculateCosineSimilarity(queryVec, fileVec)
-                        val isTextMatch = file.name.contains(query, ignoreCase = true) || file.ocrText.contains(query, ignoreCase = true) || file.tags.contains(query, ignoreCase = true)
-                        if (sim > 0.10f || isTextMatch) file to sim else null
-                    } else null
-                }.sortedByDescending { it.second }.map { it.first }
+                val probeKeys = SemanticAnnIndex.probeKeys(queryVec)
+                if (probeKeys.isEmpty()) {
+                    emit(emptyList())
+                    return@flow
+                }
+                val indexDao = activeSearchIndexDao ?: run {
+                    emit(emptyList())
+                    return@flow
+                }
+                indexDao.ensureSemanticAnnIndex(tfliteProvider.embeddingVersion)
+                emitAll(
+                    indexDao.observeSemanticCandidates(
+                        embeddingVersion = tfliteProvider.embeddingVersion,
+                        bucketKeys = probeKeys,
+                        limit = SEMANTIC_CANDIDATE_LIMIT
+                    ).map { files ->
+                        files.mapNotNull { file ->
+                            val fileVec = tfliteProvider.stringToFloatArray(file.semanticEmbeddingString)
+                            val similarity = fileVec?.let {
+                                tfliteProvider.calculateCosineSimilarity(queryVec, it)
+                            }
+                            if (similarity != null && similarity > SEMANTIC_SIMILARITY_THRESHOLD) {
+                                file to similarity
+                            } else {
+                                null
+                            }
+                        }.sortedByDescending { it.second }.map { it.first }
+                    }
+                )
             }
         }
     }
@@ -173,12 +217,9 @@ open class SmartManagerRepository(
                                 if (docFp.isNotBlank()) updated = updated.copy(visualSimilarityHash = docFp)
                             }
                         }
-                        if (!updated.semanticIndexed) {
-                            val textContent = "${updated.name} ${updated.ocrText} ${updated.tags}".trim()
-                            val javaFile = if (!updated.path.startsWith("content://")) File(updated.path) else null
-                            val embedding = if (javaFile != null && javaFile.exists() && javaFile.canRead()) {
-                                tfliteProvider.generateImageEmbedding(javaFile) ?: tfliteProvider.generateTextEmbedding(textContent)
-                            } else tfliteProvider.generateTextEmbedding(textContent)
+                        if (SemanticIndexingPolicy.needsReindex(updated, tfliteProvider)) {
+                            val textContent = "${updated.ocrText}\n${updated.tags}".trim()
+                            val embedding = tfliteProvider.generateDocumentEmbedding(updated.name, textContent)
                             if (embedding != null) {
                                 updated = updated.copy(
                                     semanticEmbeddingVersion = tfliteProvider.embeddingVersion,
@@ -190,7 +231,10 @@ open class SmartManagerRepository(
                         if (updated != file) updatedChunk.add(updated)
                         processedCount++
                     }
-                    if (updatedChunk.isNotEmpty()) dao.updateFiles(updatedChunk)
+                    if (updatedChunk.isNotEmpty()) {
+                        activeSearchIndexDao?.updateFilesAndSemanticAnnIndex(dao, updatedChunk)
+                            ?: dao.updateFiles(updatedChunk)
+                    }
                     _scanProgress.value = processedCount.toFloat() / totalCount.toFloat()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -207,7 +251,12 @@ open class SmartManagerRepository(
     fun getVisualDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getVisualDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
     fun getVideoDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getVideoDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
     fun getDocumentDuplicates(): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getDocumentDuplicates(dao.getAllActiveFiles())
-    fun getSemanticDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getSemanticDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
+    fun getSemanticDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> =
+        if (isSemanticSearchAvailable) {
+            duplicateDetectionEngine.getSemanticDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
 
     val documentStats: Flow<Triple<Int, Int, Float>> = dao.getAllActiveFiles().map { files ->
         val docs = files.filter { it.category == FileCategory.DOCUMENTS.name && !it.isVault && !it.isRecycleBin }
@@ -305,6 +354,8 @@ open class SmartManagerRepository(
     open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean = vaultRepository.verifyVaultPin(inputPin, storedHash)
     open fun changeVaultPin(oldPin: String, newPin: String): Boolean = vaultRepository.changeVaultPin(oldPin, newPin)
     open fun unlockVaultWithPin(pin: String): Boolean = vaultRepository.unlockWithPin(pin)
+    open fun vaultPinLockoutStatus(): VaultPinLockoutStatus = vaultRepository.vaultPinLockoutStatus()
+    open fun requiresVaultPinUpgrade(): Boolean = vaultRepository.requiresPinUpgrade()
     open fun hasBiometricEnrollment(): Boolean = vaultRepository.hasBiometricEnrollment()
     open fun prepareBiometricEnrollmentCipher() = vaultRepository.prepareBiometricEnrollmentCipher()
     open fun completeBiometricEnrollment(result: androidx.biometric.BiometricPrompt.AuthenticationResult): Boolean =
@@ -322,13 +373,9 @@ open class SmartManagerRepository(
     fun observeCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = dao.getCloudSyncItems()
 
     private suspend fun isProviderEnabled(provider: String): Boolean {
-        val pluginId = when (provider.uppercase()) {
-            "GOOGLE_DRIVE" -> "gdrive_sync"
-            "ONEDRIVE" -> "onedrive_sync"
-            "DROPBOX" -> "dropbox_sync"
-            else -> null
-        } ?: return false
-        return dao.getAllPlugins().first().find { it.pluginId == pluginId }?.isEnabled == true
+        val capability = CloudProviderCapabilities.forProvider(provider) ?: return false
+        return capability.isImplemented &&
+            dao.getAllPlugins().first().find { it.pluginId == capability.pluginId }?.isEnabled == true
     }
 
     suspend fun enqueueCloudSyncItem(provider: String, fileName: String, size: Long, filePath: String = "", isCore: Boolean = false): Boolean = withContext(Dispatchers.IO) {
@@ -337,7 +384,20 @@ open class SmartManagerRepository(
         val keyPath = if (filePath.isNotBlank()) filePath else fileName
         val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
         if (duplicate != null) return@withContext false
-        withRetry { dao.insertCloudSyncItem(CloudSyncItemEntity(provider = provider, fileName = fileName, filePath = filePath, fileSize = size, status = "QUEUED", lastSyncedMs = System.currentTimeMillis(), isCore = isCore)) }
+        withRetry {
+            dao.insertCloudSyncItem(
+                CloudSyncItemEntity(
+                    provider = provider,
+                    fileName = fileName,
+                    filePath = filePath,
+                    fileSize = size,
+                    status = "QUEUED",
+                    lastSyncedMs = System.currentTimeMillis(),
+                    isCore = isCore,
+                    localFileStableId = keyPath
+                )
+            )
+        }
         enqueueCloudSyncWork()
         true
     }
@@ -365,9 +425,7 @@ open class SmartManagerRepository(
 
     fun trimMemory() {
         try {
-            if (tfliteProvider is TFLiteSemanticEmbeddingProvider) {
-                (tfliteProvider as TFLiteSemanticEmbeddingProvider).close()
-            }
+            tfliteProvider.close()
         } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to trim memory", e) }
     }
 
@@ -408,5 +466,11 @@ open class SmartManagerRepository(
             val request = androidx.work.OneTimeWorkRequestBuilder<com.example.worker.BackgroundIndexWorker>().setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, java.util.concurrent.TimeUnit.SECONDS).build()
             androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("BackgroundIndexWork", androidx.work.ExistingWorkPolicy.KEEP, request)
         } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to enqueue BackgroundIndexWorker", e) }
+    }
+
+    private companion object {
+        const val SEARCH_RESULT_LIMIT = 250
+        const val SEMANTIC_CANDIDATE_LIMIT = 400
+        const val SEMANTIC_SIMILARITY_THRESHOLD = 0.10f
     }
 }

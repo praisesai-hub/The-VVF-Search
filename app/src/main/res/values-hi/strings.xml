@@ -27,7 +27,7 @@
     <string name="menu">मेन्यू</string>
     <string name="change_master_pin">मास्टर PIN बदलें</string>
     <string name="current_pin">वर्तमान PIN</string>
-    <string name="new_4_digit_pin">नया 4-अंकीय PIN</string>
+    <string name="new_6_digit_pin">नया 6-अंकीय PIN</string>
     <string name="confirm_new_pin">नए PIN की पुष्टि करें</string>
     <string name="change">बदलें</string>
     <string name="lock_vault">वॉल्ट लॉक करें</string>
@@ -61,14 +61,14 @@
     <string name="use_fingerprint_or_face_id_to_">वॉल्ट खोलने के लिए फिंगरप्रिंट या Face ID का उपयोग करें</string>
     <string name="auto_lock_timer">ऑटो लॉक टाइमर</string>
     <string name="locks_automatically_when_inact">निष्क्रिय होने पर अपने आप लॉक हो जाता है</string>
-    <string name="update_your_4_digit_security_p">अपना 4-अंकीय सुरक्षा PIN बदलें</string>
+    <string name="update_your_6_digit_security_p">अपना 6-अंकीय सुरक्षा PIN बदलें</string>
     <string name="phase_3_kotlin_jetpack_compose">✓ चरण 3: Kotlin + Jetpack Compose + Room + Navigation Component</string>
     <string name="phase_4_encrypted_vault_struct">✓ चरण 4: एन्क्रिप्टेड वॉल्ट संरचना और PIN सुरक्षा</string>
     <string name="phase_5_core_file_manager_leve">✓ चरण 5: कोर फ़ाइल मैनेजर और लेवल 1–2 सटीक हैश डुप्लीकेट</string>
     <string name="phase_8_ocr_engine_text_extrac">✓ चरण 8: OCR इंजन टेक्स्ट निष्कर्षण मॉड्यूल</string>
     <string name="phase_9_ai_semantic_search_on_">✓ चरण 9: ऑन-डिवाइस TFLite मॉडल पर AI सिमेंटिक खोज</string>
     <string name="phase_10_duplicate_level_3_4_w" formatted="false">✓ चरण 10: समानता सीमा स्लाइडर के साथ लेवल 3–4 डुप्लीकेट (70%–95%)</string>
-    <string name="phase_11_multi_cloud_sync_goog">✓ चरण 11: मल्टी-क्लाउड सिंक (Google Drive कोर + प्लगइन प्रदाता)</string>
+    <string name="phase_11_multi_cloud_sync_goog">✓ चरण 11: Google Drive सिंक (अन्य प्रदाता जल्द उपलब्ध होंगे)</string>
     <string name="phase_13_launcher_icon_golden_">✓ चरण 13: लॉन्चर आइकन Golden Leaf + ब्रांड पैलेट</string>
     <string name="phase_14_plugin_system_archite">✓ चरण 14: प्लगइन सिस्टम आर्किटेक्चर (कोर बनाम प्लगइन टॉगल)</string>
     <string name="phase_15_cold_start_target_10s">✓ चरण 15: स्टार्टअप प्रदर्शन मापन लंबित</string>
@@ -94,6 +94,8 @@
     <string name="not_connected">कनेक्टेड नहीं</string>
     <string name="drive_session_present_sync_unavailable">Drive सत्र उपलब्ध है; वास्तविक स्थानीय-फ़ाइल अपलोड प्रवाह कॉन्फ़िगर होने तक फ़ाइल सिंक उपलब्ध नहीं है।</string>
     <string name="cloud_sync_oauth_required">इस बिल्ड में Google OAuth प्रवाह कॉन्फ़िगर नहीं है। क्लाउड सिंक बंद है।</string>
+    <string name="cloud_transfer_security_title">क्लाउड ट्रांसफर सुरक्षा</string>
+    <string name="cloud_transfer_security_disclosure">यह ऐप क्लाउड ट्रांसफर को client-side end-to-end encryption से सुरक्षित नहीं करती। भविष्य के किसी अनुमोदित बिल्ड में सक्षम होने पर फ़ाइलें HTTPS के माध्यम से चुने गए प्रदाता को भेजी जाएँगी और उस प्रदाता के storage controls पर निर्भर होंगी। Vault encryption स्थानीय vault सामग्री को अलग से सुरक्षित करती है।</string>
     <string name="configure_google_drive_oauth">Google Drive OAuth कॉन्फ़िगर करें</string>
     <string name="sync_unavailable">सिंक उपलब्ध नहीं</string>
     <string name="sync_action">सिंक कार्रवाई</string>

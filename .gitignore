@@ -25,3 +25,6 @@ debug.keystore.base64
 *.p12
 *.pfx
 /release-artifacts/
+
+# Downloaded at build time from an immutable, SHA-256-verified official source.
+/app/src/main/assets/embedding_gemma.task

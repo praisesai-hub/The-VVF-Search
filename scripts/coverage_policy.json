@@ -1,0 +1,103 @@
+{
+  "baseline_instruction_percent": 64.89,
+  "minimum_instruction_percent": 69.89,
+  "aggregate_selectors": [
+    "class:com.example.data.FileRepository",
+    "class:com.example.data.PluginRepository",
+    "class:com.example.data.SmartManagerRepository",
+    "class:com.example.data.FtsSearchQueryCompiler",
+    "class:com.example.data.SemanticAnnIndex",
+    "class:com.example.data.SemanticIndexingPolicy",
+    "exact:com.example.data.SearchIndexDao",
+    "class:com.example.data.SearchIndexSchema",
+    "class:com.example.data.DuplicateDetectionEngine",
+    "class:com.example.data.DuplicateManager",
+    "class:com.example.data.CloudProviderCapabilities",
+    "class:com.example.data.CloudSyncContract",
+    "class:com.example.data.CloudSyncEngine",
+    "class:com.example.data.CloudSyncPolicy",
+    "class:com.example.data.GoogleAuthManager",
+    "class:com.example.data.GoogleAuthManagerFactory",
+    "class:com.example.data.GoogleDriveProviderAdapter",
+    "class:com.example.data.VaultRepository",
+    "class:com.example.data.VaultOperationCoordinator",
+    "class:com.example.data.VaultManagerEngine",
+    "class:com.example.data.VaultSecurity",
+    "class:com.example.data.VaultPin",
+    "class:com.example.data.VaultSession",
+    "class:com.example.data.VaultBiometric",
+    "class:com.example.security.LegacyEncryptedPreferencesMigration",
+    "class:com.example.security.SecureKeyValueStore",
+    "class:com.example.security.VaultCryptoSession",
+    "class:com.example.security.VaultKeyEnvelope"
+  ],
+  "scopes": [
+    {
+      "name": "security-critical",
+      "baseline_instruction_percent": 65.11,
+      "minimum_instruction_percent": 70.11,
+      "selectors": [
+        "class:com.example.security.LegacyEncryptedPreferencesMigration",
+        "class:com.example.security.SecureKeyValueStore",
+        "class:com.example.security.VaultCryptoSession",
+        "class:com.example.security.VaultKeyEnvelope",
+        "class:com.example.data.VaultRepository",
+        "class:com.example.data.VaultOperationCoordinator",
+        "class:com.example.data.VaultManagerEngine",
+        "class:com.example.data.VaultSecurity",
+        "class:com.example.data.VaultPin",
+        "class:com.example.data.VaultSession",
+        "class:com.example.data.VaultBiometric"
+      ]
+    },
+    {
+      "name": "vault",
+      "baseline_instruction_percent": 65.11,
+      "minimum_instruction_percent": 70.11,
+      "selectors": [
+        "class:com.example.data.VaultRepository",
+        "class:com.example.data.VaultOperationCoordinator",
+        "class:com.example.data.VaultManagerEngine",
+        "class:com.example.data.VaultSecurity",
+        "class:com.example.data.VaultPin",
+        "class:com.example.data.VaultSession",
+        "class:com.example.data.VaultBiometric",
+        "class:com.example.security.VaultCryptoSession",
+        "class:com.example.security.VaultKeyEnvelope",
+        "class:com.example.security.SecureKeyValueStore",
+        "class:com.example.security.LegacyEncryptedPreferencesMigration"
+      ]
+    },
+    {
+      "name": "cloud-sync",
+      "baseline_instruction_percent": 76.73,
+      "minimum_instruction_percent": 81.73,
+      "selectors": [
+        "class:com.example.data.Cloud",
+        "class:com.example.data.GoogleAuthManager",
+        "class:com.example.data.GoogleDriveProviderAdapter",
+        "class:com.example.data.CloudSyncEngine",
+        "class:com.example.data.CloudSyncContract",
+        "class:com.example.data.CloudSyncPolicy",
+        "class:com.example.data.CloudProviderCapabilities"
+      ]
+    },
+    {
+      "name": "repository-data",
+      "baseline_instruction_percent": 53.87,
+      "minimum_instruction_percent": 58.87,
+      "selectors": [
+        "class:com.example.data.FileRepository",
+        "class:com.example.data.PluginRepository",
+        "class:com.example.data.SmartManagerRepository",
+        "class:com.example.data.FtsSearchQueryCompiler",
+        "class:com.example.data.SemanticAnnIndex",
+        "class:com.example.data.SemanticIndexingPolicy",
+        "exact:com.example.data.SearchIndexDao",
+        "class:com.example.data.SearchIndexSchema",
+        "class:com.example.data.DuplicateDetectionEngine",
+        "class:com.example.data.DuplicateManager"
+      ]
+    }
+  ]
+}

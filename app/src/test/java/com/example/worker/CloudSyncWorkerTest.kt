@@ -12,6 +12,7 @@ import com.example.data.FileItemEntity
 import com.example.data.GoogleAuthManager
 import com.example.data.PluginEntity
 import com.example.data.VaultItemEntity
+import com.example.data.VaultOperationEntity
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncResult
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,7 +70,9 @@ class FakeFileDao : FileDao {
     override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-    override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+    override fun observeSearchFiles(
+        query: androidx.sqlite.db.SupportSQLiteQuery
+    ): Flow<List<FileItemEntity>> = flowOf(emptyList())
     override suspend fun getUnhashedFiles(): List<FileItemEntity> = emptyList()
     override suspend fun updateFiles(files: List<FileItemEntity>) {}
     override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null
@@ -87,6 +91,9 @@ class FakeFileDao : FileDao {
     override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
     override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
     override suspend fun deleteVaultItemById(id: Long) {}
+    override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+    override suspend fun upsertVaultOperation(operation: VaultOperationEntity) {}
+    override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
     val pluginsList = mutableListOf<PluginEntity>()
 
     override fun getAllPlugins(): Flow<List<PluginEntity>> = flowOf(pluginsList)
@@ -176,7 +183,7 @@ class CloudSyncWorkerTest {
                     workerParameters,
                     daoOverride = fakeDao,
                     providerAdapterOverride = fakeAdapter,
-                    authManagerOverride = GoogleAuthManager(
+                    tokenProviderOverride = GoogleAuthManager(
                         appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)
                     ),
                     transferAllowed = transferAllowed
@@ -238,6 +245,14 @@ class CloudSyncWorkerTest {
 
         fakeAdapter.shouldFail = false
         fakeAdapter.exceptionToThrow = null
+        fakeAdapter.resultByRemotePath[tempFile.name] = CloudSyncResult.Success(
+            bytesTransferred = tempFile.length(),
+            remoteFileId = "drive-file-101",
+            remoteRevisionId = "revision-101",
+            contentHash = "content-hash-101",
+            etag = "etag-101",
+            idempotencyKey = "idempotency-101"
+        )
 
         val worker = createWorker(runAttemptCount = 0)
 
@@ -248,6 +263,14 @@ class CloudSyncWorkerTest {
         val itemsInDb = fakeDao.getCloudSyncItems().first()
         val updatedItem = itemsInDb.find { it.id == 101L }
         assertEquals("SYNCED", updatedItem?.status)
+        assertEquals("drive-file-101", updatedItem?.remoteFileId)
+        assertEquals("revision-101", updatedItem?.remoteRevisionId)
+        assertEquals("content-hash-101", updatedItem?.contentHash)
+        assertEquals("etag-101", updatedItem?.etag)
+        assertEquals("idempotency-101", updatedItem?.idempotencyKey)
+        assertEquals(tempFile.absolutePath, updatedItem?.localFileStableId)
+        assertEquals(1, updatedItem?.attemptCount)
+        assertTrue((updatedItem?.lastAttemptAtMs ?: 0L) > 0L)
     }
 
     @Test
@@ -279,6 +302,9 @@ class CloudSyncWorkerTest {
         val itemsInDb = fakeDao.getCloudSyncItems().first()
         val updatedItem = itemsInDb.find { it.id == 102L }
         assertEquals("FAILED", updatedItem?.status)
+        assertEquals(1, updatedItem?.attemptCount)
+        assertTrue(updatedItem?.contentHash?.matches(Regex("[0-9a-f]{64}")) == true)
+        assertTrue(updatedItem?.idempotencyKey?.matches(Regex("[0-9a-f]{64}")) == true)
     }
 
     @Test

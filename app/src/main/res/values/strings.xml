@@ -26,7 +26,7 @@
     <string name="menu">Menu</string>
     <string name="change_master_pin">Change Master PIN</string>
     <string name="current_pin">Current PIN</string>
-    <string name="new_4_digit_pin">New 4-Digit PIN</string>
+    <string name="new_6_digit_pin">New 6-Digit PIN</string>
     <string name="confirm_new_pin">Confirm New PIN</string>
     <string name="change">Change</string>
     <string name="lock_vault">Lock Vault</string>
@@ -60,14 +60,14 @@
     <string name="use_fingerprint_or_face_id_to_">Use fingerprint or face ID to open vault</string>
     <string name="auto_lock_timer">Auto Lock Timer</string>
     <string name="locks_automatically_when_inact">Locks automatically when inactive</string>
-    <string name="update_your_4_digit_security_p">Update your 4-digit security PIN</string>
+    <string name="update_your_6_digit_security_p">Update your 6-digit security PIN</string>
     <string name="phase_3_kotlin_jetpack_compose">✓ Phase 3: Kotlin + Jetpack Compose + Room + Navigation Component</string>
     <string name="phase_4_encrypted_vault_struct">✓ Phase 4: Encrypted Vault structure &amp; PIN protection</string>
     <string name="phase_5_core_file_manager_leve">✓ Phase 5: Core File Manager &amp; Level 1–2 Exact Hash Duplicates</string>
     <string name="phase_8_ocr_engine_text_extrac">✓ Phase 8: OCR Engine text extraction module</string>
     <string name="phase_9_ai_semantic_search_on_">✓ Phase 9: AI Semantic Search on-device TFLite model</string>
     <string name="phase_10_duplicate_level_3_4_w" formatted="false">✓ Phase 10: Duplicate Level 3–4 with Similarity Threshold Slider (70%–95%)</string>
-    <string name="phase_11_multi_cloud_sync_goog">✓ Phase 11: Multi-Cloud Sync (Google Drive Core + Plugin Providers)</string>
+    <string name="phase_11_multi_cloud_sync_goog">✓ Phase 11: Google Drive Sync (other providers coming soon)</string>
     <string name="phase_13_launcher_icon_golden_">✓ Phase 13: Launcher Icon Golden Leaf + Brand Palette</string>
     <string name="phase_14_plugin_system_archite">✓ Phase 14: Plugin System Architecture (Core vs Plugin toggles)</string>
     <string name="phase_15_cold_start_target_10s">✓ Phase 15: Startup performance measurement pending</string>
@@ -98,6 +98,8 @@
     <string name="not_connected">Not Connected</string>
     <string name="drive_session_present_sync_unavailable">Drive session is present; file sync is unavailable until a real local-file upload flow is configured.</string>
     <string name="cloud_sync_oauth_required">No Google OAuth flow is configured in this build. Cloud sync remains disabled.</string>
+    <string name="cloud_transfer_security_title">Cloud transfer security</string>
+    <string name="cloud_transfer_security_disclosure">Cloud transfer is not client-side end-to-end encrypted by this app. If enabled in a future approved build, files are sent over HTTPS to the selected provider and rely on that provider\'s storage controls. Vault encryption separately protects local vault content.</string>
     <string name="configure_google_drive_oauth">Configure Google Drive OAuth</string>
     <string name="sync_unavailable">Sync unavailable</string>
     <string name="sync_action">Sync action</string>

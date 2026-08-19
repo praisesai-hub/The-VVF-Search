@@ -42,7 +42,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         authManager = GoogleAuthManager(preferences)
         fakeInterceptor = RecordingInterceptor()
         adapter = GoogleDriveProviderAdapter(
-            authManager = authManager,
+            tokenProvider = authManager,
             httpClient = OkHttpClient.Builder().addInterceptor(fakeInterceptor).build(),
         )
     }
@@ -65,7 +65,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
 
         val destination = temporaryFile("guard")
         val unauthenticated = runBlocking {
-            adapter.downloadFile("remote.txt", destination)
+            adapter.downloadFile("remote-file-id", destination)
         }
         assertTrue(unauthenticated is CloudSyncResult.Error)
         assertTrue((unauthenticated as CloudSyncResult.Error).message.contains("not authenticated"))
@@ -90,6 +90,9 @@ class GoogleDriveProviderAdapterInstrumentedTest {
             fakeInterceptor.responseProvider = { request ->
                 requestCount += 1
                 if (requestCount == 1) {
+                    assertTrue(request.url.encodedPath.endsWith("/drive/v3/files"))
+                    response(request, 200, "{\"files\":[]}")
+                } else if (requestCount == 2) {
                     assertEquals(expectedMimeType, request.header("X-Upload-Content-Type"))
                     response(request, 200, "{}", location = "https://upload.test/session/$extension")
                 } else {
@@ -124,12 +127,14 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         assertTrue(missingLocation is CloudSyncResult.Error)
         val missingLocationError = missingLocation as CloudSyncResult.Error
         assertFalse(missingLocationError.isRetryable)
-        assertTrue(missingLocationError.message.contains("Missing 'Location'"))
+        assertTrue(missingLocationError.message.contains("Location header"))
 
         var requestCount = 0
         fakeInterceptor.responseProvider = { request ->
             requestCount += 1
             if (requestCount == 1) {
+                response(request, 200, "{\"files\":[]}")
+            } else if (requestCount == 2) {
                 response(request, 200, "{}", location = "https://upload.test/session/malformed")
             } else {
                 response(request, 200, "{\"name\":\"without-id\"}")
@@ -151,22 +156,17 @@ class GoogleDriveProviderAdapterInstrumentedTest {
     }
 
     @Test
-    fun downloadSuccessWritesContentAndUsesExtractedFileId(): Unit {
+    fun downloadSuccessWritesContentUsingPersistedFileId(): Unit {
         authenticate()
         val destination = temporaryFile("download", ".txt")
-        var requestCount = 0
         fakeInterceptor.responseProvider = { request ->
-            requestCount += 1
-            if (requestCount == 1) {
-                assertTrue(request.url.queryParameter("q")?.contains("name='remote.txt'") == true)
-                response(request, 200, "{\"files\":[{\"id\":\"remote-id\"}]}")
-            } else {
-                assertTrue(request.url.toString().contains("/remote-id?alt=media"))
-                response(request, 200, "downloaded content")
-            }
+            assertTrue(request.url.toString().contains("/remote-id?alt=media"))
+            assertEquals("true", request.url.queryParameter("supportsAllDrives"))
+            assertEquals(null, request.url.queryParameter("q"))
+            response(request, 200, "downloaded content")
         }
 
-        val result = runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val result = runBlocking { adapter.downloadFile("remote-id", destination) }
         assertTrue(result is CloudSyncResult.Success)
         assertEquals("downloaded content", destination.readText())
         assertEquals(destination.length(), (result as CloudSyncResult.Success).bytesTransferred)
@@ -181,35 +181,28 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         fakeInterceptor.responseProvider = { request ->
             response(request, 404, "missing")
         }
-        val searchError = runBlocking { adapter.downloadFile("remote.txt", destination) }
-        assertTrue(searchError is CloudSyncResult.Error)
-        assertFalse((searchError as CloudSyncResult.Error).isRetryable)
-        assertTrue(searchError.message.contains("HTTP 404"))
+        val mediaNotFound = runBlocking { adapter.downloadFile("remote-id", destination) }
+        assertTrue(mediaNotFound is CloudSyncResult.Error)
+        assertFalse((mediaNotFound as CloudSyncResult.Error).isRetryable)
+        assertTrue(mediaNotFound.message.contains("HTTP 404"))
+        assertEquals("remote-id", mediaNotFound.remoteFileId)
+
+        fakeInterceptor.responseProvider = { error("Missing ID must not reach network") }
+        val missingId = runBlocking { adapter.downloadFile("", destination) }
+        assertTrue(missingId is CloudSyncResult.Error)
+        assertFalse((missingId as CloudSyncResult.Error).isRetryable)
+        assertTrue(missingId.message.contains("file ID is missing"))
 
         fakeInterceptor.responseProvider = { request ->
-            response(request, 200, "{\"files\":[]}")
+            response(request, 503, "try later")
         }
-        val notFound = runBlocking { adapter.downloadFile("remote.txt", destination) }
-        assertTrue(notFound is CloudSyncResult.Error)
-        assertFalse((notFound as CloudSyncResult.Error).isRetryable)
-        assertTrue(notFound.message.contains("File not found"))
-
-        var requestCount = 0
-        fakeInterceptor.responseProvider = { request ->
-            requestCount += 1
-            if (requestCount == 1) {
-                response(request, 200, "{\"files\":[{\"fileId\":\"remote-id\"}]}")
-            } else {
-                response(request, 503, "try later")
-            }
-        }
-        val mediaError = runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val mediaError = runBlocking { adapter.downloadFile("remote-id", destination) }
         assertTrue(mediaError is CloudSyncResult.Error)
         assertTrue((mediaError as CloudSyncResult.Error).isRetryable)
         assertTrue(mediaError.message.contains("HTTP 503"))
 
         fakeInterceptor.responseProvider = { throw UnknownHostException("no network") }
-        val networkFailure = runBlocking { adapter.downloadFile("remote.txt", destination) }
+        val networkFailure = runBlocking { adapter.downloadFile("remote-id", destination) }
         assertTrue(networkFailure is CloudSyncResult.Error)
         val networkFailureError = networkFailure as CloudSyncResult.Error
         assertTrue(networkFailureError.isRetryable)
@@ -223,19 +216,13 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         val destination = temporaryFile("download-empty", ".txt")
         val mockedHttpClient = mockk<okhttp3.OkHttpClient>()
         val mockedCall = mockk<Call>()
-        val searchRequest = Request.Builder().url("https://search.test").build()
         val mediaRequest = Request.Builder().url("https://media.test").build()
-        val searchResponse = response(
-            searchRequest,
-            200,
-            "{\"files\":[{\"id\":\"remote-id\"}]}",
-        )
         val emptyMediaResponse = response(mediaRequest, 200, "")
         every { mockedHttpClient.newCall(any()) } returns mockedCall
-        every { mockedCall.execute() } returns searchResponse andThen emptyMediaResponse
+        every { mockedCall.execute() } returns emptyMediaResponse
         val isolatedAdapter = GoogleDriveProviderAdapter(authManager, mockedHttpClient)
 
-        val result = runBlocking { isolatedAdapter.downloadFile("remote.txt", destination) }
+        val result = runBlocking { isolatedAdapter.downloadFile("remote-id", destination) }
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
         assertFalse(error.isRetryable)

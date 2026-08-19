@@ -53,7 +53,7 @@ class RepositorySecurityCoverageInstrumentedTest {
 
     @Test
     fun legacyVaultItem_isMigratedThroughAuthenticatedSession(): Unit = runBlocking {
-        val pin = "2468"
+        val pin = "246810"
         assertTrue(repository.initializeVaultPin(pin))
         assertTrue(repository.unlockWithPin(pin))
 
@@ -84,6 +84,7 @@ class RepositorySecurityCoverageInstrumentedTest {
             sizeBytes = "legacy confidential payload".length.toLong(),
             isVault = true
         )
+        dao.filesById[target.id] = target
 
         assertTrue(repository.unlockFromVault(legacyItem, target))
         assertTrue(restoreTarget.exists())
@@ -100,15 +101,15 @@ class RepositorySecurityCoverageInstrumentedTest {
     fun smartRepository_delegatesVaultAndFailClosedSyncPaths(): Unit = runBlocking {
         val facade = SmartManagerRepository(context, dao)
 
-        // The deterministic on-device fallback remains available when the optional
-        // Mobile CLIP assets are absent; an empty fake DAO still yields no results.
+        // CI packages the immutable, SHA-256-verified multilingual model asset. An empty fake
+        // DAO still yields no results, but semantic availability must reflect the real package.
         assertTrue(facade.isSemanticSearchAvailable)
         assertTrue(facade.searchSemanticFiles("query").first().isEmpty())
-        assertTrue(facade.initializeVaultPin("2468"))
+        assertTrue(facade.initializeVaultPin("246810"))
         assertTrue(facade.hasVaultPin())
-        assertTrue(facade.verifyVaultPin("2468"))
+        assertTrue(facade.verifyVaultPin("246810"))
         assertTrue(facade.getStoredVaultPinHash().isNotBlank())
-        assertTrue(facade.unlockVaultWithPin("2468"))
+        assertTrue(facade.unlockVaultWithPin("246810"))
 
         val noCryptoResult = mockk<BiometricPrompt.AuthenticationResult>()
         every { noCryptoResult.cryptoObject } returns null

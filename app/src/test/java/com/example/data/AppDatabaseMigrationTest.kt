@@ -308,4 +308,152 @@ class AppDatabaseMigrationTest {
         
         db.close()
     }
+
+    @Test
+    fun migration5To6_addsCloudRemoteIdAndIdempotencyColumnsWithoutDataLoss() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_cloud_idempotency_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(5) {
+                override fun onCreate(db: SupportSQLiteDatabase) = Unit
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+        db.execSQL(
+            """
+            CREATE TABLE `cloud_sync` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `provider` TEXT NOT NULL,
+                `fileName` TEXT NOT NULL,
+                `filePath` TEXT NOT NULL DEFAULT '',
+                `fileSize` INTEGER NOT NULL,
+                `status` TEXT NOT NULL,
+                `lastSyncedMs` INTEGER NOT NULL,
+                `isCore` INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO cloud_sync (id, provider, fileName, filePath, fileSize, status, lastSyncedMs, isCore)
+            VALUES (901, 'GOOGLE_DRIVE', 'saf-document.pdf', 'content://documents/901', 42, 'QUEUED', 12345, 0)
+            """.trimIndent()
+        )
+
+        AppDatabase.MIGRATION_5_6.migrate(db)
+
+        db.query("SELECT * FROM cloud_sync WHERE id = 901").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("content://documents/901", cursor.getString(cursor.getColumnIndexOrThrow("filePath")))
+            assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("remoteFileId")))
+            assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("idempotencyKey")))
+        }
+        db.close()
+    }
+
+    @Test
+    fun migration6To7_addsDistributedRecoveryFieldsWithSafeDefaults() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_cloud_recovery_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(6) {
+                override fun onCreate(db: SupportSQLiteDatabase) = Unit
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+        db.execSQL(
+            """
+            CREATE TABLE `cloud_sync` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `provider` TEXT NOT NULL,
+                `fileName` TEXT NOT NULL,
+                `filePath` TEXT NOT NULL DEFAULT '',
+                `fileSize` INTEGER NOT NULL,
+                `status` TEXT NOT NULL,
+                `lastSyncedMs` INTEGER NOT NULL,
+                `isCore` INTEGER NOT NULL,
+                `remoteFileId` TEXT NOT NULL DEFAULT '',
+                `idempotencyKey` TEXT NOT NULL DEFAULT ''
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO cloud_sync
+            (id, provider, fileName, filePath, fileSize, status, lastSyncedMs, isCore, remoteFileId, idempotencyKey)
+            VALUES (902, 'GOOGLE_DRIVE', 'contract.pdf', 'content://documents/902', 84, 'FAILED', 12346, 0, 'drive-902', 'legacy-key')
+            """.trimIndent()
+        )
+
+        AppDatabase.MIGRATION_6_7.migrate(db)
+
+        db.query("SELECT * FROM cloud_sync WHERE id = 902").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("drive-902", cursor.getString(cursor.getColumnIndexOrThrow("remoteFileId")))
+            assertEquals("legacy-key", cursor.getString(cursor.getColumnIndexOrThrow("idempotencyKey")))
+            assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("remoteRevisionId")))
+            assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("localFileStableId")))
+            assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("contentHash")))
+            assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("uploadSessionUri")))
+            assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("lastAttemptAtMs")))
+            assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("attemptCount")))
+            assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("etag")))
+        }
+        db.query("PRAGMA index_list(`cloud_sync`)").use { cursor ->
+            val nameColumn = cursor.getColumnIndexOrThrow("name")
+            assertTrue(
+                generateSequence { if (cursor.moveToNext()) cursor.getString(nameColumn) else null }
+                    .any { it == "index_cloud_sync_provider_localFileStableId_contentHash" }
+            )
+        }
+        db.close()
+    }
+
+    @Test
+    fun migration7To8_createsDurableVaultOperationLedgerAndIndexes() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_vault_operation_recovery_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(7) {
+                override fun onCreate(db: SupportSQLiteDatabase) = Unit
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+
+        AppDatabase.MIGRATION_7_8.migrate(db)
+
+        db.execSQL(
+            """
+            INSERT INTO vault_operations
+            (id, operationType, state, sourceFileId, vaultItemId, sourcePath, encryptedFilePath,
+             encryptedFileName, restoreDestinationPath, originalName, category, sizeBytes,
+             ivBase64, isBiometricProtected, createdAtMs, updatedAtMs, recoveryError)
+            VALUES
+            ('op-1', 'ENCRYPT', 'SOURCE_REMOVAL_PENDING', 7, 0, '/files/source.pdf',
+             '/vault/ENC_op-1.vvf', 'ENC_op-1.vvf', '', 'source.pdf', 'DOCUMENTS', 64,
+             'AQIDBA==', 0, 123, 124, '')
+            """.trimIndent()
+        )
+        db.query("SELECT * FROM vault_operations WHERE id = 'op-1'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("ENCRYPT", cursor.getString(cursor.getColumnIndexOrThrow("operationType")))
+            assertEquals(
+                "SOURCE_REMOVAL_PENDING",
+                cursor.getString(cursor.getColumnIndexOrThrow("state"))
+            )
+            assertEquals(7L, cursor.getLong(cursor.getColumnIndexOrThrow("sourceFileId")))
+        }
+        db.query("PRAGMA index_list(`vault_operations`)").use { cursor ->
+            val nameColumn = cursor.getColumnIndexOrThrow("name")
+            val indexes = generateSequence {
+                if (cursor.moveToNext()) cursor.getString(nameColumn) else null
+            }.toSet()
+            assertTrue("state index missing", "index_vault_operations_state" in indexes)
+            assertTrue("operation type index missing", "index_vault_operations_operationType" in indexes)
+        }
+        db.close()
+    }
 }

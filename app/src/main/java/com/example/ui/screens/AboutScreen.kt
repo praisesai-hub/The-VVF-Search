@@ -246,8 +246,8 @@ fun AboutScreen(
 
                     FeatureRow(
                         icon = Icons.Default.Speed,
-                        title = "Semantic AI Search",
-                        subtitle = "Instant vector embedding match across your documents"
+                        title = "Multilingual Semantic Search",
+                        subtitle = "On-device vector search for supported metadata and OCR text"
                     )
 
                     FeatureRow(

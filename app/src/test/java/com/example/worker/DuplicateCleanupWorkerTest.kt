@@ -35,7 +35,7 @@ class DuplicateCleanupWorkerTest {
     }
 
     @Test
-    fun doWork_enabledWithNoDuplicates_returnsSuccess() = runBlocking {
+    fun doWork_enabledWhenEncryptedDatabaseCannotOpen_returnsRetry() = runBlocking {
         context.getSharedPreferences("vvf_app_settings", android.content.Context.MODE_PRIVATE)
             .edit()
             .putBoolean("auto_clean_duplicates_bg", true)
@@ -44,6 +44,6 @@ class DuplicateCleanupWorkerTest {
 
         val result = worker.doWork()
 
-        assertEquals(ListenableWorker.Result.Success::class.java, result::class.java)
+        assertEquals(ListenableWorker.Result.Retry::class.java, result::class.java)
     }
 }

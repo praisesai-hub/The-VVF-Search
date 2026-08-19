@@ -40,6 +40,14 @@ class CloudPluginsScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("google_drive_connect_btn")
             .assertIsDisplayed()
             .assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("cloud_transfer_security_disclosure")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Cloud transfer is not client-side end-to-end encrypted by this app. If enabled in a " +
+                "future approved build, files are sent over HTTPS to the selected provider and " +
+                "rely on that provider's storage controls. Vault encryption separately protects " +
+                "local vault content."
+        ).assertIsDisplayed()
     }
 
     @Test
@@ -64,12 +72,39 @@ class CloudPluginsScreenInstrumentedTest {
         }
 
         composeTestRule.onNodeWithTag("vvf_login_brand_logo").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Cloud Sync Queue (1)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Google Drive Sync Queue (1)").assertIsDisplayed()
         composeTestRule.onNodeWithTag("sync_item_901").assertIsDisplayed()
         composeTestRule.onNode(hasScrollToIndexAction()).performScrollToNode(
             androidx.compose.ui.test.hasText("Keep Local")
         )
         composeTestRule.onNodeWithText("Keep Local").performClick()
         composeTestRule.onNodeWithText("Keep Cloud").assertIsDisplayed()
+    }
+
+    @Test
+    fun unsupportedCloudPlugin_isMarkedComingSoonAndCannotBeEnabled() {
+        val application = ApplicationProvider.getApplicationContext<VVFApplication>()
+        val viewModel = MainViewModel(application)
+        val oneDrivePlugin = com.example.data.PluginEntity(
+            pluginId = "onedrive_sync",
+            name = "OneDrive",
+            category = "CLOUD",
+            description = "Sync files to OneDrive",
+            isEnabled = true,
+            isCore = false,
+        )
+
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                CloudPluginsScreen(viewModel, emptyList(), listOf(oneDrivePlugin))
+            }
+        }
+
+        composeTestRule.onNodeWithText("Plugin Manager").performClick()
+        composeTestRule.onNodeWithTag("provider_coming_soon_onedrive_sync").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Not available in this release. Sync files to OneDrive"
+        ).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("plugin_switch_onedrive_sync").assertIsNotEnabled()
     }
 }

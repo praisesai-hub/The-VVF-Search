@@ -1,6 +1,8 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
+  jacoco
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
@@ -16,6 +18,18 @@ val googleServicesConfigPresent = listOf(
   "src/debug/google-services.json",
   "src/release/google-services.json"
 ).any { file(it).isFile }
+
+val embeddingGemmaAsset = layout.projectDirectory.file("src/main/assets/embedding_gemma.task")
+val fetchEmbeddingGemmaModel = tasks.register<Exec>("fetchEmbeddingGemmaModel") {
+  description = "Downloads the immutable, SHA-256-verified EmbeddingGemma task asset."
+  outputs.file(embeddingGemmaAsset)
+  inputs.file(rootProject.layout.projectDirectory.file("scripts/fetch_embedding_gemma_model.sh"))
+  commandLine(
+    "bash",
+    rootProject.layout.projectDirectory.file("scripts/fetch_embedding_gemma_model.sh").asFile.absolutePath,
+    embeddingGemmaAsset.asFile.absolutePath
+  )
+}
 
 android {
   namespace = "com.example"
@@ -126,10 +140,13 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.sqlite)
+  implementation(libs.sqlcipher.android)
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.litert)
+  implementation(libs.mediapipe.tasks.text)
   implementation(libs.mlkit.text.recognition)
   implementation(libs.mlkit.text.recognition.devanagari)
   implementation(libs.logging.interceptor)
@@ -176,6 +193,18 @@ detekt {
   ignoreFailures = false
   config.setFrom(file("config/detekt/detekt.yml"))
   baseline = file("detekt-baseline.xml")
+}
+
+tasks.named("preBuild").configure { dependsOn(fetchEmbeddingGemmaModel) }
+
+// Robolectric loads Android application classes through a sandbox classloader. JaCoCo excludes
+// classes without a source location by default, which otherwise turns exercised JVM paths into
+// false-zero coverage. Keep JDK internals excluded to avoid instrumenting the host runtime.
+tasks.withType<Test>().configureEach {
+  extensions.configure(JacocoTaskExtension::class) {
+    isIncludeNoLocationClasses = true
+    excludes = listOf("jdk.internal.*")
+  }
 }
 
 // Crashlytics mapping upload requires the Google Services-generated app ID file.

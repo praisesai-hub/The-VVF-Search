@@ -44,7 +44,9 @@ class DuplicateManagerTest {
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun observeSearchFiles(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override suspend fun getUnhashedFiles(): List<FileItemEntity> = emptyList()
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override suspend fun insertFile(file: FileItemEntity): Long = 0L
@@ -65,6 +67,9 @@ class DuplicateManagerTest {
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
         override suspend fun deleteVaultItemById(id: Long) {}
+        override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+        override suspend fun upsertVaultOperation(operation: VaultOperationEntity) {}
+        override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
         override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(emptyList())
         override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long = 0L
         override suspend fun deleteCloudSyncItem(id: Long) {}

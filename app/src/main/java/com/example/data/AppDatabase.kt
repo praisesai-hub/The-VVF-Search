@@ -6,23 +6,34 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.security.DatabasePassphraseProvider
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 private const val LEGACY_VAULT_FORMAT_VERSION = 1
 private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
+private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
+private const val DATABASE_VERSION_WITH_CLOUD_RECOVERY = 7
+private const val DATABASE_VERSION_WITH_VAULT_OPERATIONS = 8
+private const val DATABASE_VERSION_WITH_FTS5_AND_ANN = 9
+internal const val DATABASE_SCHEMA_VERSION = 10
 
 @Database(
     entities = [
         FileItemEntity::class,
         VaultItemEntity::class,
+        VaultOperationEntity::class,
         CloudSyncItemEntity::class,
-        PluginEntity::class
+        PluginEntity::class,
+        SemanticAnnBucketEntity::class,
+        SemanticAnnIndexStateEntity::class
     ],
-    version = DATABASE_VERSION_WITH_VAULT_FORMAT,
+    version = DATABASE_SCHEMA_VERSION,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun fileDao(): FileDao
+    abstract fun searchIndexDao(): SearchIndexDao
 
     companion object {
         @Volatile
@@ -103,6 +114,129 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(
+            DATABASE_VERSION_WITH_VAULT_FORMAT,
+            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cloud_sync", "remoteFileId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "idempotencyKey", "TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_cloud_sync_idempotencyKey` " +
+                        "ON `cloud_sync` (`idempotencyKey`)"
+                )
+            }
+        }
+        val MIGRATION_6_7 = object : Migration(
+            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY,
+            DATABASE_VERSION_WITH_CLOUD_RECOVERY
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "cloud_sync", "remoteRevisionId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "localFileStableId", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "contentHash", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "uploadSessionUri", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "cloud_sync", "lastAttemptAtMs", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "attemptCount", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "cloud_sync", "etag", "TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_cloud_sync_provider_localFileStableId_contentHash` " +
+                        "ON `cloud_sync` (`provider`, `localFileStableId`, `contentHash`)"
+                )
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(
+            DATABASE_VERSION_WITH_CLOUD_RECOVERY,
+            DATABASE_VERSION_WITH_VAULT_OPERATIONS
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `vault_operations` (
+                        `id` TEXT NOT NULL,
+                        `operationType` TEXT NOT NULL,
+                        `state` TEXT NOT NULL,
+                        `sourceFileId` INTEGER NOT NULL,
+                        `vaultItemId` INTEGER NOT NULL,
+                        `sourcePath` TEXT NOT NULL,
+                        `encryptedFilePath` TEXT NOT NULL,
+                        `encryptedFileName` TEXT NOT NULL,
+                        `restoreDestinationPath` TEXT NOT NULL,
+                        `originalName` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `ivBase64` TEXT NOT NULL,
+                        `isBiometricProtected` INTEGER NOT NULL,
+                        `createdAtMs` INTEGER NOT NULL,
+                        `updatedAtMs` INTEGER NOT NULL,
+                        `recoveryError` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_vault_operations_state` " +
+                        "ON `vault_operations` (`state`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_vault_operations_operationType` " +
+                        "ON `vault_operations` (`operationType`)"
+                )
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(
+            DATABASE_VERSION_WITH_VAULT_OPERATIONS,
+            DATABASE_VERSION_WITH_FTS5_AND_ANN
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `semantic_ann_buckets` (
+                        `fileId` INTEGER NOT NULL,
+                        `embeddingVersion` INTEGER NOT NULL,
+                        `bucketKey` TEXT NOT NULL,
+                        PRIMARY KEY(`fileId`, `embeddingVersion`, `bucketKey`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `semantic_ann_state` (
+                        `embeddingVersion` INTEGER NOT NULL,
+                        `indexedAtMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`embeddingVersion`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_semantic_ann_buckets_embeddingVersion_bucketKey` " +
+                        "ON `semantic_ann_buckets` (`embeddingVersion`, `bucketKey`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_semantic_ann_buckets_fileId` " +
+                        "ON `semantic_ann_buckets` (`fileId`)"
+                )
+                SearchIndexSchema.createFtsIndex(db)
+                SearchIndexSchema.rebuildFtsIndex(db)
+                SearchIndexSchema.createAnnCleanupTrigger(db)
+            }
+        }
+
+        /**
+         * Repairs the derived FTS schema for databases created during the version 9 rollout.
+         * The virtual table is intentionally idempotent because it is derived only from `files`.
+         */
+        val MIGRATION_9_10 = object : Migration(DATABASE_VERSION_WITH_FTS5_AND_ANN, DATABASE_SCHEMA_VERSION) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SearchIndexSchema.createFtsIndex(db)
+                SearchIndexSchema.rebuildFtsIndex(db)
+                SearchIndexSchema.createAnnCleanupTrigger(db)
+            }
+        }
+
+
         private fun addColumnIfNotExists(
             db: SupportSQLiteDatabase,
             tableName: String,
@@ -132,19 +266,62 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val builder = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "vvf_smart_manager_db"
-                )
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                val passphrase = DatabasePassphraseProvider(context.applicationContext).getOrCreate()
+                try {
+                    loadSqlCipherOrThrow()
+                    DatabaseEncryptionMigrator(
+                        context = context.applicationContext,
+                        databaseName = DATABASE_NAME,
+                        passphrase = passphrase
+                    ).ensureEncrypted()
+                    val builder = Room.databaseBuilder(
+                        context.applicationContext,
+                        AppDatabase::class.java,
+                        DATABASE_NAME
+                    )
+                    .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                    .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8,
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
+                    )
 
-                val instance = builder.build()
-                INSTANCE = instance
-                instance
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            SearchIndexSchema.createFtsIndex(db)
+                            SearchIndexSchema.createAnnCleanupTrigger(db)
+                        }
+
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            // A plaintext-to-SQLCipher conversion preserves the source version.
+                            // Ensure an already-versioned database still has its derived indexes.
+                            SearchIndexSchema.createFtsIndex(db)
+                            SearchIndexSchema.createAnnCleanupTrigger(db)
+                        }
+                    })
+
+                    builder.build().also { INSTANCE = it }
+                } finally {
+                    passphrase.fill(0)
+                }
             }
         }
+
+        private fun loadSqlCipherOrThrow() {
+            try {
+                System.loadLibrary("sqlcipher")
+            } catch (error: UnsatisfiedLinkError) {
+                throw IllegalStateException("SQLCipher native library is unavailable", error)
+            }
+        }
+
+        private const val DATABASE_NAME = "vvf_smart_manager_db"
     }
 }
-

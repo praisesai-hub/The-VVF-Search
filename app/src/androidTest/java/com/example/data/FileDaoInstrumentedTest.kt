@@ -147,6 +147,35 @@ class FileDaoInstrumentedTest {
     }
 
     @Test
+    fun ftsSearch_indexesHindiAndTracksMetadataUpdatesAndDeletes(): Unit = runBlocking {
+        val document = file(
+            name = "${fixturePrefix}बिजली-बिल.pdf",
+            path = "/data/${fixturePrefix}electricity.pdf",
+            ocr = "बिजली का बिल भुगतान विवरण",
+            tags = "ऊर्जा"
+        )
+        dao.insertFileDirect(document)
+        val stored = dao.getFileByPath(document.path) ?: error("FTS fixture missing")
+
+        assertTrue(
+            dao.searchFiles("बिजली").first().any { it.id == stored.id }
+        )
+        assertTrue(
+            dao.getFilteredFilesPaged(null, "भुगतान", 10, 0).any { it.id == stored.id }
+        )
+
+        dao.updateFile(stored.copy(tags = "utility-renewal"))
+        assertTrue(
+            dao.searchFiles("utility").first().any { it.id == stored.id }
+        )
+
+        dao.deleteFileById(stored.id)
+        assertTrue(
+            dao.searchFiles("utility").first().none { it.id == stored.id }
+        )
+    }
+
+    @Test
     fun metadataTransactions_preserveExistingFieldsAndUpdateRows(): Unit = runBlocking {
         val path = "/data/${fixturePrefix}merge.txt"
         val initial = file(

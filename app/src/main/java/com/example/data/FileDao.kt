@@ -4,10 +4,14 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.room.SkipQueryVerification
 import androidx.room.Update
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
-@Dao
+/** Aggregate projection returned by FileDao.getCategoryStats(). */
 data class CategoryStat(val category: String, val count: Int, val totalSize: Long)
 
 @Dao
@@ -20,8 +24,7 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND ocrText != '' ORDER BY dateModifiedMs DESC LIMIT 100")
     fun getOcrScannedFiles(): Flow<List<FileItemEntity>>
 
-    @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (name LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%') ORDER BY dateModifiedMs DESC LIMIT 100")
-    fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>>
+    fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = searchFiles(query)
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 ORDER BY dateModifiedMs DESC")
     fun getAllActiveFiles(): Flow<List<FileItemEntity>>
 
@@ -31,15 +34,32 @@ interface FileDao {
     @Query("SELECT category, COUNT(*) as count, SUM(sizeBytes) as totalSize FROM files WHERE isVault = 0 AND isRecycleBin = 0 GROUP BY category")
     fun getCategoryStats(): Flow<List<CategoryStat>>
 
-    @Query("""
-        SELECT * FROM files 
-        WHERE isVault = 0 AND isRecycleBin = 0 
-          AND (:category IS NULL OR category = :category) 
-          AND (:query = '' OR name LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%') 
-        ORDER BY dateModifiedMs DESC 
+    @SkipQueryVerification
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT files.*, 0.0 AS search_rank FROM files
+            WHERE :query = ''
+              AND files.isVault = 0 AND files.isRecycleBin = 0
+              AND (:category IS NULL OR files.category = :category)
+            UNION ALL
+            SELECT files.*, bm25(file_search_fts) AS search_rank FROM files
+            JOIN file_search_fts ON file_search_fts.rowid = files.id
+            WHERE :query != ''
+              AND file_search_fts MATCH :query
+              AND files.isVault = 0 AND files.isRecycleBin = 0
+              AND (:category IS NULL OR files.category = :category)
+        )
+        ORDER BY search_rank, dateModifiedMs DESC
         LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity>
+        """
+    )
+    suspend fun getFilteredFilesPaged(
+        category: String?,
+        query: String,
+        limit: Int,
+        offset: Int
+    ): List<FileItemEntity>
 
     @Query("SELECT * FROM files WHERE category = :category AND isVault = 0 AND isRecycleBin = 0 ORDER BY dateModifiedMs DESC")
     fun getFilesByCategory(category: String): Flow<List<FileItemEntity>>
@@ -50,8 +70,26 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE isVault = 1")
     fun getVaultFiles(): Flow<List<FileItemEntity>>
 
-    @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (name LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%')")
-    fun searchFiles(query: String): Flow<List<FileItemEntity>>
+    @RawQuery(observedEntities = [FileItemEntity::class])
+    fun observeSearchFiles(query: SupportSQLiteQuery): Flow<List<FileItemEntity>>
+
+    /**
+     * FTS5 is a derived virtual table maintained by `files` triggers. Room cannot register raw
+     * FTS5 schema in its invalidation tracker, so observe the authoritative `files` entity.
+     */
+    fun searchFiles(query: String): Flow<List<FileItemEntity>> = observeSearchFiles(
+        SimpleSQLiteQuery(
+            """
+            SELECT files.* FROM files
+            JOIN file_search_fts ON file_search_fts.rowid = files.id
+            WHERE file_search_fts MATCH ?
+              AND files.isVault = 0 AND files.isRecycleBin = 0
+            ORDER BY bm25(file_search_fts), files.dateModifiedMs DESC
+            LIMIT 100
+            """.trimIndent(),
+            arrayOf<Any?>(query)
+        )
+    )
 
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (md5Hash IS NULL OR md5Hash = '' OR ((category = 'IMAGES' OR category = 'VIDEO') AND (visualSimilarityHash IS NULL OR visualSimilarityHash = '')) OR semanticIndexed = 0)")
     suspend fun getUnhashedFiles(): List<FileItemEntity>
@@ -176,6 +214,41 @@ interface FileDao {
 
     @Query("DELETE FROM vault_items WHERE id = :id")
     suspend fun deleteVaultItemById(id: Long)
+
+    @Query("SELECT * FROM vault_items WHERE encryptedFilePath = :path LIMIT 1")
+    suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity?
+
+    // Vault operation ledger DAO
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertVaultOperation(operation: VaultOperationEntity)
+
+    @Query(
+        "SELECT * FROM vault_operations " +
+            "WHERE state NOT IN ('COMPLETED', 'RECOVERY_REQUIRED') ORDER BY createdAtMs ASC"
+    )
+    suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity>
+
+    @androidx.room.Transaction
+    suspend fun commitVaultEncryptionMetadata(
+        source: FileItemEntity,
+        vaultItem: VaultItemEntity,
+        operation: VaultOperationEntity
+    ) {
+        updateFile(source.copy(isVault = true))
+        insertVaultItem(vaultItem)
+        upsertVaultOperation(operation.copy(state = VaultOperationState.METADATA_COMMITTED))
+    }
+
+    @androidx.room.Transaction
+    suspend fun commitVaultRestoreMetadata(
+        restoredFile: FileItemEntity,
+        vaultItemId: Long,
+        operation: VaultOperationEntity
+    ) {
+        updateFile(restoredFile.copy(isVault = false))
+        deleteVaultItemById(vaultItemId)
+        upsertVaultOperation(operation.copy(state = VaultOperationState.METADATA_COMMITTED))
+    }
 
     // Cloud Sync DAO
     @Query("SELECT * FROM cloud_sync ORDER BY lastSyncedMs DESC")

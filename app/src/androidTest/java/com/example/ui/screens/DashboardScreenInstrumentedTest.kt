@@ -110,9 +110,10 @@ class DashboardScreenInstrumentedTest {
         }
 
         composeTestRule.onNodeWithTag("dashboard_health_card").assertIsDisplayed()
-        composeTestRule.onNodeWithText("VVF Smart Manager v2.0").assertIsDisplayed()
-        composeTestRule.onNodeWithText("System Health: 94% Excellent").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Storage Used: 3.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("VVF Smart Manager").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Storage overview").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Indexed storage: 3.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 files across 2 categories").assertIsDisplayed()
         val dashboardList = composeTestRule.onNode(hasScrollToIndexAction())
         dashboardList.performScrollToNode(hasText("Recent Storage Files"))
         composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
@@ -273,8 +274,8 @@ class DashboardScreenInstrumentedTest {
 
     private fun authenticatedViewModel(): MainViewModel {
         val viewModel = MainViewModel(app)
-        check(viewModel.repository.initializeVaultPin("2468"))
-        check(viewModel.repository.unlockVaultWithPin("2468"))
+        check(viewModel.repository.initializeVaultPin("246810"))
+        check(viewModel.repository.unlockVaultWithPin("246810"))
         return viewModel
     }
 }

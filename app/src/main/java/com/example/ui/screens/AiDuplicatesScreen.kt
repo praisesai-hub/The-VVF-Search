@@ -504,7 +504,7 @@ fun DuplicateCleanerSection(
         if (!viewModel.isSemanticSearchAvailable) {
             item {
                 Text(
-                    text = "Semantic Search — Coming Soon (model not bundled)",
+                    text = "Multilingual semantic matching is unavailable until the verified on-device model is ready.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -715,7 +715,7 @@ fun SemanticSearchSection(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "TFLite AI Semantic Search Engine",
+                            text = "Multilingual On-Device Semantic Search",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -723,9 +723,11 @@ fun SemanticSearchSection(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = if (isAvailable) {
-                            "Natural Language Search across all file metadata, tags, and OCR text using on-device lightweight embeddings."
+                            "Hindi, Devanagari, and other supported-language metadata, tags, and OCR text " +
+                                "are ranked locally with multilingual embeddings."
                         } else {
-                            "Semantic Search — Coming Soon (model not bundled). TFLite model and vocabulary assets are required for vector search."
+                            "Multilingual embedding model is unavailable. Vector semantic search is disabled " +
+                                "rather than replaced with a low-quality fallback."
                         },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -740,7 +742,7 @@ fun SemanticSearchSection(
                                 if (isAvailable)
                                     stringResource(R.string.e_g_electricity_bill_tax_invoi)
                                 else
-                                    "Semantic Search — Coming Soon (model not bundled)"
+                                    "Multilingual model unavailable"
                             )
                         },
                         leadingIcon = {
@@ -774,7 +776,8 @@ fun SemanticSearchSection(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Text(
-                        text = "Semantic Search — Coming Soon (model not bundled)",
+                        text = "Multilingual semantic search is unavailable until the verified on-device " +
+                            "model is installed.",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

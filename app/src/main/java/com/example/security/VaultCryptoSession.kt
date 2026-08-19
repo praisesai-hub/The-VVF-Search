@@ -14,6 +14,7 @@ class VaultCryptoSession private constructor(private val keyBytes: ByteArray) : 
         private const val AES_KEY_SIZE_BYTES = 32
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_TAG_LENGTH = 128
+        private const val GCM_IV_SIZE_BYTES = 12
 
         fun fromKeyBytes(bytes: ByteArray): VaultCryptoSession {
             require(bytes.size == AES_KEY_SIZE_BYTES) { "Vault DEK must be 256 bits" }
@@ -46,6 +47,7 @@ class VaultCryptoSession private constructor(private val keyBytes: ByteArray) : 
 
     fun getDecryptionCipher(iv: ByteArray): Cipher {
         checkOpen()
+        require(iv.size == GCM_IV_SIZE_BYTES) { "Vault AES-GCM IV must be 96 bits" }
         return Cipher.getInstance(TRANSFORMATION).apply {
             init(Cipher.DECRYPT_MODE, currentKey(), GCMParameterSpec(GCM_TAG_LENGTH, iv))
         }

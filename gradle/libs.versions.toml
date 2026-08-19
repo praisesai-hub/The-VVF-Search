@@ -41,10 +41,13 @@ googleServices = "4.5.0"
 credentials = "1.6.0"
 googleid = "1.2.0"
 litert = "1.4.1"
+mediaPipeTasks = "1.0.0"
 textRecognition = "16.0.1"
 securityCrypto = "1.1.0"
 bouncyCastle = "1.85.2"
 gson = "2.13.2"
+sqlCipher = "4.18.0"
+androidxSqlite = "2.7.0"
 
 documentfile = "1.1.0"
 detekt = "1.23.8"
@@ -83,6 +86,8 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "roomCompiler" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "roomRuntime" }
+sqlcipher-android = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlCipher" }
+androidx-sqlite = { group = "androidx.sqlite", name = "sqlite", version.ref = "androidxSqlite" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
 androidx-runner = { group = "androidx.test", name = "runner", version.ref = "runner" }
@@ -117,6 +122,7 @@ androidx-credentials = { group = "androidx.credentials", name = "credentials", v
 androidx-credentials-play-services = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
+mediapipe-tasks-text = { group = "com.google.mediapipe", name = "tasks-text", version.ref = "mediaPipeTasks" }
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "textRecognition" }
 mlkit-text-recognition-devanagari = { group = "com.google.mlkit", name = "text-recognition-devanagari", version.ref = "textRecognition" }
 leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }

@@ -66,7 +66,9 @@ class FileRepositoryTest {
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun observeSearchFiles(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override suspend fun getUnhashedFiles(): List<FileItemEntity> = emptyList()
         override suspend fun updateFiles(files: List<FileItemEntity>) {}
         override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null
@@ -84,6 +86,9 @@ class FileRepositoryTest {
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
         override suspend fun deleteVaultItemById(id: Long) {}
+        override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+        override suspend fun upsertVaultOperation(operation: VaultOperationEntity) {}
+        override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
         override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(emptyList())
         override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long = 0L
         override suspend fun deleteCloudSyncItem(id: Long) {}
@@ -197,7 +202,7 @@ class FileRepositoryTest {
     }
 
     @Test
-    fun testGetFilteredFilesPaged_delegatesToDaoWithExactParams() = runBlocking {
+    fun testGetFilteredFilesPaged_delegatesCompiledFtsQueryToDao() = runBlocking {
         val expectedList = listOf(
             FileItemEntity(id = 5L, name = "report.pdf", path = "/report.pdf", category = "DOCUMENTS", sizeBytes = 1024L)
         )
@@ -208,7 +213,7 @@ class FileRepositoryTest {
         assertEquals(expectedList, result)
         assertTrue(fakeDao.getFilteredFilesPagedCalled)
         assertEquals("DOCUMENTS", fakeDao.lastCategory)
-        assertEquals("report", fakeDao.lastQuery)
+        assertEquals("\"report\"*", fakeDao.lastQuery)
         assertEquals(10, fakeDao.lastLimit)
         assertEquals(0, fakeDao.lastOffset)
     }

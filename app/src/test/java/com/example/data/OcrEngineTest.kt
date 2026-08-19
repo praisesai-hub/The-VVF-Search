@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import com.example.ai.SemanticEmbeddingProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
@@ -66,7 +67,9 @@ class OcrEngineTest {
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun observeSearchFiles(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(duplicateFiles)
         override suspend fun insertFile(file: FileItemEntity): Long = 0L
         override suspend fun insertFiles(files: List<FileItemEntity>) {}
@@ -81,6 +84,9 @@ class OcrEngineTest {
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
         override suspend fun deleteVaultItemById(id: Long) {}
+        override suspend fun getVaultItemByEncryptedPath(path: String): VaultItemEntity? = null
+        override suspend fun upsertVaultOperation(operation: VaultOperationEntity) {}
+        override suspend fun getIncompleteVaultOperations(): List<VaultOperationEntity> = emptyList()
         override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(cloudItems)
         override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
             insertedCloudItems.add(item)
@@ -93,6 +99,46 @@ class OcrEngineTest {
         }
         override suspend fun setPluginEnabled(id: String, enabled: Boolean) {}
         override suspend fun insertPlugins(plugins: List<PluginEntity>) {}
+    }
+
+    private class FakeSearchIndexDao(
+        private val currentFiles: () -> List<FileItemEntity>
+    ) : SearchIndexDao {
+        override fun observeFilesByFtsQuery(
+            query: androidx.sqlite.db.SupportSQLiteQuery
+        ): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
+        override fun observeFilesByFts(
+            ftsQuery: String,
+            category: String?,
+            limit: Int
+        ): Flow<List<FileItemEntity>> = flowOf(
+            currentFiles().filter { file -> category == null || file.category == category }.take(limit)
+        )
+
+        override suspend fun insertSemanticAnnBuckets(buckets: List<SemanticAnnBucketEntity>) = Unit
+
+        override suspend fun deleteSemanticAnnBucketsForFile(fileId: Long) = Unit
+
+        override suspend fun markSemanticAnnIndexBuilt(state: SemanticAnnIndexStateEntity) = Unit
+
+        override suspend fun hasSemanticAnnIndex(embeddingVersion: Int): Boolean = true
+
+        override suspend fun getSemanticRowsForAnnIndex(
+            embeddingVersion: Int,
+            limit: Int,
+            offset: Int
+        ): List<FileItemEntity> = emptyList()
+
+        override fun observeSemanticCandidates(
+            embeddingVersion: Int,
+            bucketKeys: List<String>,
+            limit: Int
+        ): Flow<List<FileItemEntity>> = flowOf(
+            currentFiles().filter {
+                it.semanticIndexed && it.semanticEmbeddingVersion == embeddingVersion
+            }.take(limit)
+        )
     }
 
     class FakeOcrEngine : OcrEngine {
@@ -352,7 +398,7 @@ class OcrEngineTest {
     }
 
     @Test
-    fun searchSemanticFiles_usesLocalFallbackWhenModelAssetsAreUnavailable() = runBlocking {
+    fun searchSemanticFiles_doesNotClaimLatinOnlyFallbackAsSemanticSearch() = runBlocking {
         fakeDao.activeFiles += FileItemEntity(
             id = 621L,
             name = "notes.txt",
@@ -361,8 +407,55 @@ class OcrEngineTest {
             sizeBytes = 1L
         )
 
-        assertTrue(repository.isSemanticSearchAvailable)
-        assertFalse(repository.searchSemanticFiles("notes").first().isEmpty())
+        assertFalse(repository.isSemanticSearchAvailable)
+        assertTrue(repository.searchSemanticFiles("notes").first().isEmpty())
+    }
+
+    @Test
+    fun searchSemanticFiles_ranksHindiDocumentWithMultilingualProvider() = runBlocking {
+        val multilingualProvider = HindiFixtureEmbeddingProvider()
+        repository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            ocrEngine = fakeOcrEngine,
+            semanticEmbeddingProvider = multilingualProvider,
+            searchIndexDao = FakeSearchIndexDao { fakeDao.activeFiles }
+        )
+        fakeDao.activeFiles += listOf(
+            FileItemEntity(
+                id = 622L,
+                name = "बिजली का बिल.pdf",
+                path = "content://documents/electricity-bill",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+                semanticIndexed = true,
+                semanticEmbeddingVersion = multilingualProvider.embeddingVersion,
+                semanticEmbeddingString = "1.0,0.0"
+            ),
+            FileItemEntity(
+                id = 623L,
+                name = "रेल टिकट.pdf",
+                path = "content://documents/train-ticket",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+                semanticIndexed = true,
+                semanticEmbeddingVersion = multilingualProvider.embeddingVersion,
+                semanticEmbeddingString = "0.0,1.0"
+            )
+        )
+
+        val results = repository.searchSemanticFiles("इस महीने का बिजली बिल").first()
+
+        assertEquals(listOf(622L), results.map { it.id })
+    }
+
+    private class HindiFixtureEmbeddingProvider : SemanticEmbeddingProvider {
+        override val embeddingVersion: Int = 3
+        override fun isModelLoaded(): Boolean = true
+        override suspend fun generateImageEmbedding(file: File): FloatArray? = null
+        override suspend fun generateTextEmbedding(text: String): FloatArray? = generateQueryEmbedding(text)
+        override suspend fun generateQueryEmbedding(query: String): FloatArray? =
+            if (query.contains("बिजली")) floatArrayOf(1f, 0f) else floatArrayOf(0f, 1f)
     }
 
     @Test

@@ -1,7 +1,6 @@
 package com.example.data
 
 import android.content.Context
-import com.example.security.LegacyEncryptedPreferencesMigration
 import com.example.security.SecureKeyValueStore
 
 /**
@@ -9,6 +8,7 @@ import com.example.security.SecureKeyValueStore
  * Authentication state must fail closed: no ordinary SharedPreferences fallback is permitted.
  */
 object GoogleAuthManagerFactory {
+    private const val LEGACY_OAUTH_PREFS_NAME = "secure_google_oauth_prefs"
 
     @Volatile
     private var INSTANCE: GoogleAuthManager? = null
@@ -22,19 +22,17 @@ object GoogleAuthManagerFactory {
                     fileName = "secure_google_oauth_prefs.secure",
                     keyAlias = "VVF_SECURE_PREFS_GOOGLE_OAUTH_KEY"
                 )
-                LegacyEncryptedPreferencesMigration.migrateIfNeeded(
-                    context = appContext,
-                    legacyName = "secure_google_oauth_prefs",
-                    target = secureStore,
-                    keys = setOf(
-                        GoogleAuthManager.KEY_ACCESS_TOKEN,
-                        GoogleAuthManager.KEY_REFRESH_TOKEN,
-                        GoogleAuthManager.KEY_EMAIL,
-                        GoogleAuthManager.KEY_DISPLAY_NAME
-                    )
-                )
+                // No raw OAuth credential can be authenticity-validated offline. Do not migrate
+                // legacy access/refresh tokens into the current store; retire them fail-closed.
+                appContext.deleteSharedPreferences(LEGACY_OAUTH_PREFS_NAME)
                 GoogleAuthManager(secureStore).also { INSTANCE = it }
             }
         }
     }
+
+    /**
+     * Cloud execution code receives only the credential capability it requires. UI code continues
+     * to obtain [GoogleAuthManager] when it must observe non-secret authentication state.
+     */
+    internal fun getTokenProvider(context: Context): OAuthTokenProvider = getInstance(context)
 }

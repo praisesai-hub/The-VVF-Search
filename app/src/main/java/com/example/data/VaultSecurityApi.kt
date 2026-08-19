@@ -11,6 +11,8 @@ interface VaultPinApi {
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean
     fun changeVaultPin(oldPin: String, newPin: String): Boolean
     fun unlockWithPin(pin: String): Boolean
+    fun vaultPinLockoutStatus(): VaultPinLockoutStatus
+    fun requiresPinUpgrade(): Boolean
 }
 
 interface VaultBiometricApi {
@@ -71,6 +73,10 @@ private class VaultPinDelegate(
 
     override fun unlockWithPin(pin: String): Boolean =
         sessions.replace(engine.unlockWithPin(pin))
+
+    override fun vaultPinLockoutStatus(): VaultPinLockoutStatus = engine.vaultPinLockoutStatus()
+
+    override fun requiresPinUpgrade(): Boolean = engine.requiresPinUpgrade()
 }
 
 private class VaultBiometricDelegate(
