@@ -2,6 +2,7 @@ import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesS
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
+  jacoco
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
