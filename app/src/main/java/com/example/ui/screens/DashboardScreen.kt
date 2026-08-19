@@ -99,6 +99,7 @@ fun DashboardScreen(
     var showRoadmapModal by rememberSaveable { mutableStateOf(false) }
     var showFilePickerSheet by remember { mutableStateOf(false) }
     val totalSize = remember(categoryStats) { categoryStats.sumOf { it.totalSize } }
+    val totalFileCount = remember(categoryStats) { categoryStats.sumOf { it.count } }
     val formattedTotalSize = remember(totalSize) { formatFileSize(totalSize) }
     LazyColumn(
         modifier = Modifier
@@ -141,20 +142,19 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "VVF Smart Manager v2.0",
+                                    text = "VVF Smart Manager",
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
                                 }
                                 Text(
-                                    text = "System Health: 94% Excellent",
+                                    text = "Storage overview",
                                     fontSize = 13.sp,
                                     color = EmeraldGreen,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
-                            // Cold start benchmark badge (<10s)
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = SoftGold.copy(alpha = 0.2f),
@@ -172,7 +172,7 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Start <10s",
+                                        text = "View report",
                                         fontSize = 11.sp,
                                         color = SoftGold,
                                         fontWeight = FontWeight.Bold
@@ -181,33 +181,22 @@ fun DashboardScreen(
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
-                        // Storage Usage Progress
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Storage Used: $formattedTotalSize",
+                                text = "Indexed storage: $formattedTotalSize",
                                 fontSize = 14.sp,
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "18.5 GB Free of 128 GB",
+                                text = "$totalFileCount files across ${categoryStats.size} categories",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            progress = { 0.72f },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(10.dp)
-                                .clip(RoundedCornerShape(5.dp)),
-                            color = BhagwaOrange,
-                            trackColor = Color.White.copy(alpha = 0.2f)
-                        )
                     }
                 }
             }
