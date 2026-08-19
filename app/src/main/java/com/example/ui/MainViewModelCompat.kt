@@ -160,8 +160,11 @@ fun MainViewModel.toggleDuplicateSelection(id: Long) {
 
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.autoSelectExtraDuplicates() {
-    val groups = level1ExactDuplicates.value + level3VisualDuplicates.value + videoDuplicates.value + semanticDuplicates.value + documentDuplicates.value
-    compatState().selectedIds.value = groups.flatMap { it.files.drop(1).map { file -> file.id } }.toSet()
+    // Destructive auto-selection is cryptographically exact-only. Perceptual,
+    // semantic, and structural matches are candidates and require review.
+    compatState().selectedIds.value = level1ExactDuplicates.value
+        .flatMap { it.files.drop(1).map { file -> file.id } }
+        .toSet()
 }
 
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")

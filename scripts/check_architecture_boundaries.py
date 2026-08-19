@@ -68,6 +68,19 @@ for path in cloud_transfer_files:
         if symbol in text:
             errors.append(f"{path.relative_to(ROOT)} (CloudTransfer) references forbidden {symbol}")
 
+# Duplicate cleanup must be exact-cryptographic-only; similarity groups are review-only.
+duplicate_manager = MAIN / "com/example/data/DuplicateManager.kt"
+if duplicate_manager.exists():
+    duplicate_manager_text = duplicate_manager.read_text(encoding="utf-8")
+    if "getDuplicateFilesByHash" not in duplicate_manager_text or "exactDuplicateIds" not in duplicate_manager_text:
+        errors.append("DuplicateManager lacks exact-hash eligibility validation")
+
+compat_duplicate_surface = MAIN / "com/example/ui/MainViewModelCompat.kt"
+if compat_duplicate_surface.exists():
+    compat_duplicate_text = compat_duplicate_surface.read_text(encoding="utf-8")
+    if "level3VisualDuplicates.value + videoDuplicates.value + semanticDuplicates.value" in compat_duplicate_text:
+        errors.append("MainViewModelCompat auto-selects similarity candidates for cleanup")
+
 # User-facing error channels must not interpolate filesystem paths, URIs, or raw exception text.
 error_surface_files = [
     MAIN / "com/example/data/GoogleDriveProviderAdapter.kt",
@@ -84,6 +97,13 @@ for path in error_surface_files:
         errors.append(f"{path.relative_to(ROOT)} interpolates a filesystem path into an error message")
     if re.search(r'message\\s*=\\s*"[^"\\n]*\\$remotePath', text):
         errors.append(f"{path.relative_to(ROOT)} interpolates a remote path into an error message")
+
+# Candidate duplicate cards must not expose destructive checkbox selection.
+duplicate_screen = MAIN / "com/example/ui/screens/AiDuplicatesScreen.kt"
+if duplicate_screen.exists():
+    duplicate_screen_text = duplicate_screen.read_text(encoding="utf-8")
+    if duplicate_screen_text.count("selectable = false") < 4:
+        errors.append("AiDuplicatesScreen does not mark all similarity groups as review-only")
 
 # Retry behavior must be operation-specific; generic withRetry calls are forbidden.
 retry_surface_files = [

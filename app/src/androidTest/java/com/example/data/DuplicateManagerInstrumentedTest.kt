@@ -59,7 +59,10 @@ class DuplicateManagerInstrumentedTest {
     fun movesRealFileToTrash_andPersistsRecycleBinMetadata(): Unit = runBlocking {
         val source = createSource("duplicate.txt")
         val dao = InstrumentedDuplicateFileDao()
-        dao.filesById[1L] = fileItem(1L, source)
+        val matching = fileItem(11L, createSource("duplicate-matching.txt"))
+        dao.filesById[1L] = fileItem(1L, source, md5Hash = "exact-hash")
+        dao.filesById[11L] = matching.copy(md5Hash = "exact-hash")
+        dao.duplicateFiles.addAll(listOf(dao.filesById.getValue(1L), dao.filesById.getValue(11L)))
 
         DuplicateManager(dao, context).cleanSelectedDuplicates(setOf(1L))
 
@@ -75,24 +78,19 @@ class DuplicateManagerInstrumentedTest {
     }
 
     @Test
-    fun nonBlankOriginalPathAndEmptyHash_arePreservedDuringPhysicalMove(): Unit = runBlocking {
+    fun hashlessVisualCandidate_isNotMovedToTrash(): Unit = runBlocking {
         val source = createSource("duplicate-with-original.txt", "preserve original")
-        val originalPath = File(testRoot, "original-location.txt").absolutePath
         val dao = InstrumentedDuplicateFileDao()
         dao.filesById[2L] = fileItem(
             id = 2L,
             source = source,
             md5Hash = "",
-            originalPath = originalPath,
         )
 
         DuplicateManager(dao, context).cleanSelectedDuplicates(setOf(2L))
 
-        assertEquals(1, dao.movedFiles.size)
-        val moved = dao.movedFiles.single()
-        assertEquals(originalPath, moved.originalPath)
-        assertTrue(moved.isRecycleBin)
-        assertFalse(source.exists())
+        assertTrue(dao.movedFiles.isEmpty())
+        assertTrue(source.exists())
     }
 
     @Test
@@ -140,7 +138,11 @@ class DuplicateManagerInstrumentedTest {
     fun withoutContext_updatesRecycleBinMetadataWithoutMovingPhysicalFile(): Unit = runBlocking {
         val source = createSource("logical-only.txt")
         val dao = InstrumentedDuplicateFileDao()
-        dao.filesById[6L] = fileItem(6L, source, md5Hash = "logical-hash")
+        val exact = fileItem(6L, source, md5Hash = "logical-hash")
+        val matching = exact.copy(id = 7L)
+        dao.filesById[6L] = exact
+        dao.filesById[7L] = matching
+        dao.duplicateFiles.addAll(listOf(exact, matching))
 
         DuplicateManager(dao).cleanSelectedDuplicates(setOf(6L))
 
@@ -155,6 +157,7 @@ class DuplicateManagerInstrumentedTest {
 private class InstrumentedDuplicateFileDao : FileDao {
     val filesById = mutableMapOf<Long, FileItemEntity>()
     val recycleBinByHash = mutableMapOf<String, FileItemEntity>()
+    val duplicateFiles = mutableListOf<FileItemEntity>()
     var movedFiles: List<FileItemEntity> = emptyList()
 
     override suspend fun getFileById(id: Long): FileItemEntity? = filesById[id]
@@ -180,7 +183,7 @@ private class InstrumentedDuplicateFileDao : FileDao {
     override suspend fun moveFilesToRecycleBinAtomic(files: List<FileItemEntity>): Unit {
         movedFiles = files
     }
-    override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+    override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(duplicateFiles.toList())
     override suspend fun insertFile(file: FileItemEntity): Long = 0L
     override suspend fun insertFiles(files: List<FileItemEntity>): Unit = Unit
     override suspend fun updateFile(file: FileItemEntity): Unit = Unit

@@ -12,6 +12,7 @@ class DuplicateManagerTest {
         val filesMap = mutableMapOf<Long, FileItemEntity>()
         var moveFilesToRecycleBinAtomicCallCount = 0
         val movedFilesList = mutableListOf<FileItemEntity>()
+        val duplicateFiles = mutableListOf<FileItemEntity>()
 
         override suspend fun getFileById(id: Long): FileItemEntity? {
             return filesMap[id]
@@ -46,7 +47,7 @@ class DuplicateManagerTest {
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override suspend fun getUnhashedFiles(): List<FileItemEntity> = emptyList()
-        override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+        override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(duplicateFiles.toList())
         override suspend fun insertFile(file: FileItemEntity): Long = 0L
         override suspend fun insertFiles(files: List<FileItemEntity>) {}
         override suspend fun updateFile(file: FileItemEntity) {}
@@ -85,7 +86,10 @@ class DuplicateManagerTest {
             sizeBytes = 2048L,
             md5Hash = "content_hash_12345"
         )
+        val matchingFile = testFile.copy(id = 102L, name = "matching_duplicate.png", path = "/storage/emulated/0/Pictures/matching_duplicate.png")
         fakeDao.filesMap[testFile.id] = testFile
+        fakeDao.filesMap[matchingFile.id] = matchingFile
+        fakeDao.duplicateFiles.addAll(listOf(testFile, matchingFile))
 
         val duplicateManager = DuplicateManager(fakeDao)
 
@@ -101,6 +105,27 @@ class DuplicateManagerTest {
         val movedFile = fakeDao.movedFilesList.first()
         assertEquals(101L, movedFile.id)
         assertTrue(movedFile.isRecycleBin)
+    }
+
+    @Test
+    fun visualOrSemanticCandidate_withoutExactHash_isNeverMovedToTrash() = runBlocking {
+        val fakeDao = FakeFileDao()
+        val candidate = FileItemEntity(
+            id = 501L,
+            name = "visually-similar.jpg",
+            path = "/pictures/visually-similar.jpg",
+            category = "IMAGES",
+            sizeBytes = 100L,
+            visualSimilarityHash = "0011223344556677",
+            md5Hash = ""
+        )
+        fakeDao.filesMap[candidate.id] = candidate
+
+        DuplicateManager(fakeDao).cleanSelectedDuplicates(setOf(candidate.id))
+
+        assertEquals(0, fakeDao.moveFilesToRecycleBinAtomicCallCount)
+        assertTrue(fakeDao.movedFilesList.isEmpty())
+        assertFalse(fakeDao.filesMap.getValue(candidate.id).isRecycleBin)
     }
 
     @Test
@@ -181,21 +206,24 @@ class DuplicateManagerTest {
             sizeBytes = 20L,
             md5Hash = "hash-two"
         )
+        val exactMatch = withOriginalPath.copy(id = 13L, name = "second-copy.jpg", path = "/files/second-copy.jpg")
         fakeDao.filesMap[withoutOriginalPath.id] = withoutOriginalPath
         fakeDao.filesMap[withOriginalPath.id] = withOriginalPath
+        fakeDao.filesMap[exactMatch.id] = exactMatch
+        fakeDao.duplicateFiles.addAll(listOf(withOriginalPath, exactMatch))
         val duplicateManager = DuplicateManager(fakeDao)
 
         duplicateManager.cleanSelectedDuplicates(setOf(11L, 12L))
 
         assertEquals(1, fakeDao.moveFilesToRecycleBinAtomicCallCount)
-        assertEquals(2, fakeDao.movedFilesList.size)
+        assertEquals(1, fakeDao.movedFilesList.size)
         val movedWithoutOriginal = fakeDao.filesMap.getValue(11L)
         val movedWithOriginal = fakeDao.filesMap.getValue(12L)
-        assertTrue(movedWithoutOriginal.isRecycleBin)
+        assertFalse(movedWithoutOriginal.isRecycleBin)
         assertTrue(movedWithOriginal.isRecycleBin)
         assertEquals("/files/first.jpg", movedWithoutOriginal.originalPath)
         assertEquals("/original/second.jpg", movedWithOriginal.originalPath)
-        assertTrue(movedWithoutOriginal.deletedTimestampMs > 0L)
+        assertEquals(0L, movedWithoutOriginal.deletedTimestampMs)
         assertTrue(movedWithOriginal.deletedTimestampMs > 0L)
     }
 }

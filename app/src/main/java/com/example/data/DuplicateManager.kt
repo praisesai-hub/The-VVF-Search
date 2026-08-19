@@ -3,6 +3,7 @@ package com.example.data
 import android.content.Context
 import android.util.Log
 import com.example.storage.PhysicalStorageManager
+import kotlinx.coroutines.flow.first
 
 class DuplicateManager(
     private val dao: FileDao,
@@ -14,8 +15,13 @@ class DuplicateManager(
      * is already in the recycle bin. Performs atomic database batch updates via transaction.
      */
     suspend fun cleanSelectedDuplicates(selectedIds: Set<Long>) {
+        val exactDuplicateIds = dao.getDuplicateFilesByHash().first().map { it.id }.toSet()
         val filesToMove = mutableListOf<FileItemEntity>()
         for (id in selectedIds) {
+            // Only cryptographically exact duplicate rows are eligible for destructive cleanup.
+            // Visual, semantic, and structural candidates are intentionally ignored here even
+            // if a caller bypasses the review-only UI.
+            if (id !in exactDuplicateIds) continue
             val file = dao.getFileById(id) ?: continue
             
             if (file.isRecycleBin) continue

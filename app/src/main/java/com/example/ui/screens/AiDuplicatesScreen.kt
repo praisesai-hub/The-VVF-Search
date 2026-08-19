@@ -460,7 +460,8 @@ fun DuplicateCleanerSection(
                 DuplicateGroupCard(
                     group = group,
                     selectedIds = selectedDuplicateIds,
-                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) }
+                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) },
+                    selectable = false
                 )
             }
         }
@@ -487,7 +488,8 @@ fun DuplicateCleanerSection(
                 DuplicateGroupCard(
                     group = group,
                     selectedIds = selectedDuplicateIds,
-                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) }
+                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) },
+                    selectable = false
                 )
             }
         }
@@ -522,7 +524,8 @@ fun DuplicateCleanerSection(
                 DuplicateGroupCard(
                     group = group,
                     selectedIds = selectedDuplicateIds,
-                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) }
+                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) },
+                    selectable = false
                 )
             }
         }
@@ -549,7 +552,8 @@ fun DuplicateCleanerSection(
                 DuplicateGroupCard(
                     group = group,
                     selectedIds = selectedDuplicateIds,
-                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) }
+                    onToggleSelect = { viewModel.toggleDuplicateSelection(it) },
+                    selectable = false
                 )
             }
         }
@@ -559,7 +563,8 @@ fun DuplicateCleanerSection(
 fun DuplicateGroupCard(
     group: DuplicateGroup,
     selectedIds: Set<Long>,
-    onToggleSelect: (Long) -> Unit
+    onToggleSelect: (Long) -> Unit,
+    selectable: Boolean = true
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -592,12 +597,20 @@ fun DuplicateGroupCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+            if (!selectable) {
+                Text(
+                    text = stringResource(R.string.duplicate_review_only),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+            }
             group.files.forEach { file ->
-                val isSelected = selectedIds.contains(file.id)
+                val isSelected = selectable && selectedIds.contains(file.id)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onToggleSelect(file.id) }
+                        .then(if (selectable) Modifier.clickable { onToggleSelect(file.id) } else Modifier)
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -606,11 +619,13 @@ fun DuplicateGroupCard(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
-                            checked = isSelected,
-                            onCheckedChange = { onToggleSelect(file.id) },
-                            colors = CheckboxDefaults.colors(checkedColor = BhagwaOrange)
-                        )
+                        if (selectable) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { onToggleSelect(file.id) },
+                                colors = CheckboxDefaults.colors(checkedColor = BhagwaOrange)
+                            )
+                        }
                         Spacer(modifier = Modifier.width(4.dp))
                         Column {
                             Text(text = file.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)

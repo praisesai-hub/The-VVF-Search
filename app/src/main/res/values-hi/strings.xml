@@ -272,4 +272,6 @@
     <string name="pin_error_biometric_enrollment_saved">बायोमेट्रिक नामांकन सहेजा नहीं जा सका।</string>
     <string name="pin_error_biometric_enrollment_failed">बायोमेट्रिक नामांकन विफल रहा।</string>
     <string name="pin_error_biometric_crypto_required">प्रमाणित CryptoObject आवश्यक है।</string>
+    <string name="duplicate_review_only">केवल समीक्षा: दृश्य, semantic और structural समानता duplicate होने का प्रमाण नहीं है।</string>
+    <string name="exact_duplicate_auto_cleanup">स्वचालित cleanup केवल exact SHA-256 duplicates तक सीमित है।</string>
 </resources>
