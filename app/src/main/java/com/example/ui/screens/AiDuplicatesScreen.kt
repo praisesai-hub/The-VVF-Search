@@ -504,7 +504,7 @@ fun DuplicateCleanerSection(
         if (!viewModel.isSemanticSearchAvailable) {
             item {
                 Text(
-                    text = "Semantic Search — Coming Soon (model not bundled)",
+                    text = "Multilingual semantic matching is unavailable until the verified on-device model is ready.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

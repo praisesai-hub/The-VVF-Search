@@ -162,9 +162,9 @@ object LightweightEmbeddingEngine {
  */
 class FallbackSemanticEmbeddingProvider : SemanticEmbeddingProvider {
     /**
-     * This provider is intentionally local and deterministic. It does not claim Mobile CLIP
-     * quality, but it keeps semantic search and duplicate ranking available when a separately
-     * licensed TFLite model is not bundled with the app.
+     * This provider is intentionally local and deterministic. It is retained only as a utility
+     * vector fallback and never advertises production semantic-search availability without the
+     * multilingual model.
      */
     override val embeddingVersion: Int = 2
     override fun isModelLoaded(): Boolean = false
