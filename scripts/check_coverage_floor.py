@@ -33,6 +33,13 @@ class CoverageScope:
     selectors: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class CoveragePolicy:
+    aggregate_minimum_instruction_percent: float
+    aggregate_selectors: tuple[str, ...]
+    scopes: tuple[CoverageScope, ...]
+
+
 def instruction_counter(node: element_tree.Element) -> InstructionCoverage | None:
     counter = next(
         (item for item in node.findall("counter") if item.attrib.get("type") == "INSTRUCTION"),
@@ -59,7 +66,18 @@ def parse_percent(value: object, label: str) -> float:
     return percent
 
 
-def load_policy(policy_path: Path) -> tuple[float, tuple[CoverageScope, ...]]:
+def validate_selectors(value: object, label: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value or not all(
+        isinstance(item, str)
+        and item.startswith(("package:", "class:"))
+        and len(item.partition(":")[2]) > 0
+        for item in value
+    ):
+        raise ValueError(f"{label} needs non-empty package: or class: selectors.")
+    return tuple(value)
+
+
+def load_policy(policy_path: Path) -> CoveragePolicy:
     try:
         parsed = json.loads(policy_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -67,13 +85,17 @@ def load_policy(policy_path: Path) -> tuple[float, tuple[CoverageScope, ...]]:
 
     if not isinstance(parsed, dict):
         raise ValueError("Coverage policy root must be an object.")
-    allowed_root_keys = {"minimum_instruction_percent", "scopes"}
+    allowed_root_keys = {"minimum_instruction_percent", "aggregate_selectors", "scopes"}
     unexpected_root_keys = set(parsed) - allowed_root_keys
     if unexpected_root_keys:
         raise ValueError(f"Unexpected coverage policy keys: {sorted(unexpected_root_keys)}")
     aggregate = parse_percent(
         parsed.get("minimum_instruction_percent"),
         "minimum_instruction_percent",
+    )
+    aggregate_selectors = validate_selectors(
+        parsed.get("aggregate_selectors"),
+        "aggregate_selectors",
     )
     raw_scopes = parsed.get("scopes")
     if not isinstance(raw_scopes, list) or not raw_scopes:
@@ -96,15 +118,7 @@ def load_policy(policy_path: Path) -> tuple[float, tuple[CoverageScope, ...]]:
             raise ValueError(f"Coverage scope {index} requires a non-empty name.")
         if name in names:
             raise ValueError(f"Coverage scope name is duplicated: {name}")
-        if not isinstance(selectors, list) or not selectors or not all(
-            isinstance(item, str)
-            and item.startswith(("package:", "class:"))
-            and len(item.partition(":")[2]) > 0
-            for item in selectors
-        ):
-            raise ValueError(
-                f"Coverage scope {name} needs non-empty package: or class: selectors."
-            )
+        validated_selectors = validate_selectors(selectors, f"Coverage scope {name}")
         names.add(name)
         scopes.append(
             CoverageScope(
@@ -113,10 +127,14 @@ def load_policy(policy_path: Path) -> tuple[float, tuple[CoverageScope, ...]]:
                     raw_scope.get("minimum_instruction_percent"),
                     f"minimum_instruction_percent for scope {name}",
                 ),
-                selectors=tuple(selectors),
+                selectors=validated_selectors,
             )
         )
-    return aggregate, tuple(scopes)
+    return CoveragePolicy(
+        aggregate_minimum_instruction_percent=aggregate,
+        aggregate_selectors=aggregate_selectors,
+        scopes=tuple(scopes),
+    )
 
 
 def class_matches_scope(class_name: str, selectors: tuple[str, ...]) -> bool:
@@ -166,31 +184,38 @@ def enforce_policy(
         print(f"Coverage policy not found: {policy}", file=stderr)
         return 1
     try:
-        aggregate_minimum, scopes = load_policy(policy)
+        coverage_policy = load_policy(policy)
         report_root = element_tree.parse(report).getroot()
     except (element_tree.ParseError, ValueError) as error:
         print(f"Coverage policy validation failed: {error}", file=stderr)
         return 1
 
-    aggregate = instruction_counter(report_root)
+    aggregate = scoped_instruction_coverage(
+        report_root,
+        CoverageScope(
+            name="aggregate",
+            minimum_instruction_percent=coverage_policy.aggregate_minimum_instruction_percent,
+            selectors=coverage_policy.aggregate_selectors,
+        ),
+    )
     if aggregate is None:
-        print("Instruction coverage counter is missing from JaCoCo report.", file=stderr)
+        print("Aggregate JVM coverage selectors matched no instrumented classes.", file=stderr)
         return 1
 
     failures: list[str] = []
     print(
-        "Aggregate JVM instruction coverage: "
-        f"{aggregate.percent:.2f}% ({aggregate.covered}/{aggregate.total}), "
-        f"minimum {aggregate_minimum:.2f}%.",
+            "Aggregate JVM instruction coverage: "
+            f"{aggregate.percent:.2f}% ({aggregate.covered}/{aggregate.total}), "
+        f"minimum {coverage_policy.aggregate_minimum_instruction_percent:.2f}%.",
         file=stdout,
     )
-    if aggregate.percent < aggregate_minimum:
+    if aggregate.percent < coverage_policy.aggregate_minimum_instruction_percent:
         failures.append(
             f"Aggregate JVM instruction coverage {aggregate.percent:.2f}% is below "
-            f"{aggregate_minimum:.2f}%."
+            f"{coverage_policy.aggregate_minimum_instruction_percent:.2f}%."
         )
 
-    for scope in scopes:
+    for scope in coverage_policy.scopes:
         coverage = scoped_instruction_coverage(report_root, scope)
         if coverage is None:
             failures.append(f"Coverage scope {scope.name} matched no instrumented classes.")

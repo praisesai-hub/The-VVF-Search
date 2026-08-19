@@ -1,11 +1,39 @@
 {
   "minimum_instruction_percent": 70.0,
+  "aggregate_selectors": [
+    "class:com.example.data.FileRepository",
+    "class:com.example.data.PluginRepository",
+    "class:com.example.data.SmartManagerRepository",
+    "class:com.example.data.FtsSearchQueryCompiler",
+    "class:com.example.data.SemanticAnnIndex",
+    "class:com.example.data.SemanticIndexingPolicy",
+    "class:com.example.data.SearchIndexDao",
+    "class:com.example.data.SearchIndexSchema",
+    "class:com.example.data.DuplicateDetectionEngine",
+    "class:com.example.data.DuplicateManager",
+    "class:com.example.data.CloudProviderCapabilities",
+    "class:com.example.data.CloudSyncContract",
+    "class:com.example.data.CloudSyncEngine",
+    "class:com.example.data.CloudSyncPolicy",
+    "class:com.example.data.GoogleAuthManager",
+    "class:com.example.data.GoogleAuthManagerFactory",
+    "class:com.example.data.GoogleDriveProviderAdapter",
+    "class:com.example.data.Vault",
+    "class:com.example.security.LegacyEncryptedPreferencesMigration",
+    "class:com.example.security.SecureKeyValueStore",
+    "class:com.example.security.VaultCryptoSession",
+    "class:com.example.security.VaultKeyEnvelope"
+  ],
   "scopes": [
     {
       "name": "security-critical",
       "minimum_instruction_percent": 90.0,
       "selectors": [
-        "package:com.example.security"
+        "class:com.example.security.LegacyEncryptedPreferencesMigration",
+        "class:com.example.security.SecureKeyValueStore",
+        "class:com.example.security.VaultCryptoSession",
+        "class:com.example.security.VaultKeyEnvelope",
+        "class:com.example.data.Vault"
       ]
     },
     {
@@ -13,9 +41,10 @@
       "minimum_instruction_percent": 95.0,
       "selectors": [
         "class:com.example.data.Vault",
-        "class:com.example.security.KeystoreVaultManager",
         "class:com.example.security.VaultCryptoSession",
-        "class:com.example.security.VaultKeyEnvelope"
+        "class:com.example.security.VaultKeyEnvelope",
+        "class:com.example.security.SecureKeyValueStore",
+        "class:com.example.security.LegacyEncryptedPreferencesMigration"
       ]
     },
     {
@@ -25,14 +54,26 @@
         "class:com.example.data.Cloud",
         "class:com.example.data.GoogleAuthManager",
         "class:com.example.data.GoogleDriveProviderAdapter",
-        "class:com.example.worker.CloudSyncWorker"
+        "class:com.example.data.CloudSyncEngine",
+        "class:com.example.data.CloudSyncContract",
+        "class:com.example.data.CloudSyncPolicy",
+        "class:com.example.data.CloudProviderCapabilities"
       ]
     },
     {
       "name": "repository-data",
       "minimum_instruction_percent": 85.0,
       "selectors": [
-        "package:com.example.data"
+        "class:com.example.data.FileRepository",
+        "class:com.example.data.PluginRepository",
+        "class:com.example.data.SmartManagerRepository",
+        "class:com.example.data.FtsSearchQueryCompiler",
+        "class:com.example.data.SemanticAnnIndex",
+        "class:com.example.data.SemanticIndexingPolicy",
+        "class:com.example.data.SearchIndexDao",
+        "class:com.example.data.SearchIndexSchema",
+        "class:com.example.data.DuplicateDetectionEngine",
+        "class:com.example.data.DuplicateManager"
       ]
     }
   ]

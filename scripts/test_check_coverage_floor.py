@@ -25,11 +25,18 @@ def write_report(path: Path, aggregate: tuple[int, int], classes: list[tuple[str
     )
 
 
-def write_policy(path: Path, aggregate_minimum: float, scopes: list[dict[str, object]]) -> None:
+def write_policy(
+    path: Path,
+    aggregate_minimum: float,
+    scopes: list[dict[str, object]],
+    aggregate_selectors: list[str] | None = None,
+) -> None:
+    selectors = aggregate_selectors or ["package:com.example.security"]
     path.write_text(
         json.dumps(
             {
                 "minimum_instruction_percent": aggregate_minimum,
+                "aggregate_selectors": selectors,
                 "scopes": scopes,
             }
         ),
@@ -77,7 +84,7 @@ class CoverageFloorPolicyTest(unittest.TestCase):
             result, stdout, stderr = self.enforce(report, policy)
 
             self.assertEqual(0, result)
-            self.assertIn("Aggregate JVM instruction coverage: 80.00%", stdout)
+            self.assertIn("Aggregate JVM instruction coverage: 95.00% (95/100)", stdout)
             self.assertIn("Scope security: 95.00%", stdout)
             self.assertIn("Scope vault: 95.00%", stdout)
             self.assertEqual("", stderr)
@@ -108,6 +115,54 @@ class CoverageFloorPolicyTest(unittest.TestCase):
 
             self.assertEqual(1, result)
             self.assertIn("Coverage scope security is 80.00%, below 90.00%", stderr)
+
+    def test_aggregate_uses_explicit_handwritten_selectors_not_report_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            report = root / "report.xml"
+            policy = root / "policy.json"
+            write_report(
+                report,
+                aggregate=(0, 100),
+                classes=[
+                    ("com/example/data/HandwrittenRepository", 40, 60),
+                    ("com/example/data/GeneratedJsonAdapter", 0, 1_000),
+                ],
+            )
+            write_policy(
+                policy,
+                70.0,
+                [
+                    {
+                        "name": "repository",
+                        "minimum_instruction_percent": 50.0,
+                        "selectors": ["class:com.example.data.HandwrittenRepository"],
+                    }
+                ],
+                aggregate_selectors=["class:com.example.data.HandwrittenRepository"],
+            )
+
+            result, stdout, stderr = self.enforce(report, policy)
+
+            self.assertEqual(1, result)
+            self.assertIn("Aggregate JVM instruction coverage: 60.00% (60/100)", stdout)
+            self.assertIn("below 70.00%", stderr)
+
+    def test_missing_aggregate_selectors_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            report = root / "report.xml"
+            policy = root / "policy.json"
+            write_report(report, aggregate=(0, 100), classes=[])
+            policy.write_text(
+                json.dumps({"minimum_instruction_percent": 70, "scopes": []}),
+                encoding="utf-8",
+            )
+
+            result, _, stderr = self.enforce(report, policy)
+
+            self.assertEqual(1, result)
+            self.assertIn("aggregate_selectors needs non-empty", stderr)
 
     def test_unmatched_scope_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -151,7 +206,7 @@ class CoverageFloorPolicyTest(unittest.TestCase):
             )
             write_policy(
                 policy,
-                90.0,
+                70.0,
                 [
                     {
                         "name": "data",
@@ -162,6 +217,7 @@ class CoverageFloorPolicyTest(unittest.TestCase):
                         ],
                     }
                 ],
+                aggregate_selectors=["package:com.example.data"],
             )
 
             result, stdout, _ = self.enforce(report, policy)
@@ -180,7 +236,13 @@ class CoverageFloorPolicyTest(unittest.TestCase):
                 classes=[("com/example/security/KeyStore", 0, 100)],
             )
             policy.write_text(
-                json.dumps({"minimum_instruction_percent": 70, "scopes": []}),
+                json.dumps(
+                    {
+                        "minimum_instruction_percent": 70,
+                        "aggregate_selectors": ["package:com.example.security"],
+                        "scopes": [],
+                    }
+                ),
                 encoding="utf-8",
             )
 
