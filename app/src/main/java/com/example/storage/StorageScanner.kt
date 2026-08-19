@@ -127,6 +127,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     val category = determineCategory(name)
                     val hash = if (computeHashes) computeContentUriHash(child.uri) else ""
                     val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeContentUriDHash(child.uri) else ""
+                    val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeContentUriVideoFingerprint(child.uri) else null
                     emit(FileItemEntity(
                         name = name,
                         path = uriString,
@@ -134,7 +135,14 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                         sizeBytes = child.length(),
                         dateModifiedMs = child.lastModified(),
                         md5Hash = hash,
-                        visualSimilarityHash = visualHash
+                        visualSimilarityHash = visualHash,
+                        videoFingerprintVersion = videoFingerprint?.version ?: 0,
+                        videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
+                        videoDurationMs = videoFingerprint?.durationMs ?: 0L,
+                        videoWidth = videoFingerprint?.width ?: 0,
+                        videoHeight = videoFingerprint?.height ?: 0,
+                        videoAudioSignature = videoFingerprint?.audioSignature.orEmpty(),
+                        videoChunkHash = videoFingerprint?.chunkHash.orEmpty()
                     ))
                 }
             }
@@ -171,6 +179,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     val category = determineCategory(file.name)
                     val hash = if (computeHashes) computeFileHashQuietly(file) else ""
                     val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeDHashQuietly(file) else ""
+                    val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeVideoFingerprint(file) else null
                     onItemDiscovered(FileItemEntity(
                         name = file.name,
                         path = path,
@@ -178,7 +187,14 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                         sizeBytes = file.length(),
                         dateModifiedMs = file.lastModified(),
                         md5Hash = hash,
-                        visualSimilarityHash = visualHash
+                        visualSimilarityHash = visualHash,
+                        videoFingerprintVersion = videoFingerprint?.version ?: 0,
+                        videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
+                        videoDurationMs = videoFingerprint?.durationMs ?: 0L,
+                        videoWidth = videoFingerprint?.width ?: 0,
+                        videoHeight = videoFingerprint?.height ?: 0,
+                        videoAudioSignature = videoFingerprint?.audioSignature.orEmpty(),
+                        videoChunkHash = videoFingerprint?.chunkHash.orEmpty()
                     ))
                 }
             }
@@ -226,6 +242,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                 val category = determineCategory(name)
                 val hash = if (computeHashes) computeContentUriHash(itemUri) else ""
                 val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeContentUriDHash(itemUri) else ""
+                val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeContentUriVideoFingerprint(itemUri) else null
                 onItemDiscovered(FileItemEntity(
                     name = name,
                     path = path,
@@ -233,7 +250,14 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     sizeBytes = size,
                     dateModifiedMs = if (dateSec > 0) dateSec * 1000L else System.currentTimeMillis(),
                     md5Hash = hash,
-                    visualSimilarityHash = visualHash
+                    visualSimilarityHash = visualHash,
+                    videoFingerprintVersion = videoFingerprint?.version ?: 0,
+                    videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
+                    videoDurationMs = videoFingerprint?.durationMs ?: 0L,
+                    videoWidth = videoFingerprint?.width ?: 0,
+                    videoHeight = videoFingerprint?.height ?: 0,
+                    videoAudioSignature = videoFingerprint?.audioSignature.orEmpty(),
+                    videoChunkHash = videoFingerprint?.chunkHash.orEmpty()
                 ))
             }
         }
@@ -242,6 +266,71 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     suspend fun computeFileHash(file: File): String = withContext(Dispatchers.IO) {
         if (!file.exists() || !file.canRead()) return@withContext ""
         file.inputStream().use { computeStreamHash(it) }
+    }
+
+    suspend fun computeContentUriVideoFingerprint(uri: Uri): VideoFingerprint? = withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, uri)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO).orEmpty()
+            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty()
+            val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE).orEmpty()
+            val durationUs = durationMs.coerceAtLeast(1L) * 1_000L
+            val sampleTimes = listOf(0.10, 0.35, 0.60, 0.85).map { (durationUs * it).toLong() }
+            val sampleHashes = sampleTimes.mapNotNull { sampleUs ->
+                currentCoroutineContext().ensureActive()
+                val bitmap = retriever.getFrameAtTime(sampleUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    ?: retriever.frameAtTime
+                bitmap?.let {
+                    try { computeDHashFromBitmap(it) } finally { it.recycle() }
+                }?.takeIf { it.length == 16 }
+            }
+            if (sampleHashes.size < 3) return@withContext null
+            VideoFingerprint(
+                sampleHashes = sampleHashes,
+                durationMs = durationMs,
+                width = width,
+                height = height,
+                audioSignature = "$hasAudio|$mime|$bitrate",
+                chunkHash = computeContentUriChunkHash(uri)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Content URI video fingerprint failed: ${e.message}")
+            null
+        } finally {
+            try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release() } catch (_: Exception) {}
+        }
+    }
+
+    private fun computeContentUriChunkHash(uri: Uri): String {
+        return try {
+            val input = context.contentResolver.openInputStream(uri) ?: return ""
+            input.use {
+                val digest = MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                var firstRead = 0
+                while (firstRead < buffer.size) {
+                    val read = it.read(buffer, firstRead, buffer.size - firstRead)
+                    if (read <= 0) break
+                    firstRead += read
+                }
+                if (firstRead > 0) digest.update(buffer, 0, firstRead)
+                while (true) {
+                    val read = it.read(buffer)
+                    if (read <= 0) break
+                    total += read
+                }
+                digest.update("CONTENT_URI_VIDEO:$total".toByteArray())
+                digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Content URI video chunk fingerprint failed: ${e.message}")
+            ""
+        }
     }
 
     suspend fun computeContentUriHash(uri: Uri): String = withContext(Dispatchers.IO) {
@@ -344,6 +433,69 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             hash
         } catch (e: Exception) {
             Log.e(TAG, "dHash computation failed for ${file.name}: ${e.message}")
+            ""
+        }
+    }
+
+    suspend fun computeVideoFingerprint(file: File): VideoFingerprint? = withContext(Dispatchers.IO) {
+        if (!file.exists() || !file.canRead() || !isVideoFile(file.name)) return@withContext null
+        ensureActive()
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(file.absolutePath)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO).orEmpty()
+            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty()
+            val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE).orEmpty()
+            val audioSignature = "$hasAudio|$mime|$bitrate"
+            val durationUs = durationMs.coerceAtLeast(1L) * 1_000L
+            val sampleTimes = listOf(0.10, 0.35, 0.60, 0.85).map { (durationUs * it).toLong() }
+            val sampleHashes = sampleTimes.mapNotNull { sampleUs ->
+                ensureActive()
+                val bitmap = retriever.getFrameAtTime(sampleUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    ?: retriever.frameAtTime
+                bitmap?.let {
+                    try { computeDHashFromBitmap(it) } finally { it.recycle() }
+                }?.takeIf { it.length == 16 }
+            }
+            if (sampleHashes.size < 3) return@withContext null
+            VideoFingerprint(
+                sampleHashes = sampleHashes,
+                durationMs = durationMs,
+                width = width,
+                height = height,
+                audioSignature = audioSignature,
+                chunkHash = computeVideoChunkHash(file)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Video multi-sample fingerprint failed for ${file.name}: ${e.message}")
+            null
+        } finally {
+            try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release() } catch (_: Exception) {}
+        }
+    }
+
+    private fun computeVideoChunkHash(file: File): String {
+        return try {
+            val length = file.length()
+            if (length <= 0L) return ""
+            val digest = MessageDigest.getInstance("SHA-256")
+            digest.update("VIDEO_CHUNKS:$length".toByteArray())
+            java.io.RandomAccessFile(file, "r").use { raf ->
+                val chunkSize = 64 * 1024
+                val offsets = listOf(0L, (length / 2L - chunkSize / 2L).coerceAtLeast(0L), (length - chunkSize).coerceAtLeast(0L)).distinct()
+                offsets.forEach { offset ->
+                    raf.seek(offset)
+                    val buffer = ByteArray(chunkSize)
+                    val read = raf.read(buffer)
+                    if (read > 0) digest.update(buffer, 0, read)
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Video chunk fingerprint failed for ${file.name}: ${e.message}")
             ""
         }
     }

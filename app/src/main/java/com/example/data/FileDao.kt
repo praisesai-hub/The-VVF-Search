@@ -53,7 +53,7 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (name LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%')")
     fun searchFiles(query: String): Flow<List<FileItemEntity>>
 
-    @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (md5Hash IS NULL OR md5Hash = '' OR ((category = 'IMAGES' OR category = 'VIDEO') AND (visualSimilarityHash IS NULL OR visualSimilarityHash = '')) OR semanticIndexed = 0)")
+    @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (md5Hash IS NULL OR md5Hash = '' OR (category = 'IMAGES' AND (visualSimilarityHash IS NULL OR visualSimilarityHash = '')) OR (category = 'VIDEO' AND (videoSampleHashes IS NULL OR videoSampleHashes = '')) OR semanticIndexed = 0)")
     suspend fun getUnhashedFiles(): List<FileItemEntity>
 
     @Update
@@ -96,6 +96,13 @@ interface FileDao {
                     semanticEmbeddingVersion = if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
                     semanticIndexed = file.semanticIndexed || existing.semanticIndexed,
                     semanticEmbeddingString = if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
+                    videoFingerprintVersion = if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
+                    videoSampleHashes = if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
+                    videoDurationMs = if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
+                    videoWidth = if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
+                    videoHeight = if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
+                    videoAudioSignature = if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
+                    videoChunkHash = if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
                     isVault = existing.isVault,
                     isRecycleBin = existing.isRecycleBin,
                     deletedTimestampMs = existing.deletedTimestampMs
@@ -124,6 +131,13 @@ interface FileDao {
                 semanticEmbeddingVersion = if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
                 semanticIndexed = file.semanticIndexed || existing.semanticIndexed,
                 semanticEmbeddingString = if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
+                videoFingerprintVersion = if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
+                videoSampleHashes = if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
+                videoDurationMs = if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
+                videoWidth = if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
+                videoHeight = if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
+                videoAudioSignature = if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
+                videoChunkHash = if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
                 isVault = existing.isVault,
                 isRecycleBin = existing.isRecycleBin,
                 deletedTimestampMs = existing.deletedTimestampMs

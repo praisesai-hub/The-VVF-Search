@@ -3,6 +3,7 @@ package com.example.data
 import com.example.ai.SemanticEmbeddingProvider
 import com.example.storage.HammingDistanceCalculator
 import com.example.storage.StorageScanner
+import com.example.storage.VideoDuplicateEvidence
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
@@ -96,27 +97,22 @@ class DuplicateDetectionEngine(
         similarityThresholdFlow: Flow<Float>
     ): Flow<List<DuplicateGroup>> {
         return combine(activeFilesFlow, similarityThresholdFlow) { files, threshold ->
-            val validVideos = files.filter { 
-                it.category == FileCategory.VIDEO.name && 
-                it.visualSimilarityHash.isNotBlank() && 
-                !it.isVault && 
-                !it.isRecycleBin 
+            val validVideos = files.filter {
+                it.category == FileCategory.VIDEO.name &&
+                VideoDuplicateEvidence.sampleHashes(it).size >= 3 &&
+                !it.isVault &&
+                !it.isRecycleBin
             }
             if (validVideos.size < 2) {
                 emptyList()
             } else {
                 val thresholdInt = threshold.toInt().coerceIn(50, 100)
-                val maxDistance = ((100 - thresholdInt) * 64) / 100
 
-                // LSH bucketing for video dHash
+                // Bucket by the first nibble of every temporal sample, not one keyframe.
                 val buckets = HashMap<String, MutableList<FileItemEntity>>()
                 for (file in validVideos) {
-                    val hash = file.visualSimilarityHash
-                    if (hash.length >= 16) {
-                        buckets.getOrPut("b1_" + hash.substring(0, 4)) { mutableListOf() }.add(file)
-                        buckets.getOrPut("b2_" + hash.substring(4, 8)) { mutableListOf() }.add(file)
-                        buckets.getOrPut("b3_" + hash.substring(8, 12)) { mutableListOf() }.add(file)
-                        buckets.getOrPut("b4_" + hash.substring(12, 16)) { mutableListOf() }.add(file)
+                    VideoDuplicateEvidence.bucketKeys(file).forEach { key ->
+                        buckets.getOrPut(key) { mutableListOf() }.add(file)
                     }
                 }
 
@@ -126,36 +122,30 @@ class DuplicateDetectionEngine(
                 for (file1 in validVideos) {
                     if (visited.contains(file1.id)) continue
 
-                    val hash1 = file1.visualSimilarityHash
-                    if (hash1.length < 16) continue
                     val candidates = mutableSetOf<FileItemEntity>()
-                    buckets["b1_" + hash1.substring(0, 4)]?.let { candidates.addAll(it) }
-                    buckets["b2_" + hash1.substring(4, 8)]?.let { candidates.addAll(it) }
-                    buckets["b3_" + hash1.substring(8, 12)]?.let { candidates.addAll(it) }
-                    buckets["b4_" + hash1.substring(12, 16)]?.let { candidates.addAll(it) }
-
+                    VideoDuplicateEvidence.bucketKeys(file1).forEach { key ->
+                        buckets[key]?.let { candidates.addAll(it) }
+                    }
                     candidates.remove(file1)
                     candidates.removeAll { visited.contains(it.id) }
 
                     val cluster = mutableListOf(file1)
-                    var minDistanceInCluster = 64
+                    var bestScoreInCluster = 0
 
                     for (file2 in candidates) {
-                        val distance = storageScanner.calculateHammingDistance(file1.visualSimilarityHash, file2.visualSimilarityHash)
-                        if (distance in 0..maxDistance) {
+                        val comparison = VideoDuplicateEvidence.compare(file1, file2, thresholdInt)
+                        if (comparison.matches) {
                             cluster.add(file2)
-                            if (distance < minDistanceInCluster) {
-                                minDistanceInCluster = distance
-                            }
+                            bestScoreInCluster = maxOf(bestScoreInCluster, comparison.score)
                         }
                     }
 
                     if (cluster.size > 1) {
                         cluster.forEach { visited.add(it.id) }
-                        val avgScore = if (minDistanceInCluster < 64) ((64 - minDistanceInCluster) * 100) / 64 else 100
+                        val avgScore = bestScoreInCluster
                         resultGroups.add(
                             DuplicateGroup(
-                                title = "Perceptual Video Keyframe Match (${avgScore}% Visual Similarity): ${file1.name}",
+                                title = "Multi-Sample Video Match (${avgScore}% Visual Similarity): ${file1.name}",
                                 level = 2,
                                 similarityScore = avgScore,
                                 files = cluster

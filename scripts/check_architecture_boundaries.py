@@ -68,6 +68,20 @@ for path in cloud_transfer_files:
         if symbol in text:
             errors.append(f"{path.relative_to(ROOT)} (CloudTransfer) references forbidden {symbol}")
 
+# Video duplicate grouping must use multi-sample evidence, not the legacy single-keyframe field.
+video_engine = MAIN / "com/example/data/DuplicateDetectionEngine.kt"
+if video_engine.exists():
+    video_engine_text = video_engine.read_text(encoding="utf-8")
+    if "VideoDuplicateEvidence" not in video_engine_text:
+        errors.append("DuplicateDetectionEngine lacks multi-sample video evidence comparison")
+
+storage_scanner = MAIN / "com/example/storage/StorageScanner.kt"
+if storage_scanner.exists():
+    storage_scanner_text = storage_scanner.read_text(encoding="utf-8")
+    for required_symbol in ("computeVideoFingerprint", "computeContentUriVideoFingerprint", "videoSampleHashes"):
+        if required_symbol not in storage_scanner_text:
+            errors.append(f"StorageScanner is missing video evidence primitive: {required_symbol}")
+
 # Duplicate cleanup must be exact-cryptographic-only; similarity groups are review-only.
 duplicate_manager = MAIN / "com/example/data/DuplicateManager.kt"
 if duplicate_manager.exists():

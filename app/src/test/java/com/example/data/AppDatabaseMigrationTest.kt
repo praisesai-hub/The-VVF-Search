@@ -320,6 +320,35 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun testMigrationFrom6To7AddsVideoEvidenceColumns() {
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name("test_migration_db")
+            .callback(object : SupportSQLiteOpenHelper.Callback(6) {
+                override fun onCreate(db: SupportSQLiteDatabase) {}
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = helper.writableDatabase
+        db.execSQL("CREATE TABLE files (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, path TEXT NOT NULL, category TEXT NOT NULL, sizeBytes INTEGER NOT NULL)")
+        db.execSQL("INSERT INTO files (id, name, path, category, sizeBytes) VALUES (701, 'clip.mp4', '/videos/clip.mp4', 'VIDEO', 100)")
+
+        AppDatabase.MIGRATION_6_7.migrate(db)
+
+        val cursor = db.query("SELECT * FROM files WHERE id = 701")
+        assertTrue(cursor.moveToFirst())
+        assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("videoFingerprintVersion")))
+        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("videoSampleHashes")))
+        assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("videoDurationMs")))
+        assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("videoWidth")))
+        assertEquals(0, cursor.getInt(cursor.getColumnIndexOrThrow("videoHeight")))
+        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("videoAudioSignature")))
+        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("videoChunkHash")))
+        cursor.close()
+        db.close()
+    }
+
+    @Test
     fun testFullMigrationPathFrom1To4PreservesData() {
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
             .name("test_migration_db")

@@ -282,7 +282,14 @@ class DuplicateDetectionEngineTest {
             path = "/videos/clip-one.mp4",
             category = FileCategory.VIDEO.name,
             sizeBytes = 1L,
-            visualSimilarityHash = "0011223344556677"
+            visualSimilarityHash = "0011223344556677",
+            videoFingerprintVersion = 2,
+            videoSampleHashes = "0011223344556677;0011223344556677;0011223344556677;0011223344556677",
+            videoDurationMs = 10_000L,
+            videoWidth = 1920,
+            videoHeight = 1080,
+            videoAudioSignature = "yes|video/mp4|1000000",
+            videoChunkHash = "chunk-hash-1"
         )
         val second = first.copy(id = 2002L, name = "clip-two.mp4", path = "/videos/clip-two.mp4")
         val vaultCopy = first.copy(id = 2003L, name = "vault.mp4", isVault = true)
@@ -297,7 +304,39 @@ class DuplicateDetectionEngineTest {
         assertEquals(1, groups.size)
         assertEquals(setOf(2001L, 2002L), groups.single().files.map { it.id }.toSet())
         assertEquals(100, groups.single().similarityScore)
-        assertTrue(groups.single().title.contains("Keyframe Match"))
+        assertTrue(groups.single().title.contains("Video"))
+    }
+
+    @Test
+    fun videoDuplicates_requireMultipleTemporalSamplesAndMetadataCompatibility() = runBlocking {
+        val first = FileItemEntity(
+            id = 2101L,
+            name = "same-opening.mp4",
+            path = "/videos/same-opening.mp4",
+            category = FileCategory.VIDEO.name,
+            sizeBytes = 1L,
+            videoFingerprintVersion = 2,
+            videoSampleHashes = "0011223344556677;1111222233334444;2222333344445555;3333444455556666",
+            videoDurationMs = 10_000L,
+            videoWidth = 1920,
+            videoHeight = 1080,
+            videoAudioSignature = "yes|video/mp4|1000000",
+            videoChunkHash = "chunk-a"
+        )
+        val differentLaterSamples = first.copy(
+            id = 2102L,
+            name = "different-story.mp4",
+            path = "/videos/different-story.mp4",
+            videoSampleHashes = "0011223344556677;aaaaaaaabbbbbbbb;ccccccccdddddddd;eeeeeeeeffffffff",
+            videoChunkHash = "chunk-b"
+        )
+
+        val groups = duplicateDetectionEngine.getVideoDuplicates(
+            flowOf(listOf(first, differentLaterSamples)),
+            flowOf(100f)
+        ).first()
+
+        assertTrue(groups.isEmpty())
     }
 
     @Test

@@ -11,6 +11,7 @@ private const val LEGACY_VAULT_FORMAT_VERSION = 1
 private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
 private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
+private const val DATABASE_VERSION_WITH_VIDEO_EVIDENCE = 7
 
 @Database(
     entities = [
@@ -20,7 +21,7 @@ private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
         PluginEntity::class,
         WorkOperationEntity::class
     ],
-    version = DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY,
+    version = DATABASE_VERSION_WITH_VIDEO_EVIDENCE,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -126,6 +127,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(
+            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY,
+            DATABASE_VERSION_WITH_VIDEO_EVIDENCE
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "files", "videoFingerprintVersion", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "files", "videoSampleHashes", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "files", "videoDurationMs", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "files", "videoWidth", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "files", "videoHeight", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "files", "videoAudioSignature", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "files", "videoChunkHash", "TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         val MIGRATION_4_5 = object : Migration(
             DATABASE_VERSION_BEFORE_VAULT_FORMAT,
             DATABASE_VERSION_WITH_VAULT_FORMAT
@@ -175,7 +191,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 
                 val instance = builder.build()
                 INSTANCE = instance

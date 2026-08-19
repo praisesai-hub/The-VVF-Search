@@ -41,7 +41,14 @@ data class FileItemEntity(
     val visualSimilarityHash: String = "", // for visual duplicate level 3-4
     val semanticEmbeddingVersion: Int = 0,
     val semanticIndexed: Boolean = false,
-    val semanticEmbeddingString: String = "" // comma-separated vector floats
+    val semanticEmbeddingString: String = "", // comma-separated vector floats
+    val videoFingerprintVersion: Int = 0,
+    val videoSampleHashes: String = "", // semicolon-separated 64-bit dHashes
+    val videoDurationMs: Long = 0L,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
+    val videoAudioSignature: String = "",
+    val videoChunkHash: String = ""
 )
 
 @JsonClass(generateAdapter = true)

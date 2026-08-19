@@ -67,8 +67,22 @@ class DuplicateDetectionEngineInstrumentedTest {
     @Test
     fun videoDuplicates_applyThresholdAndExcludeUnsafeItems(): Unit {
         runBlocking {
-            val first = image(10L, "first.mp4", "0000000000000000").copy(category = FileCategory.VIDEO.name)
-            val near = first.copy(id = 11L, name = "near.mp4", visualSimilarityHash = "00000000000003FF")
+            val first = image(10L, "first.mp4", "0000000000000000").copy(
+                category = FileCategory.VIDEO.name,
+                videoFingerprintVersion = 2,
+                videoSampleHashes = "0000000000000000;1111111111111111;2222222222222222;3333333333333333",
+                videoDurationMs = 10_000L,
+                videoWidth = 1920,
+                videoHeight = 1080,
+                videoAudioSignature = "yes|video/mp4|1000000",
+                videoChunkHash = "chunk-a"
+            )
+            val near = first.copy(
+                id = 11L,
+                name = "near.mp4",
+                videoSampleHashes = "00000000000003ff;1111111111111111;2222222222222222;3333333333333333",
+                videoChunkHash = "chunk-b"
+            )
             val vault = first.copy(id = 12L, name = "vault.mp4", isVault = true)
 
             val highThreshold = engine.getVideoDuplicates(
@@ -83,7 +97,7 @@ class DuplicateDetectionEngineInstrumentedTest {
             ).first()
             assertEquals(1, lowThreshold.size)
             assertEquals(setOf(10L, 11L), lowThreshold.single().files.map { it.id }.toSet())
-            assertTrue(lowThreshold.single().title.contains("Keyframe Match"))
+            assertTrue(lowThreshold.single().title.contains("Video"))
         }
     }
 

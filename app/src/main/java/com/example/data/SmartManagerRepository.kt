@@ -172,11 +172,26 @@ open class SmartManagerRepository(
                                 if (dHash.isNotBlank()) updated = updated.copy(visualSimilarityHash = dHash)
                             }
                         }
-                        if (updated.category == FileCategory.VIDEO.name && updated.visualSimilarityHash.isBlank() && !updated.path.startsWith("content://")) {
+                        if (updated.category == FileCategory.VIDEO.name &&
+                            updated.videoSampleHashes.isBlank() &&
+                            !updated.path.startsWith("content://")
+                        ) {
                             val javaFile = File(updated.path)
                             if (javaFile.exists() && javaFile.canRead()) {
-                                val vHash = withContext(Dispatchers.IO) { storageScanner.computeVideoDHash(javaFile) }
-                                if (vHash.isNotBlank()) updated = updated.copy(visualSimilarityHash = vHash)
+                                val fingerprint = withContext(Dispatchers.IO) {
+                                    storageScanner.computeVideoFingerprint(javaFile)
+                                }
+                                if (fingerprint != null) {
+                                    updated = updated.copy(
+                                        videoFingerprintVersion = fingerprint.version,
+                                        videoSampleHashes = fingerprint.serializedSamples(),
+                                        videoDurationMs = fingerprint.durationMs,
+                                        videoWidth = fingerprint.width,
+                                        videoHeight = fingerprint.height,
+                                        videoAudioSignature = fingerprint.audioSignature,
+                                        videoChunkHash = fingerprint.chunkHash
+                                    )
+                                }
                             }
                         }
                         if (updated.category == FileCategory.DOCUMENTS.name && updated.visualSimilarityHash.isBlank() && !updated.path.startsWith("content://")) {
@@ -225,7 +240,11 @@ open class SmartManagerRepository(
     val documentStats: Flow<Triple<Int, Int, Float>> = dao.getAllActiveFiles().map { files ->
         val docs = files.filter { it.category == FileCategory.DOCUMENTS.name && !it.isVault && !it.isRecycleBin }
         val total = docs.size
-        val indexed = docs.count { it.visualSimilarityHash.isNotBlank() || it.md5Hash.isNotBlank() }
+        val indexed = docs.count {
+            it.visualSimilarityHash.isNotBlank() ||
+                it.videoSampleHashes.isNotBlank() ||
+                it.md5Hash.isNotBlank()
+        }
         Triple(indexed, total - indexed, if (total > 0) indexed.toFloat() / total.toFloat() else 1.0f)
     }.flowOn(Dispatchers.Default)
 
