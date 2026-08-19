@@ -101,9 +101,9 @@ class RepositorySecurityCoverageInstrumentedTest {
     fun smartRepository_delegatesVaultAndFailClosedSyncPaths(): Unit = runBlocking {
         val facade = SmartManagerRepository(context, dao)
 
-        // Missing multilingual model assets disable semantic vectors rather than silently
-        // presenting the Latin-only deterministic fallback as production semantic search.
-        assertFalse(facade.isSemanticSearchAvailable)
+        // CI packages the immutable, SHA-256-verified multilingual model asset. An empty fake
+        // DAO still yields no results, but semantic availability must reflect the real package.
+        assertTrue(facade.isSemanticSearchAvailable)
         assertTrue(facade.searchSemanticFiles("query").first().isEmpty())
         assertTrue(facade.initializeVaultPin("246810"))
         assertTrue(facade.hasVaultPin())
