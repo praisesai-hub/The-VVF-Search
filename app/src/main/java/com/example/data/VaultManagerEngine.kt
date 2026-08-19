@@ -20,12 +20,25 @@ private const val PIN_WRAP_IV_KEY = "vault_pin_wrap_iv"
 private const val PIN_WRAP_CIPHERTEXT_KEY = "vault_pin_wrap_ciphertext"
 private const val BIOMETRIC_WRAP_IV_KEY = "vault_biometric_wrap_iv"
 private const val BIOMETRIC_WRAP_CIPHERTEXT_KEY = "vault_biometric_wrap_ciphertext"
+private const val FAILED_ATTEMPTS_KEY = "vault_failed_attempts"
+private const val LOCKED_UNTIL_MS_KEY = "vault_locked_until_ms"
+
+const val MIN_VAULT_PIN_LENGTH = 8
+const val MAX_VAULT_PIN_LENGTH = 128
+const val MAX_VAULT_FAILED_ATTEMPTS = 5
+const val VAULT_BASE_LOCKOUT_MS = 30_000L
+const val VAULT_MAX_LOCKOUT_MS = 24 * 60 * 60 * 1000L
+
+class VaultAuthenticationLockedOutException(
+    val lockedUntilMs: Long
+) : SecurityException("Vault authentication is temporarily locked")
 
 class VaultManagerEngine(
     private val context: Context,
     private val keystoreVaultManager: KeystoreVaultManager,
     private val injectedVaultPrefs: SharedPreferences? = null,
-    private val injectedVaultStore: StringKeyValueStore? = null
+    private val injectedVaultStore: StringKeyValueStore? = null,
+    private val nowMs: () -> Long = { System.currentTimeMillis() }
 ) {
     private val vaultStore: StringKeyValueStore by lazy {
         injectedVaultStore
@@ -35,11 +48,16 @@ class VaultManagerEngine(
 
     fun hasVaultPin(): Boolean = stored(vaultStore, VAULT_PIN_HASH_KEY).isNotBlank()
 
+    fun getVaultLockoutState(): VaultLockoutState = VaultLockoutState(
+        failedAttempts = stored(vaultStore, FAILED_ATTEMPTS_KEY).toIntOrNull()?.coerceAtLeast(0) ?: 0,
+        lockedUntilMs = stored(vaultStore, LOCKED_UNTIL_MS_KEY).toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+    )
+
     internal val storedVaultPinHash: String
         get() = stored(vaultStore, VAULT_PIN_HASH_KEY)
 
     fun initializeVaultPin(pin: String): Boolean {
-        if (hasVaultPin() || pin.length != 4 || !pin.all(Char::isDigit)) return false
+        if (hasVaultPin() || !isValidVaultPin(pin)) return false
         val dek = keystoreVaultManager.randomVaultDek()
         val pinWrap = VaultKeyEnvelope.wrapWithPin(dek, pin)
         val values = mapOf(
@@ -47,7 +65,9 @@ class VaultManagerEngine(
             PIN_WRAP_SALT_KEY to encode(pinWrap.salt),
             PIN_WRAP_IV_KEY to encode(pinWrap.iv),
             PIN_WRAP_CIPHERTEXT_KEY to encode(pinWrap.ciphertext),
-            ENVELOPE_VERSION_KEY to VaultKeyEnvelope.VERSION.toString()
+            ENVELOPE_VERSION_KEY to VaultKeyEnvelope.VERSION.toString(),
+            FAILED_ATTEMPTS_KEY to "0",
+            LOCKED_UNTIL_MS_KEY to "0"
         )
         val committed = vaultStore.commit(values)
         dek.fill(0)
@@ -55,23 +75,42 @@ class VaultManagerEngine(
     }
 
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean {
+        if (!isValidVaultPin(inputPin)) return false
         val expectedHash = if (storedHash.isNotBlank()) storedHash else getStoredVaultPinHash()
         return expectedHash.isNotBlank() && keystoreVaultManager.verifyPin(inputPin, expectedHash)
     }
 
     fun unlockWithPin(pin: String): VaultCryptoSession {
-        check(verifyVaultPin(pin)) { "Invalid vault PIN" }
+        val now = nowMs()
+        val currentState = getVaultLockoutState()
+        if (currentState.lockedUntilMs > now) {
+            throw VaultAuthenticationLockedOutException(currentState.lockedUntilMs)
+        }
+        if (!verifyVaultPin(pin)) {
+            recordFailedAuthentication(currentState.failedAttempts, now)
+            throw IllegalStateException("Invalid vault PIN")
+        }
         val dek = if (hasPinEnvelope(vaultStore)) {
             unwrapPinDek(vaultStore, pin)
         } else {
             migrateLegacyPinToEnvelope(vaultStore, keystoreVaultManager, pin)
         }
-        return VaultCryptoSession.fromKeyBytes(dek).also { dek.fill(0) }
+        return try {
+            resetFailedAuthentication()
+            VaultCryptoSession.fromKeyBytes(dek)
+        } finally {
+            dek.fill(0)
+        }
     }
 
     fun changeVaultPin(oldPin: String, newPin: String): Boolean {
-        val validInput = verifyVaultPin(oldPin) && newPin.length == 4 && newPin.all(Char::isDigit)
-        if (!validInput) return false
+        val now = nowMs()
+        val currentState = getVaultLockoutState()
+        if (currentState.lockedUntilMs > now || !isValidVaultPin(newPin)) return false
+        if (!verifyVaultPin(oldPin)) {
+            recordFailedAuthentication(currentState.failedAttempts, now)
+            return false
+        }
         val currentDek = try {
             if (hasPinEnvelope(vaultStore)) {
                 unwrapPinDek(vaultStore, oldPin)
@@ -94,7 +133,9 @@ class VaultManagerEngine(
                         PIN_WRAP_SALT_KEY to encode(pinWrap.salt),
                         PIN_WRAP_IV_KEY to encode(pinWrap.iv),
                         PIN_WRAP_CIPHERTEXT_KEY to encode(pinWrap.ciphertext),
-                        ENVELOPE_VERSION_KEY to VaultKeyEnvelope.VERSION.toString()
+                        ENVELOPE_VERSION_KEY to VaultKeyEnvelope.VERSION.toString(),
+                        FAILED_ATTEMPTS_KEY to "0",
+                        LOCKED_UNTIL_MS_KEY to "0"
                     )
                 )
             } finally {
@@ -146,7 +187,12 @@ class VaultManagerEngine(
             ?: throw SecurityException("Authenticated CryptoObject is required")
         val wrapped = decode(stored(vaultStore, BIOMETRIC_WRAP_CIPHERTEXT_KEY))
         val dek = cipher.doFinal(wrapped)
-        return VaultCryptoSession.fromKeyBytes(dek).also { dek.fill(0) }
+        return try {
+            resetFailedAuthentication()
+            VaultCryptoSession.fromKeyBytes(dek)
+        } finally {
+            dek.fill(0)
+        }
     }
 
     fun disableBiometricEnrollment(): Boolean {
@@ -159,7 +205,35 @@ class VaultManagerEngine(
         if (committed) keystoreVaultManager.deleteBiometricWrapKey()
         return committed
     }
+
+    private fun recordFailedAuthentication(previousAttempts: Int, now: Long) {
+        val nextAttempts = previousAttempts.coerceAtLeast(0) + 1
+        val lockoutExponent = ((nextAttempts - 1) / MAX_VAULT_FAILED_ATTEMPTS).coerceAtMost(16)
+        val duration = (VAULT_BASE_LOCKOUT_MS * (1L shl lockoutExponent))
+            .coerceAtMost(VAULT_MAX_LOCKOUT_MS)
+        val lockedUntil = if (nextAttempts >= MAX_VAULT_FAILED_ATTEMPTS) now + duration else 0L
+        check(vaultStore.commit(
+            mapOf(
+                FAILED_ATTEMPTS_KEY to nextAttempts.toString(),
+                LOCKED_UNTIL_MS_KEY to lockedUntil.toString()
+            )
+        )) { "Vault authentication state could not be persisted" }
+    }
+
+    private fun resetFailedAuthentication() {
+        check(vaultStore.commit(
+            mapOf(
+                FAILED_ATTEMPTS_KEY to "0",
+                LOCKED_UNTIL_MS_KEY to "0"
+            )
+        )) { "Vault authentication state could not be reset" }
+    }
 }
+
+private fun isValidVaultPin(pin: String): Boolean =
+    pin.length in MIN_VAULT_PIN_LENGTH..MAX_VAULT_PIN_LENGTH &&
+        pin.none(Char::isWhitespace) &&
+        pin.any(Char::isDigit)
 
 internal fun VaultManagerEngine.getStoredVaultPinHash(): String = storedVaultPinHash
 

@@ -58,15 +58,15 @@ class VaultRepositoryTest {
     fun pinOperations_delegateToVaultManagerEngine() {
         every { vaultEngine.hasVaultPin() } returns true
         every { vaultEngine.getStoredVaultPinHash() } returns "stored-hash"
-        every { vaultEngine.initializeVaultPin("1234") } returns true
-        every { vaultEngine.verifyVaultPin("1234", "stored-hash") } returns true
-        every { vaultEngine.changeVaultPin("1234", "5678") } returns true
+        every { vaultEngine.initializeVaultPin("12345678") } returns true
+        every { vaultEngine.verifyVaultPin("12345678", "stored-hash") } returns true
+        every { vaultEngine.changeVaultPin("12345678", "5678") } returns true
 
         assertTrue(repository.hasVaultPin())
         assertEquals("stored-hash", repository.getStoredVaultPinHash())
-        assertTrue(repository.initializeVaultPin("1234"))
-        assertTrue(repository.verifyVaultPin("1234", "stored-hash"))
-        assertTrue(repository.changeVaultPin("1234", "5678"))
+        assertTrue(repository.initializeVaultPin("12345678"))
+        assertTrue(repository.verifyVaultPin("12345678", "stored-hash"))
+        assertTrue(repository.changeVaultPin("12345678", "5678"))
     }
 
     @Test
@@ -77,7 +77,7 @@ class VaultRepositoryTest {
             encryptedFileName = "ENC_123_report.pdf.vvf",
             iv = byteArrayOf(1, 2, 3, 4)
         )
-        repository.unlockWithPin("1234")
+        repository.unlockWithPin("12345678")
         every {
             PhysicalStorageManager.encryptAndWipeSourceStreaming(
                 context,
@@ -109,7 +109,7 @@ class VaultRepositoryTest {
     fun encryptToVault_throwsPhysicalFailureAndDoesNotMutateDao() = runBlocking {
         val file = fileItem(name = "report.pdf", path = "/source/report.pdf")
         val failure = IOException("source could not be securely wiped")
-        repository.unlockWithPin("1234")
+        repository.unlockWithPin("12345678")
         every {
             PhysicalStorageManager.encryptAndWipeSourceStreaming(
                 context,
@@ -134,7 +134,7 @@ class VaultRepositoryTest {
         val target = fileItem(id = 12L, name = "photo.jpg", path = "/source/photo.jpg")
         val vaultItem = vaultItem(id = 31L, originalName = target.name)
         coEvery { dao.getVaultFileByName(target.name) } returns target
-        repository.unlockWithPin("1234")
+        repository.unlockWithPin("12345678")
         every {
             PhysicalStorageManager.decryptAndRestoreStreaming(
                 context,
@@ -158,7 +158,7 @@ class VaultRepositoryTest {
     @Test
     fun unlockFromVault_deletesOrphanedVaultMetadataWhenTargetIsMissing() = runBlocking {
         val vaultItem = vaultItem(id = 44L, originalName = "missing.txt")
-        repository.unlockWithPin("1234")
+        repository.unlockWithPin("12345678")
         coEvery { dao.getVaultFileByName(vaultItem.originalName) } returns null
         coEvery { dao.deleteVaultItemById(vaultItem.id) } just Runs
 
@@ -174,7 +174,7 @@ class VaultRepositoryTest {
         val target = fileItem(id = 16L, name = "secret.txt", path = "/source/secret.txt")
         val vaultItem = vaultItem(id = 52L, originalName = target.name)
         val failure = IOException("tampered vault data")
-        repository.unlockWithPin("1234")
+        repository.unlockWithPin("12345678")
         every {
             PhysicalStorageManager.decryptAndRestoreStreaming(
                 context,

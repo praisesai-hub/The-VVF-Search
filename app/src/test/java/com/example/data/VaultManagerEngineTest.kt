@@ -10,6 +10,7 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -41,25 +42,25 @@ class VaultManagerEngineTest {
     @Test
     fun initializeVaultPin_persistsHashAndReportsSuccessOnlyAfterCommit() {
         val prefs = CommitControlledPreferences(commitResult = true)
-        every { keystore.hashPin("1234") } returns "derived-hash"
+        every { keystore.hashPin("12345678") } returns "derived-hash"
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertTrue(engine.initializeVaultPin("1234"))
+        assertTrue(engine.initializeVaultPin("12345678"))
         assertEquals("derived-hash", engine.getStoredVaultPinHash())
         assertTrue(engine.hasVaultPin())
-        verify(exactly = 1) { keystore.hashPin("1234") }
+        verify(exactly = 1) { keystore.hashPin("12345678") }
     }
 
     @Test
     fun initializeVaultPin_failsClosedWhenDurableCommitFails() {
         val prefs = CommitControlledPreferences(commitResult = false)
-        every { keystore.hashPin("1234") } returns "derived-hash"
+        every { keystore.hashPin("12345678") } returns "derived-hash"
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertFalse(engine.initializeVaultPin("1234"))
+        assertFalse(engine.initializeVaultPin("12345678"))
         assertFalse(engine.hasVaultPin())
         assertEquals("", engine.getStoredVaultPinHash())
-        verify(exactly = 1) { keystore.hashPin("1234") }
+        verify(exactly = 1) { keystore.hashPin("12345678") }
     }
 
     @Test
@@ -67,14 +68,14 @@ class VaultManagerEngineTest {
         val prefs = CommitControlledPreferences(commitResult = false).apply {
             putPersistedValue("vault_pin_hash", "existing-hash")
         }
-        every { keystore.verifyPin("1111", "existing-hash") } returns true
-        every { keystore.hashPin("2222") } returns "new-hash"
+        every { keystore.verifyPin("11111111", "existing-hash") } returns true
+        every { keystore.hashPin("22222222") } returns "new-hash"
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertFalse(engine.changeVaultPin("1111", "2222"))
+        assertFalse(engine.changeVaultPin("11111111", "22222222"))
         assertEquals("existing-hash", engine.getStoredVaultPinHash())
-        verify(exactly = 1) { keystore.verifyPin("1111", "existing-hash") }
-        verify(exactly = 0) { keystore.hashPin("2222") }
+        verify(exactly = 1) { keystore.verifyPin("11111111", "existing-hash") }
+        verify(exactly = 0) { keystore.hashPin("22222222") }
     }
 
     @Test
@@ -82,10 +83,10 @@ class VaultManagerEngineTest {
         val prefs = CommitControlledPreferences(commitResult = true).apply {
             putPersistedValue("vault_pin_hash", "existing-hash")
         }
-        every { keystore.verifyPin("1111", "existing-hash") } returns true
+        every { keystore.verifyPin("11111111", "existing-hash") } returns true
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertFalse(engine.changeVaultPin("1111", "bad"))
+        assertFalse(engine.changeVaultPin("11111111", "bad"))
         assertEquals("existing-hash", engine.getStoredVaultPinHash())
         verify(exactly = 0) { keystore.hashPin(any()) }
     }
@@ -97,10 +98,10 @@ class VaultManagerEngineTest {
         }
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertFalse(engine.initializeVaultPin("1234"))
+        assertFalse(engine.initializeVaultPin("12345678"))
         assertFalse(engine.initializeVaultPin("123"))
         assertFalse(engine.initializeVaultPin("12a4"))
-        assertFalse(engine.initializeVaultPin("12345"))
+        assertFalse(engine.initializeVaultPin("1234567"))
         assertEquals("existing-hash", engine.getStoredVaultPinHash())
         verify(exactly = 0) { keystore.hashPin(any()) }
     }
@@ -108,16 +109,16 @@ class VaultManagerEngineTest {
     @Test
     fun verifyVaultPin_failsClosedWithoutStoredHashAndAcceptsVerifiedStoredHash() {
         val emptyEngine = VaultManagerEngine(context, keystore, CommitControlledPreferences(commitResult = true))
-        assertFalse(emptyEngine.verifyVaultPin("1234"))
+        assertFalse(emptyEngine.verifyVaultPin("12345678"))
 
         val prefs = CommitControlledPreferences(commitResult = true).apply {
             putPersistedValue("vault_pin_hash", "stored-hash")
         }
-        every { keystore.verifyPin("1234", "stored-hash") } returns true
+        every { keystore.verifyPin("12345678", "stored-hash") } returns true
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertTrue(engine.verifyVaultPin("1234"))
-        verify(exactly = 1) { keystore.verifyPin("1234", "stored-hash") }
+        assertTrue(engine.verifyVaultPin("12345678"))
+        verify(exactly = 1) { keystore.verifyPin("12345678", "stored-hash") }
     }
 
     @Test
@@ -125,10 +126,10 @@ class VaultManagerEngineTest {
         val prefs = CommitControlledPreferences(commitResult = true).apply {
             putPersistedValue("vault_pin_hash", "stored-hash")
         }
-        every { keystore.verifyPin("1111", "stored-hash") } returns false
+        every { keystore.verifyPin("11111111", "stored-hash") } returns false
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertFalse(engine.changeVaultPin("1111", "2222"))
+        assertFalse(engine.changeVaultPin("11111111", "22222222"))
         assertEquals("stored-hash", engine.getStoredVaultPinHash())
         verify(exactly = 0) { keystore.hashPin(any()) }
     }
@@ -138,14 +139,43 @@ class VaultManagerEngineTest {
         val prefs = CommitControlledPreferences(commitResult = true).apply {
             putPersistedValue("vault_pin_hash", "old-hash")
         }
-        every { keystore.verifyPin("1111", "old-hash") } returns true
-        every { keystore.hashPin("2222") } returns "new-hash"
+        every { keystore.verifyPin("11111111", "old-hash") } returns true
+        every { keystore.hashPin("22222222") } returns "new-hash"
         val engine = VaultManagerEngine(context, keystore, prefs)
 
-        assertTrue(engine.changeVaultPin("1111", "2222"))
+        assertTrue(engine.changeVaultPin("11111111", "22222222"))
         assertEquals("new-hash", engine.getStoredVaultPinHash())
-        verify(exactly = 1) { keystore.verifyPin("1111", "old-hash") }
-        verify(exactly = 1) { keystore.hashPin("2222") }
+        verify(exactly = 1) { keystore.verifyPin("11111111", "old-hash") }
+        verify(exactly = 1) { keystore.hashPin("22222222") }
+    }
+
+    @Test
+    fun failedPinAttempts_persistLockoutAcrossEngineRecreationAndBackoff() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "stored-hash")
+        }
+        every { keystore.verifyPin("00000000", "stored-hash") } returns false
+        var now = 1_000L
+        val engine = VaultManagerEngine(context, keystore, prefs, nowMs = { now })
+
+        repeat(MAX_VAULT_FAILED_ATTEMPTS) {
+            assertThrows(IllegalStateException::class.java) {
+                engine.unlockWithPin("00000000")
+            }
+        }
+        assertEquals(MAX_VAULT_FAILED_ATTEMPTS, engine.getVaultLockoutState().failedAttempts)
+        assertEquals(now + VAULT_BASE_LOCKOUT_MS, engine.getVaultLockoutState().lockedUntilMs)
+
+        val reopened = VaultManagerEngine(context, keystore, prefs, nowMs = { now })
+        assertThrows(VaultAuthenticationLockedOutException::class.java) {
+            reopened.unlockWithPin("00000000")
+        }
+
+        now += VAULT_BASE_LOCKOUT_MS + 1L
+        assertThrows(IllegalStateException::class.java) {
+            reopened.unlockWithPin("00000000")
+        }
+        assertTrue(reopened.getVaultLockoutState().lockedUntilMs > now)
     }
 
     private class CommitControlledPreferences(

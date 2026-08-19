@@ -4,8 +4,16 @@ import androidx.biometric.BiometricPrompt
 import com.example.security.VaultCryptoSession
 import javax.crypto.Cipher
 
+data class VaultLockoutState(
+    val failedAttempts: Int,
+    val lockedUntilMs: Long
+) {
+    val isLockedOut: Boolean get() = lockedUntilMs > System.currentTimeMillis()
+}
+
 interface VaultPinApi {
     fun hasVaultPin(): Boolean
+    fun getVaultLockoutState(): VaultLockoutState
     fun getStoredVaultPinHash(): String
     fun initializeVaultPin(pin: String): Boolean
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean
@@ -58,6 +66,8 @@ private class VaultPinDelegate(
     private val sessions: VaultSessionHolder
 ) : VaultPinApi {
     override fun hasVaultPin(): Boolean = engine.hasVaultPin()
+
+    override fun getVaultLockoutState(): VaultLockoutState = engine.getVaultLockoutState()
 
     override fun getStoredVaultPinHash(): String = engine.getStoredVaultPinHash()
 

@@ -53,7 +53,7 @@ class RepositorySecurityCoverageInstrumentedTest {
 
     @Test
     fun legacyVaultItem_isMigratedThroughAuthenticatedSession(): Unit = runBlocking {
-        val pin = "2468"
+        val pin = "24682468"
         assertTrue(repository.initializeVaultPin(pin))
         assertTrue(repository.unlockWithPin(pin))
 
@@ -104,11 +104,11 @@ class RepositorySecurityCoverageInstrumentedTest {
         // Mobile CLIP assets are absent; an empty fake DAO still yields no results.
         assertTrue(facade.isSemanticSearchAvailable)
         assertTrue(facade.searchSemanticFiles("query").first().isEmpty())
-        assertTrue(facade.initializeVaultPin("2468"))
+        assertTrue(facade.initializeVaultPin("24682468"))
         assertTrue(facade.hasVaultPin())
-        assertTrue(facade.verifyVaultPin("2468"))
+        assertTrue(facade.verifyVaultPin("24682468"))
         assertTrue(facade.getStoredVaultPinHash().isNotBlank())
-        assertTrue(facade.unlockVaultWithPin("2468"))
+        assertTrue(facade.unlockVaultWithPin("24682468"))
 
         val noCryptoResult = mockk<BiometricPrompt.AuthenticationResult>()
         every { noCryptoResult.cryptoObject } returns null

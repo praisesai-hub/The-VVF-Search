@@ -1,5 +1,7 @@
 package com.example.ui.screens
 import com.example.R
+import com.example.data.MAX_VAULT_PIN_LENGTH
+import com.example.data.MIN_VAULT_PIN_LENGTH
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -226,7 +228,7 @@ fun VaultScreen(
             confirmButton = {
                 Button(onClick = {
                     if (changePinNew != changePinConfirm) changePinError = context.getString(R.string.pin_mismatch)
-                    else if (changePinNew.length != 4 || !changePinNew.all { it.isDigit() }) changePinError = context.getString(R.string.pin_exactly_digits)
+                    else if (changePinNew.length < MIN_VAULT_PIN_LENGTH || changePinNew.length > MAX_VAULT_PIN_LENGTH || !changePinNew.any { it.isDigit() } || changePinNew.any { it.isWhitespace() }) changePinError = context.getString(R.string.pin_exactly_digits)
                     else {
                         val success = viewModel.changeVaultPin(changePinOld, changePinNew)
                         if (success) {
@@ -256,7 +258,7 @@ fun VaultScreen(
             )
             Spacer(modifier = Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                repeat(4) { index -> Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index < enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }
+                repeat(MIN_VAULT_PIN_LENGTH) { index -> Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index < enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }
             }
             if (pinError != null) { Spacer(modifier = Modifier.height(12.dp)); Text(text = pinError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
             Spacer(modifier = Modifier.height(32.dp))

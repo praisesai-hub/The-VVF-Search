@@ -288,8 +288,8 @@ class FileManagerScreenInstrumentedTest {
 
     private fun authenticatedViewModel(): MainViewModel {
         val viewModel = MainViewModel(app)
-        check(viewModel.repository.initializeVaultPin("2468"))
-        check(viewModel.repository.unlockVaultWithPin("2468"))
+        check(viewModel.repository.initializeVaultPin("24682468"))
+        check(viewModel.repository.unlockVaultWithPin("24682468"))
         return viewModel
     }
 }

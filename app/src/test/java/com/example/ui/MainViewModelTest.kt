@@ -51,7 +51,10 @@ class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(cont
         return changePinResult
     }
 
-    override fun unlockVaultWithPin(pin: String): Boolean = unlockPinResult
+    override fun unlockVaultWithPin(pin: String): Boolean {
+        lastVerifiedPin = pin
+        return unlockPinResult
+    }
 
     var lockVaultSessionCalls = 0
     override fun lockVaultSession() { lockVaultSessionCalls += 1 }
@@ -101,18 +104,27 @@ class MainViewModelTest {
         viewModel.appendPinDigit("2")
         viewModel.appendPinDigit("3")
         viewModel.appendPinDigit("4")
+        viewModel.appendPinDigit("5")
+        viewModel.appendPinDigit("6")
+        viewModel.appendPinDigit("7")
+        viewModel.appendPinDigit("8")
 
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(viewModel.isVaultUnlocked.value)
         assertNull(viewModel.pinError.value)
-        assertEquals("1234", fakeRepository.lastVerifiedPin)
+        assertEquals("12345678", fakeRepository.lastVerifiedPin)
     }
 
     @Test
     fun verifyPin_failure_setsPinErrorAndResetsEnteredPin() {
         fakeRepository.verifyPinResult = false
+        fakeRepository.unlockPinResult = false
 
+        viewModel.appendPinDigit("9")
+        viewModel.appendPinDigit("9")
+        viewModel.appendPinDigit("9")
+        viewModel.appendPinDigit("9")
         viewModel.appendPinDigit("9")
         viewModel.appendPinDigit("9")
         viewModel.appendPinDigit("9")
@@ -123,7 +135,7 @@ class MainViewModelTest {
         assertFalse(viewModel.isVaultUnlocked.value)
         assertEquals("Incorrect PIN. Try again.", viewModel.pinError.value)
         assertEquals("", viewModel.enteredPin.value)
-        assertEquals("9999", fakeRepository.lastVerifiedPin)
+        assertEquals("99999999", fakeRepository.lastVerifiedPin)
     }
 
     @Test
@@ -132,6 +144,10 @@ class MainViewModelTest {
         viewModel.appendPinDigit("2")
         viewModel.appendPinDigit("3")
         viewModel.appendPinDigit("4")
+        viewModel.appendPinDigit("5")
+        viewModel.appendPinDigit("6")
+        viewModel.appendPinDigit("7")
+        viewModel.appendPinDigit("8")
         assertTrue(viewModel.isVaultUnlocked.value)
 
         viewModel.lockVaultForBackground()
@@ -153,6 +169,10 @@ class MainViewModelTest {
         viewModel.appendPinDigit("2")
         viewModel.appendPinDigit("3")
         viewModel.appendPinDigit("4")
+        viewModel.appendPinDigit("5")
+        viewModel.appendPinDigit("6")
+        viewModel.appendPinDigit("7")
+        viewModel.appendPinDigit("8")
         val unlockedGeneration = viewModel.vaultActivityGeneration.value
 
         viewModel.recordVaultActivity()
@@ -164,11 +184,11 @@ class MainViewModelTest {
     fun changeVaultPin_success_returnsTrueAndClearsError() {
         fakeRepository.changePinResult = true
 
-        val result = viewModel.changeVaultPin("1234", "5678")
+        val result = viewModel.changeVaultPin("12345678", "56785678")
 
         assertTrue(result)
         assertNull(viewModel.pinError.value)
-        assertEquals("1234", fakeRepository.lastChangedOldPin)
+        assertEquals("12345678", fakeRepository.lastChangedOldPin)
         assertEquals("5678", fakeRepository.lastChangedNewPin)
     }
 
@@ -176,12 +196,12 @@ class MainViewModelTest {
     fun changeVaultPin_failure_returnsFalseAndSetsPinError() {
         fakeRepository.changePinResult = false
 
-        val result = viewModel.changeVaultPin("1234", "0000")
+        val result = viewModel.changeVaultPin("12345678", "00000000")
 
         assertFalse(result)
         assertEquals("Failed to update PIN. Check current PIN.", viewModel.pinError.value)
-        assertEquals("1234", fakeRepository.lastChangedOldPin)
-        assertEquals("0000", fakeRepository.lastChangedNewPin)
+        assertEquals("12345678", fakeRepository.lastChangedOldPin)
+        assertEquals("00000000", fakeRepository.lastChangedNewPin)
     }
 
     @Test

@@ -27,8 +27,6 @@ private class VmCompatState {
     var pinLockedUntilElapsedMs: Long = 0L
 }
 
-private const val PIN_LOCKOUT_THRESHOLD = 5
-private const val PIN_LOCKOUT_DURATION_MS = 30_000L
 internal const val DEFAULT_VAULT_AUTO_LOCK_TIMEOUT_MS = 60_000L
 private const val MIN_VAULT_AUTO_LOCK_TIMEOUT_MS = 15_000L
 private const val MAX_VAULT_AUTO_LOCK_TIMEOUT_MS = 15 * 60_000L
@@ -206,7 +204,7 @@ private fun MainViewModel.processPinDigit(state: VmCompatState, digit: String, n
     val pin = state.enteredPin.value + digit
     state.enteredPin.value = pin
     state.pinError.value = null
-    if (pin.length != 4) return
+    if (pin.length != MIN_VAULT_PIN_LENGTH) return
     if (isVaultPinSetupRequired) {
         handlePinSetup(state, pin)
     } else {
@@ -229,7 +227,7 @@ private fun VmCompatState.clearExpiredPinCooldown() {
 }
 
 private fun VmCompatState.acceptsPinDigit(digit: String): Boolean =
-    enteredPin.value.length < 4 && digit.length == 1 && digit[0].isDigit()
+    enteredPin.value.length < MIN_VAULT_PIN_LENGTH && digit.length == 1 && digit[0].isDigit()
 
 private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
     val firstEntry = state.setupPinFirstEntry.value
@@ -260,8 +258,20 @@ private fun MainViewModel.handlePinSetup(state: VmCompatState, pin: String) {
 }
 
 private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String, now: Long) {
-    val storedHash = repository.getStoredVaultPinHash()
-    val unlocked = repository.verifyVaultPin(pin, storedHash) && repository.unlockVaultWithPin(pin)
+    val unlocked = try {
+        repository.unlockVaultWithPin(pin)
+    } catch (locked: VaultAuthenticationLockedOutException) {
+        state.failedPinAttempts = MAX_VAULT_FAILED_ATTEMPTS
+        state.pinLockedUntilElapsedMs = now +
+            (locked.lockedUntilMs - System.currentTimeMillis()).coerceAtLeast(0L)
+        state.enteredPin.value = ""
+        state.pinError.value = compatMessage(R.string.pin_error_too_many_attempts)
+        return
+    } catch (_: SecurityException) {
+        false
+    } catch (_: IllegalStateException) {
+        false
+    }
     if (unlocked) {
         state.failedPinAttempts = 0
         state.pinLockedUntilElapsedMs = 0L
@@ -273,8 +283,8 @@ private fun MainViewModel.handlePinUnlock(state: VmCompatState, pin: String, now
     }
     state.failedPinAttempts += 1
     state.enteredPin.value = ""
-    state.pinError.value = if (state.failedPinAttempts >= PIN_LOCKOUT_THRESHOLD) {
-        state.pinLockedUntilElapsedMs = now + PIN_LOCKOUT_DURATION_MS
+    state.pinError.value = if (state.failedPinAttempts >= MAX_VAULT_FAILED_ATTEMPTS) {
+        state.pinLockedUntilElapsedMs = now + VAULT_BASE_LOCKOUT_MS
         compatMessage(R.string.pin_error_too_many_attempts)
     } else {
         compatMessage(R.string.pin_error_incorrect)
