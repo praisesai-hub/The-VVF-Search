@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.util.Base64
+import androidx.biometric.BiometricPrompt
 import com.example.security.KeystoreVaultManager
+import com.example.security.VaultCryptoSession
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -240,6 +242,57 @@ class VaultManagerEngineTest {
 
         assertFalse(engine.hasBiometricEnrollment)
         verify(exactly = 1) { keystore.deleteBiometricWrapKey() }
+    }
+
+    @Test
+    fun unlockWithPin_rejectsLegacyEnvelopeBeforeCheckingCredentials() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "legacy-hash")
+            putPersistedValue("vault_envelope_version", "2")
+        }
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertThrows(VaultPinUpgradeRequiredException::class.java) {
+            engine.unlockWithPin("2468")
+        }
+
+        verify(exactly = 0) { keystore.verifyPin(any(), any()) }
+    }
+
+    @Test
+    fun unlockWithPin_failsClosedAndRecordsAttemptWhenEnvelopeCannotBeUnwrapped() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "stored-hash")
+            putPersistedValue("vault_envelope_version", "3")
+        }
+        every { keystore.verifyPin("123456", "stored-hash") } returns true
+        val engine = VaultManagerEngine(context, keystore, prefs, currentTimeMillis = { 1_000L })
+
+        assertThrows(SecurityException::class.java) {
+            engine.unlockWithPin("123456")
+        }
+
+        assertEquals(1, engine.vaultPinLockoutStatus(1_000L).failedAttempts)
+    }
+
+    @Test
+    fun completeBiometricEnrollment_requiresAuthenticatedCryptoObject() {
+        val result = mockk<BiometricPrompt.AuthenticationResult>()
+        every { result.cryptoObject } returns null
+        val engine = VaultManagerEngine(context, keystore, CommitControlledPreferences(commitResult = true))
+        val session = VaultCryptoSession.fromKeyBytes(ByteArray(32) { 4 })
+
+        assertFalse(engine.completeBiometricEnrollment(session, result))
+        session.close()
+    }
+
+    @Test
+    fun disableBiometricEnrollment_doesNotDeleteKeystoreKeyWhenCommitIsNotDurable() {
+        val engine = VaultManagerEngine(context, keystore, CommitControlledPreferences(commitResult = false))
+
+        assertFalse(engine.disableBiometricEnrollment())
+
+        verify(exactly = 0) { keystore.deleteBiometricWrapKey() }
     }
 
     private fun assertLockedAfterInvalidAttempt(engine: VaultManagerEngine) {
