@@ -2,7 +2,10 @@ package com.example.security
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.file.Files
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -101,6 +104,57 @@ class SecureKeyValueStoreTest {
     }
 
     @Test
+    fun `commit rejects invalid encrypted payload before it reaches disk`() {
+        val invalidCrypto = object : SecureStoreCrypto {
+            override fun encrypt(plaintext: ByteArray): EncryptedPayload =
+                EncryptedPayload(ciphertext = ByteArray(15), iv = ByteArray(11))
+
+            override fun decrypt(payload: EncryptedPayload): ByteArray = error("not used")
+        }
+        val store = SecureKeyValueStore(context, FILE_NAME, "unused", directory, invalidCrypto)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            store.commit(mapOf("token" to "value"))
+        }
+        assertFalse(File(directory, FILE_NAME).exists())
+    }
+
+    @Test
+    fun `commit rejects too many and oversized entries`() {
+        val store = store()
+        val tooMany = (1..33).associate { "key-$it" to "value-$it" }
+
+        assertThrows(IllegalArgumentException::class.java) { store.commit(tooMany) }
+        assertThrows(IllegalArgumentException::class.java) {
+            store.commit(mapOf("large" to "x".repeat(16_385)))
+        }
+    }
+
+    @Test
+    fun `malformed decrypted payloads fail closed including duplicate keys`() {
+        val store = store()
+        writeEnvelope(plaintext = byteArrayOf(0, 1, 2, 3))
+
+        assertThrows(IllegalStateException::class.java) { store.getString("token") }
+
+        val duplicatePlaintext = ByteArrayOutputStream().use { bytes ->
+            DataOutputStream(bytes).use { output ->
+                output.writeInt(0x56564650)
+                output.writeInt(1)
+                output.writeInt(2)
+                output.writeUTF("duplicate")
+                output.writeUTF("first")
+                output.writeUTF("duplicate")
+                output.writeUTF("second")
+            }
+            bytes.toByteArray()
+        }
+        writeEnvelope(plaintext = duplicatePlaintext)
+
+        assertThrows(IllegalStateException::class.java) { store.getString("duplicate") }
+    }
+
+    @Test
     fun `migration copies only allow-listed non-null entries`() {
         val target = RecordingStore()
 
@@ -143,6 +197,20 @@ class SecureKeyValueStoreTest {
         directory = directory,
         crypto = crypto
     )
+
+    private fun writeEnvelope(plaintext: ByteArray) {
+        val ciphertext = plaintext.map { (it.toInt() xor 0x5A).toByte() }.toByteArray()
+        FileOutputStream(File(directory, FILE_NAME), false).use { stream ->
+            DataOutputStream(stream).use { output ->
+                output.writeInt(0x56564645)
+                output.writeInt(1)
+                output.writeInt(12)
+                output.write(ByteArray(12))
+                output.writeInt(ciphertext.size)
+                output.write(ciphertext)
+            }
+        }
+    }
 
     private val context: Context
         get() = ApplicationProvider.getApplicationContext()
