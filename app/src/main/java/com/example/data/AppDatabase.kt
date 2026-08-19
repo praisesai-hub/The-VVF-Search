@@ -6,13 +6,15 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.security.DatabasePassphraseProvider
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 private const val LEGACY_VAULT_FORMAT_VERSION = 1
 private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
 private const val DATABASE_VERSION_WITH_VAULT_FORMAT = 5
 private const val DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY = 6
 private const val DATABASE_VERSION_WITH_CLOUD_RECOVERY = 7
-private const val DATABASE_VERSION_WITH_VAULT_OPERATION_RECOVERY = 8
+internal const val DATABASE_SCHEMA_VERSION = 8
 
 @Database(
     entities = [
@@ -22,7 +24,7 @@ private const val DATABASE_VERSION_WITH_VAULT_OPERATION_RECOVERY = 8
         CloudSyncItemEntity::class,
         PluginEntity::class
     ],
-    version = DATABASE_VERSION_WITH_VAULT_OPERATION_RECOVERY,
+    version = DATABASE_SCHEMA_VERSION,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -141,7 +143,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_7_8 = object : Migration(
             DATABASE_VERSION_WITH_CLOUD_RECOVERY,
-            DATABASE_VERSION_WITH_VAULT_OPERATION_RECOVERY
+            DATABASE_SCHEMA_VERSION
         ) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -209,26 +211,46 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val builder = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "vvf_smart_manager_db"
-                )
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(
-                    MIGRATION_1_2,
-                    MIGRATION_2_3,
-                    MIGRATION_3_4,
-                    MIGRATION_4_5,
-                    MIGRATION_5_6,
-                    MIGRATION_6_7,
-                    MIGRATION_7_8
-                )
+                val passphrase = DatabasePassphraseProvider(context.applicationContext).getOrCreate()
+                try {
+                    loadSqlCipherOrThrow()
+                    DatabaseEncryptionMigrator(
+                        context = context.applicationContext,
+                        databaseName = DATABASE_NAME,
+                        passphrase = passphrase
+                    ).ensureEncrypted()
+                    val builder = Room.databaseBuilder(
+                        context.applicationContext,
+                        AppDatabase::class.java,
+                        DATABASE_NAME
+                    )
+                    .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                    .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8
+                    )
 
-                val instance = builder.build()
-                INSTANCE = instance
-                instance
+                    builder.build().also { INSTANCE = it }
+                } finally {
+                    passphrase.fill(0)
+                }
             }
         }
+
+        private fun loadSqlCipherOrThrow() {
+            try {
+                System.loadLibrary("sqlcipher")
+            } catch (error: UnsatisfiedLinkError) {
+                throw IllegalStateException("SQLCipher native library is unavailable", error)
+            }
+        }
+
+        private const val DATABASE_NAME = "vvf_smart_manager_db"
     }
 }
