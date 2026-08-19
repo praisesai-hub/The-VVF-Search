@@ -8,9 +8,11 @@ import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
 import com.example.data.FileCategory
+import com.example.data.FileDao
 import com.example.ui.components.PickableLocalFile
 import com.example.data.SmartManagerRepository
 import com.example.data.VaultPinLockoutStatus
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,7 +31,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 
-class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(context) {
+class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(
+    context = context,
+    dao = mockk<FileDao>(relaxed = true)
+) {
     var verifyPinResult = true
     var changePinResult = true
     var unlockPinResult = true
