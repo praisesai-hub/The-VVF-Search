@@ -84,6 +84,7 @@ class RepositorySecurityCoverageInstrumentedTest {
             sizeBytes = "legacy confidential payload".length.toLong(),
             isVault = true
         )
+        dao.filesById[target.id] = target
 
         assertTrue(repository.unlockFromVault(legacyItem, target))
         assertTrue(restoreTarget.exists())
