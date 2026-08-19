@@ -438,16 +438,18 @@ fun FileManagerScreen(
             }
         )
     }
-    // Encrypt confirmation and Best-Effort Wipe disclaimer dialog
+    // Encrypt confirmation and source-removal limitation dialog.
     if (encryptTargetFile != null) {
         AlertDialog(
             onDismissRequest = { encryptTargetFile = null },
-            title = { Text("Encrypt & Best-Effort Wipe") },
+            title = { Text("Encrypt & Best-Effort Source Removal") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = "This will encrypt \"${encryptTargetFile?.name}\" using AES-256 (Android Keystore) and store it in the secure Vault.\n\n" +
-                               "The original source file will be overwritten with random and zero data (3-pass Best-Effort Wipe) and then deleted.",
+                            "The app will attempt a three-pass software overwrite (random, zeros, random) " +
+                                "before deleting the original source. This is best-effort source removal, " +
+                                "not guaranteed secure erase.",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -458,7 +460,9 @@ fun FileManagerScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Disclaimer: Modern flash/SSD storage utilizes Wear-Leveling. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure.",
+                            text = "Important: Android devices and modern flash or SSD storage may use " +
+                                "wear-leveling and storage controllers. Software overwrite and deletion " +
+                                "cannot guarantee permanent, unrecoverable, or forensic erasure.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(10.dp),
@@ -477,7 +481,7 @@ fun FileManagerScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange)
                 ) {
-                    Text("Encrypt & Wipe")
+                    Text("Encrypt & Best-Effort Remove")
                 }
             },
             dismissButton = {
@@ -915,4 +919,3 @@ fun SafDirectoryPickerCard(
         }
     }
 }
-

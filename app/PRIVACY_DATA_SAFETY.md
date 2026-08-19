@@ -8,7 +8,7 @@ VVF Smart Manager is **local-first**. File metadata, duplicate hashes, OCR text,
 
 The encrypted vault uses AES-256-GCM with an authenticated in-memory session key. Key material is created only after vault authentication and is backed by Android Keystore protections. Vault container filenames are opaque identifiers and do not repeat the source filename. App backups and device-transfer extraction are disabled because vault and authentication state must not be restored outside their original key lifecycle.
 
-> **Storage limitation:** app-private storage and Android file-based encryption protect local records under the normal Android security model. A rooted, compromised, or physically forensically acquired device is a stronger threat model. The app does not claim that overwrite/delete operations guarantee physical erasure on flash storage.
+> **Storage limitation:** app-private storage and Android file-based encryption protect local records under the normal Android security model. A rooted, compromised, or physically forensically acquired device is a stronger threat model. Neither the app's three-pass software overwrite nor delete operation is a secure-erase guarantee. On Android devices and modern flash or SSD storage, wear-leveling and storage-controller behavior mean the app cannot guarantee permanent, unrecoverable, or forensic erasure.
 
 ## 2. Default network and telemetry posture
 

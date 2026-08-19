@@ -170,9 +170,10 @@ class FileManagerScreenInstrumentedTest {
 
         composeTestRule.onNodeWithContentDescription("Menu").performClick()
         composeTestRule.onNodeWithText("Encrypt to Vault").performClick()
-        composeTestRule.onNodeWithText("Encrypt & Best-Effort Wipe").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Disclaimer: Modern flash/SSD storage utilizes Wear-Leveling. Software-level overwriting is performed on a best-effort basis and does not guarantee absolute block-level physical erasure.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Encrypt & Wipe").performClick()
+        composeTestRule.onNodeWithText("Encrypt & Best-Effort Source Removal").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Important: Android devices and modern flash or SSD storage may use wear-leveling and storage controllers. Software overwrite and deletion cannot guarantee permanent, unrecoverable, or forensic erasure.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Encrypt & Best-Effort Remove").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Encrypt & Best-Effort Remove").performClick()
 
         runBlocking {
             withTimeout(10_000) {
@@ -182,6 +183,35 @@ class FileManagerScreenInstrumentedTest {
             }
         }
         assertFalse(sourceFile.exists())
+    }
+
+    @Test
+    fun vaultScreen_disclosesBestEffortSourceRemovalAndNoSecureEraseGuarantee(): Unit {
+        val viewModel = authenticatedViewModel()
+        val disclosure =
+            "The app attempts a three-pass software overwrite (random, zeros, random) before " +
+                "deleting the original source. This is best-effort source removal, not guaranteed " +
+                "secure erase.\n\nAndroid devices and modern flash or SSD storage may use " +
+                "wear-leveling and storage controllers. Software overwrite and deletion cannot " +
+                "guarantee permanent, unrecoverable, or forensic erasure."
+
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                VaultScreen(
+                    viewModel = viewModel,
+                    isUnlocked = true,
+                    enteredPin = "",
+                    pinError = null,
+                    vaultItems = emptyList()
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Source Removal Is Best-Effort").assertIsDisplayed()
+        composeTestRule.onNodeWithText(disclosure).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithContentDescription("Source removal limitation: not a secure erase guarantee")
+            .assertIsDisplayed()
     }
 
     @Test
