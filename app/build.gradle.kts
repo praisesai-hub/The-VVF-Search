@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
   alias(libs.plugins.android.application)
@@ -194,6 +195,16 @@ detekt {
 }
 
 tasks.named("preBuild").configure { dependsOn(fetchEmbeddingGemmaModel) }
+
+// Robolectric loads Android application classes through a sandbox classloader. JaCoCo excludes
+// classes without a source location by default, which otherwise turns exercised JVM paths into
+// false-zero coverage. Keep JDK internals excluded to avoid instrumenting the host runtime.
+tasks.withType<Test>().configureEach {
+  extensions.configure(JacocoTaskExtension::class) {
+    isIncludeNoLocationClasses = true
+    excludes = listOf("jdk.internal.*")
+  }
+}
 
 // Crashlytics mapping upload requires the Google Services-generated app ID file.
 // Keep upload enabled when Firebase configuration is present, but do not make
