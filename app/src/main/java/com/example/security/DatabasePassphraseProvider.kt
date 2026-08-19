@@ -10,7 +10,8 @@ import java.util.Base64
  */
 class DatabasePassphraseProvider private constructor(
     private val store: StringKeyValueStore,
-    private val random: SecureRandom
+    private val random: SecureRandom,
+    @Suppress("UNUSED_PARAMETER") private val constructionMarker: Unit
 ) {
     constructor(context: Context) : this(
         store = SecureKeyValueStore(
@@ -18,11 +19,12 @@ class DatabasePassphraseProvider private constructor(
             fileName = STORE_FILE_NAME,
             keyAlias = KEY_ALIAS
         ),
-        random = SecureRandom()
+        random = SecureRandom(),
+        constructionMarker = Unit
     )
 
     internal constructor(store: StringKeyValueStore, random: SecureRandom = SecureRandom()) :
-        this(store, random)
+        this(store, random, Unit)
     @Synchronized
     fun getOrCreate(): ByteArray {
         val existing = store.getString(PASSPHRASE_KEY)
