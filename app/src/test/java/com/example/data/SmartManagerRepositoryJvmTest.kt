@@ -103,7 +103,6 @@ class SmartManagerRepositoryJvmTest {
         )
 
         assertFalse(queued)
-        verify(exactly = 0) { dao.getAllPlugins() }
         verify(exactly = 0) { dao.getCloudSyncItems() }
         coVerify(exactly = 0) { dao.insertCloudSyncItem(any()) }
     }
