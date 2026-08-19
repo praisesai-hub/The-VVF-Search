@@ -1,6 +1,5 @@
 package com.example.security
 
-import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -9,10 +8,7 @@ class DatabasePassphraseProviderTest {
     @Test
     fun getOrCreate_persistsOneThirtyTwoBytePassphrase() {
         val store = InMemoryStore()
-        val provider = DatabasePassphraseProvider(
-            context = ApplicationProvider.getApplicationContext(),
-            store = store
-        )
+        val provider = DatabasePassphraseProvider(store)
 
         val first = provider.getOrCreate()
         val second = provider.getOrCreate()

@@ -8,15 +8,21 @@ import java.util.Base64
  * Owns the SQLCipher passphrase envelope. The generated random passphrase is
  * never exposed through UI state or ordinary SharedPreferences.
  */
-class DatabasePassphraseProvider(
-    context: Context,
-    private val store: StringKeyValueStore = SecureKeyValueStore(
-        context = context,
-        fileName = STORE_FILE_NAME,
-        keyAlias = KEY_ALIAS
-    ),
-    private val random: SecureRandom = SecureRandom()
+class DatabasePassphraseProvider private constructor(
+    private val store: StringKeyValueStore,
+    private val random: SecureRandom
 ) {
+    constructor(context: Context) : this(
+        store = SecureKeyValueStore(
+            context = context,
+            fileName = STORE_FILE_NAME,
+            keyAlias = KEY_ALIAS
+        ),
+        random = SecureRandom()
+    )
+
+    internal constructor(store: StringKeyValueStore, random: SecureRandom = SecureRandom()) :
+        this(store, random)
     @Synchronized
     fun getOrCreate(): ByteArray {
         val existing = store.getString(PASSPHRASE_KEY)
