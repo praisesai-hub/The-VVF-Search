@@ -89,6 +89,7 @@ class VaultRepositoryTest {
         every { PhysicalStorageManager.removeSourceAfterVaultEncryption(context, file.path) } returns true
         val committedSource = slot<FileItemEntity>()
         val committedVaultItem = slot<VaultItemEntity>()
+        val committedOperation = slot<VaultOperationEntity>()
         val operations = mutableListOf<VaultOperationEntity>()
         coEvery { dao.getFileById(file.id) } returns file
         coEvery { dao.getVaultItemByEncryptedPath(result.vaultFilePath) } returns null
@@ -96,9 +97,13 @@ class VaultRepositoryTest {
             dao.commitVaultEncryptionMetadata(
                 capture(committedSource),
                 capture(committedVaultItem),
-                any()
+                capture(committedOperation)
             )
-        } just Runs
+        } coAnswers {
+            operations += committedOperation.captured.copy(
+                state = VaultOperationState.METADATA_COMMITTED
+            )
+        }
         coEvery { dao.upsertVaultOperation(capture(operations)) } just Runs
 
         repository.encryptToVault(file)
