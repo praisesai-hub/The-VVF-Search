@@ -114,6 +114,8 @@ fun CloudSyncSection(
     onConflictModeChange: (String) -> Unit
 ) {
     val googleAuthState by viewModel.googleAuthState.collectAsStateWithLifecycle()
+    val keepLocalLabel = stringResource(R.string.keep_local)
+    val keepCloudLabel = stringResource(R.string.keep_cloud)
     LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Google Drive Core Banner
         item {
@@ -240,10 +242,10 @@ fun CloudSyncSection(
                         Text(text = stringResource(R.string.strategy_mode), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = {
                             onConflictModeChange(
-                                if (conflictResolutionMode == keepLocalLabel) keepCloudLabel else keepLocalLabel
+                                if (conflictMode == keepLocalLabel) keepCloudLabel else keepLocalLabel
                             )
                         }) {
-                            Text(text = conflictResolutionMode, color = BhagwaOrange, fontWeight = FontWeight.Bold)
+                            Text(text = conflictMode, color = BhagwaOrange, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
