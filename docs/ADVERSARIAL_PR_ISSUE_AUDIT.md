@@ -145,6 +145,20 @@ The supplied follow-up report describes the same latest run and identifies it as
 
 The provided statement that 171 instrumented tests finished successfully is consistent with the completed emulator test step, but its exact test-count line was not present in the retained failed-step log. This audit therefore treats the successful instrumentation step as proven and the exact count as unconfirmed until the uploaded test-report artifact is read.
 
+## 8. Follow-up validation at commit `47e588a`
+
+A single follow-up validation, [Android CI/CD `32425402657`](https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32425402657), was dispatched for the batched hardening commit `47e588a`. The JVM job failed before the emulator job could produce useful coverage evidence. In accordance with the resource policy, the remaining emulator execution was cancelled after the JVM gate had already failed. This is a **cancelled validation after a proven JVM failure**, not evidence that instrumented tests regressed. [7]
+
+| Gate | Direct evidence | Finding |
+|---|---|---|
+| JVM unit tests | `301 tests completed, 2 failed` | The suite was not green. |
+| Cloud retry classification | `CloudSyncEngineTest.resolveHostMessage_isMappedToRetryableError` expected retryable `true`, received `false` | The retry refactor incorrectly treated `IllegalStateException("Unable to resolve host …")` as non-transient even though the domain error mapper classified it as network-unavailable. |
+| Legacy vault migration test | `VaultRepositoryTest.unlockFromVault_migratesLegacyV1FileToV2BeforeRestoringIt` raised `SecurityException: Vault authentication is required` | The test constructed a separate repository but did not establish its delegated authenticated session before calling `unlockFromVault`; this was a fixture defect, not a proven migration implementation defect. |
+| Lint report stage | `SarifReporter.writeQuickFixes` raised `MissingFormatArgumentException: Format specifier '%1$s'` | The crash is in Android Lint's SARIF renderer after analysis and HTML report emission. It is not evidence of a matching application string-resource defect. |
+| Detekt | `Analysis failed with 210 weighted issues` | The earlier targeted refactors reduced the recorded count from 217, but the gate remains failing. |
+
+The two JVM regressions were corrected in subsequent commit `e930080`: retry classification now recognizes hostname-resolution messages before exception-family dispatch, and the migration fixture explicitly establishes the test repository session. Lint is configured to keep HTML, XML, and text reports but disable only SARIF output, whose renderer was the crashing component. Android's Lint DSL documents these report types as independently configurable. [8] These corrections are **not yet CI-verified**; no second validation was dispatched in order to avoid another rapid-run cycle.
+
 ## References
 
 [1]: https://github.com/praisesai-hub/The-VVF-Search/pull/44 "PR #44 — Google dependency update"
@@ -153,3 +167,5 @@ The provided statement that 171 instrumented tests finished successfully is cons
 [4]: https://github.com/praisesai-hub/The-VVF-Search/issues/33 "Issue #33 — Weekly Dependabot and CI risks"
 [5]: https://github.com/praisesai-hub/The-VVF-Search/issues/34 "Issue #34 — Kotlin CodeQL compatibility"
 [6]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32421178517 "Android CI/CD run 32421178517"
+[7]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32425402657 "Android CI/CD run 32425402657"
+[8]: https://developer.android.com/reference/tools/gradle-api/8.3/null/com/android/build/api/dsl/Lint "Android Lint Gradle DSL reference"

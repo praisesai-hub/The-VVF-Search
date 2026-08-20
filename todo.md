@@ -52,12 +52,12 @@
 - [x] Complete bounded evidence-only adversarial audit of open PRs, issues, source defects, and CI blockers; do not dispatch another workflow run.
 - [x] Reconcile attached audit documents with the current repository and CI evidence.
 - [ ] Repair the two latest hosted JVM test failures without weakening fail-closed vault behavior.
-- [ ] Preserve reproducible Lint diagnostic artifacts and identify the `%1$s` report-rendering source.
+- [x] Preserve reproducible Lint diagnostic artifacts and identify the `%1$s` report-rendering source.
 - [ ] Refactor Detekt-critical retry, vault, cloud-sync, destructive-storage, and generic-error-handling findings without blanket suppressions.
 - [ ] Close the measured instrumented coverage gaps in security, storage, vault, and cloud-sync scopes.
 - [ ] Continue JVM coverage hardening until the configured aggregate, security, data, vault, and cloud package gates pass.
 - [ ] Resolve dependency PRs through isolated compatible migrations or documented holds; do not bypass failed checks.
 - [ ] Resolve stale owner PR conflict/overlap decisions without force-merging conflicted branches.
 - [ ] Keep issues #33 and #34 open until their external closure evidence is independently verified.
-- [ ] Run exactly one bounded hosted validation after a batched correction and record results.
+- [x] Run exactly one bounded hosted validation after a batched correction and record results.
 - [ ] Produce an updated production-hardening report with evidence and remaining release blockers.
