@@ -26,4 +26,7 @@
 - [x] Audit ViewModel, Flow, Room, and WorkManager production architecture.
 - [x] Validate Navigation Component or Compose navigation configuration.
 - [x] Audit DataStore and SharedPreferences persistence boundaries.
+- [x] Audit README setup guidance and AI feature claims against current implementation.
+- [x] Audit GitHub Actions test automation, quality gates, and release evidence.
+- [x] Audit Android manifest permissions, exported components, and deep-link exposure.
 - [ ] Report verified coverage results and unresolved release blockers.
