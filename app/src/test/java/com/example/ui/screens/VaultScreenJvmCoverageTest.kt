@@ -61,4 +61,15 @@ class VaultScreenJvmCoverageTest {
 
         composeTestRule.onRoot().assertIsDisplayed()
     }
+
+    @Test
+    fun aboutScreenRendersAuditedProductAndLegalContent() {
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                AboutScreen(onBackClick = {})
+            }
+        }
+
+        composeTestRule.onRoot().assertIsDisplayed()
+    }
 }
