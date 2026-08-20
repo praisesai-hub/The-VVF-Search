@@ -135,6 +135,7 @@ jobs:
           --report app/build/reports/coverage/test/debug/report.xml \
           --policy scripts/coverage-policy.json
     - name: Upload JVM Unit Test Coverage Report
+      if: always()
       uses: actions/upload-artifact@v7
       with:
         name: jvm-unit-test-coverage
