@@ -5,9 +5,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
@@ -61,7 +62,7 @@ class DashboardScreenJvmCoverageTest {
 
         composeTestRule.onNodeWithText("VVF Smart Manager v2.0").assertIsDisplayed()
         composeTestRule.onNodeWithText("System Health: 94% Excellent").assertIsDisplayed()
-        val list = composeTestRule.onNode(hasScrollToIndexAction())
+        val list = composeTestRule.onAllNodes(hasScrollToIndexAction()).onFirst()
         list.performScrollToNode(hasText("Recent Storage Files"))
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
 
