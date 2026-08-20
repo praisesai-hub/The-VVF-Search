@@ -176,6 +176,12 @@ A single validation, [Android CI/CD `32428262425`](https://github.com/praisesai-
 
 The downloaded Lint text report identified all 13 errors without relying on guesswork: three restricted WorkManager result-subclass checks, eight configuration-unaware `LocalContext.current.getString()` calls in `VaultScreen`, and two unescaped literal percentages in the English/Hindi `system_health` resources. Commits `2aab7b7`, `8f2da08`, and `17e53b5` contain targeted fixes for those enumerated sources; commits `11da2a0` and `8effb6e` add Vault and secure-store fail-closed tests. These later commits remain **unverified** until the next deliberately batched validation run.
 
+## 10. Validation at commit `2e4f946`
+
+Validation [run `32430258723`](https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32430258723) was the next single batched check after the known Lint repairs, expanded Vault/security tests, and CloudSyncWorker Detekt refactor. Its JVM compiler did not reach the test or coverage policy: `CloudSyncWorker.kt` had an extra closing brace immediately after the extracted `processSyncItems` function. The parser closed the worker class early, then reported `WORK_NAME` as unresolved at the companion declaration and a top-level declaration error at the final brace. This was a **source regression introduced by the refactor**, not a pre-existing repository issue. [10]
+
+The obsolete emulator job was cancelled after the completed JVM job had already failed. Commit `8e5535e` removes the extra brace. It has passed only whitespace and structural-balance checks in this environment; it remains **unverified by hosted compilation**. The same run's Detekt evidence remained at 210 weighted issues, so no improvement in the quality gate may yet be claimed.
+
 ## References
 
 [1]: https://github.com/praisesai-hub/The-VVF-Search/pull/44 "PR #44 — Google dependency update"
@@ -187,3 +193,4 @@ The downloaded Lint text report identified all 13 errors without relying on gues
 [7]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32425402657 "Android CI/CD run 32425402657"
 [8]: https://developer.android.com/reference/tools/gradle-api/8.3/null/com/android/build/api/dsl/Lint "Android Lint Gradle DSL reference"
 [9]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32428262425 "Android CI/CD run 32428262425"
+[10]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32430258723 "Android CI/CD run 32430258723"
