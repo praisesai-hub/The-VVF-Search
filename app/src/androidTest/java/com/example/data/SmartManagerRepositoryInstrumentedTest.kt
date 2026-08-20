@@ -75,6 +75,9 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun deleteFilesByIds(ids: List<Long>) = Unit
         override suspend fun deleteFileById(id: Long) {
             deletedFileIds += id
+            activeFiles.removeAll { it.id == id }
+            unhashedFiles.removeAll { it.id == id }
+            recycleBinFiles.removeAll { it.id == id }
         }
         override suspend fun emptyRecycleBin() {
             recycleBinFiles.clear()
