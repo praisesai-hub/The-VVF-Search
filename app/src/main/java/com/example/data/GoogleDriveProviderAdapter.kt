@@ -95,7 +95,11 @@ class GoogleDriveProviderAdapter(
                 httpClient.newCall(request).execute().use { response ->
                     when {
                         response.code == 308 -> {
-                            offset = parseCommittedOffset(response.header("Range"), offset, endExclusive)
+                            offset = parseCommittedOffset(
+                                response.header("Range") ?: response.header("Content-Range"),
+                                offset,
+                                endExclusive
+                            )
                             onProgress(CloudTransferProgress(resumableSessionUri = sessionUri, bytesCommitted = offset))
                         }
                         response.isSuccessful -> {
@@ -217,7 +221,13 @@ class GoogleDriveProviderAdapter(
         return runCatching {
             httpClient.newCall(request).execute().use { response ->
                 when {
-                    response.code == 308 -> UploadProbe.Offset(parseCommittedOffset(response.header("Range"), 0L, 0L))
+                    response.code == 308 -> UploadProbe.Offset(
+                        parseCommittedOffset(
+                            response.header("Range") ?: response.header("Content-Range"),
+                            0L,
+                            0L
+                        )
+                    )
                     response.isSuccessful -> extractFileIdFromJson(response.body?.string().orEmpty())
                         ?.let(UploadProbe::Completed) ?: UploadProbe.Unknown
                     else -> UploadProbe.Unknown
