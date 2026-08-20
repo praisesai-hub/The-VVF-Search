@@ -48,7 +48,8 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
         onProgress: suspend (CloudTransferProgress) -> Unit
     ): CloudSyncResult {
         receivedTransferState = transferState
-        progressToEmit?.let(onProgress)
+        val progress = progressToEmit
+        if (progress != null) onProgress(progress)
         return uploadFile(file, remotePath, operationId)
     }
 
