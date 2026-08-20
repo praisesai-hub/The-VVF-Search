@@ -6,6 +6,6 @@
 - [x] Run one final bounded isolated-branch validation without merging to main.
 - [ ] Resolve the remaining enforced JVM coverage gates before any merge to main.
 - [x] Inventory Android Lint, Detekt/ktlint, and external code-quality tooling configuration.
-- [ ] Run available static-analysis checks and collect reproducible output.
-- [ ] Assess SonarQube/CodeClimate integration readiness and report verified gaps.
+- [x] Run available static-analysis checks and collect reproducible output.
+- [x] Assess SonarQube/CodeClimate integration readiness and report verified gaps.
 - [ ] Report verified coverage results and unresolved release blockers.
