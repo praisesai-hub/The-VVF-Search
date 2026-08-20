@@ -272,7 +272,12 @@ class GoogleDriveProviderAdapter(
         value.replace("\\", "\\\\").replace("'", "\\'")
 
     private fun parseCommittedOffset(range: String?, currentOffset: Long, endExclusive: Long): Long {
-        val end = range?.substringAfterLast('-')?.toLongOrNull()
+        val end = range
+            ?.trim()
+            ?.let { value ->
+                Regex("bytes\\s*[= ]\\s*\\d+-(\\d+)(?:/\\d+)?").find(value)?.groupValues?.getOrNull(1)?.toLongOrNull()
+                    ?: value.substringAfterLast('-').substringBefore('/').toLongOrNull()
+            }
         return if (end != null) maxOf(currentOffset, end + 1L) else endExclusive.coerceAtLeast(currentOffset)
     }
 
