@@ -126,7 +126,6 @@ class CloudSyncWorker @JvmOverloads constructor(
         }
         summary
     }
-    }
 
     private suspend fun kotlinx.coroutines.CoroutineScope.processSyncItem(
         item: CloudSyncItemEntity,
