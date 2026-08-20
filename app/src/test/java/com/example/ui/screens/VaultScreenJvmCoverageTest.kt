@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
 import com.example.ui.FakeSmartManagerRepository
 import com.example.ui.MainViewModel
+import com.example.ui.VVFSmartManagerApp
 import com.example.ui.theme.VVFSmartManagerTheme
 import org.junit.Before
 import org.junit.Rule
@@ -44,6 +45,17 @@ class VaultScreenJvmCoverageTest {
                     pinError = null,
                     vaultItems = emptyList(),
                 )
+            }
+        }
+
+        composeTestRule.onRoot().assertIsDisplayed()
+    }
+
+    @Test
+    fun topLevelAppRendersDefaultDashboardWithLifecycleObserver() {
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                VVFSmartManagerApp(viewModel)
             }
         }
 
