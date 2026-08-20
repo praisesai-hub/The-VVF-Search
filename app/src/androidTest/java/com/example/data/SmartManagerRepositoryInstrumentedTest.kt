@@ -50,7 +50,7 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null
         override suspend fun moveFilesToRecycleBinAtomic(files: List<FileItemEntity>) = updateFiles(files)
         override suspend fun getFileById(id: Long): FileItemEntity? =
-            (activeFiles + unhashedFiles).firstOrNull { it.id == id }
+            (activeFiles + unhashedFiles + recycleBinFiles).firstOrNull { it.id == id }
         override suspend fun getFileByName(name: String): FileItemEntity? =
             (activeFiles + unhashedFiles).firstOrNull { it.name == name }
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())

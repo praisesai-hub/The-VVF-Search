@@ -81,7 +81,7 @@ class CloudSyncEngineInstrumentedTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(false, result.isRetryable)
-        assertTrue(result.message.contains("does not exist"))
+        assertEquals("The file operation could not be completed.", result.message)
         assertNull(adapter.uploadedFile)
     }
 
@@ -95,7 +95,7 @@ class CloudSyncEngineInstrumentedTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(false, result.isRetryable)
-        assertTrue(result.message.contains("No supported provider adapter"))
+        assertEquals("The operation could not be completed.", result.message)
     }
 
     @Test
@@ -139,7 +139,7 @@ class CloudSyncEngineInstrumentedTest {
         result as CloudSyncResult.Error
         assertEquals(true, result.isRetryable)
         assertSame(failure, result.cause)
-        assertEquals("host unavailable", result.message)
+        assertEquals("Network connection is unavailable.", result.message)
     }
 
     @Test
@@ -155,7 +155,7 @@ class CloudSyncEngineInstrumentedTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(true, result.isRetryable)
-        assertEquals("Unable to resolve host storage.example", result.message)
+        assertEquals("Network connection is unavailable.", result.message)
     }
 }
 

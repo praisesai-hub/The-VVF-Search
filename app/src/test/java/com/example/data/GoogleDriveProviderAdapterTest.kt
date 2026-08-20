@@ -458,7 +458,7 @@ class GoogleDriveProviderAdapterTest {
         }
 
         assertEquals("remote-resumed", (result as CloudSyncResult.Success).remoteFileId)
-        assertEquals(listOf("bytes */10", "bytes 3-9/10"), ranges)
+        assertEquals("Unexpected Content-Range sequence: $ranges", listOf("bytes */10", "bytes 3-9/10"), ranges)
         assertEquals(10L, progress.last().bytesCommitted)
     }
 

@@ -246,7 +246,7 @@ class FileDaoInstrumentedTest {
             hash = "video-hash",
             visualHash = "video-visual",
             semanticIndexed = true,
-        )
+        ).copy(videoSampleHashes = "0011223344556677;0011223344556677;0011223344556677")
         dao.insertFileDirect(keep)
         dao.insertFileDirect(duplicate)
         dao.insertFileDirect(blankHash)

@@ -163,7 +163,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         fakeInterceptor.responseProvider = { request ->
             requestCount += 1
             if (requestCount == 1) {
-                assertTrue(request.url.queryParameter("q")?.contains("name='remote.txt'") == true)
+                assertTrue(request.url.queryParameter("q")?.contains("name = 'remote.txt'") == true)
                 response(request, 200, "{\"files\":[{\"id\":\"remote-id\"}]}")
             } else {
                 assertTrue(request.url.toString().contains("/remote-id?alt=media"))

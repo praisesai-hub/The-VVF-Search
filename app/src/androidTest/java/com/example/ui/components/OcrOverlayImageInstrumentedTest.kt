@@ -65,7 +65,7 @@ class OcrOverlayImageInstrumentedTest {
                 }
             }
 
-            composeTestRule.onNodeWithContentDescription("OCR Image Preview").assertIsDisplayed()
+            composeTestRule.onNodeWithContentDescription("OCR image preview").assertIsDisplayed()
         } finally {
             imageFile.delete()
         }

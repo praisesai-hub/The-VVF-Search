@@ -146,7 +146,7 @@
     <string name="keep_local">स्थानीय रखें</string>
     <string name="keep_cloud">क्लाउड रखें</string>
     <string name="dashboard_title">%1$s v2.0</string>
-    <string name="system_health">सिस्टम स्वास्थ्य: 94%% उत्कृष्ट</string>
+    <string name="system_health">सिस्टम स्वास्थ्य: 94% उत्कृष्ट</string>
     <string name="start_benchmark">स्टार्ट &lt;10 सेकंड</string>
     <string name="storage_used">उपयोग किया गया स्टोरेज: %1$s</string>
     <string name="free_storage">128 GB में से 18.5 GB खाली</string>

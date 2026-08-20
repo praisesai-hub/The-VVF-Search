@@ -119,10 +119,10 @@ class VaultPinInstrumentedTest {
             "00000000".forEach { digit -> viewModel.appendPinDigit(digit.toString()) }
         }
 
-        assertEquals("Too many incorrect attempts. Try again in 30 seconds.", viewModel.pinError.value)
+        assertEquals("Too many incorrect attempts. Vault authentication is temporarily locked.", viewModel.pinError.value)
         viewModel.appendPinDigit("2")
         assertEquals("", viewModel.enteredPin.value)
-        assertEquals("Too many incorrect attempts. Try again in 30 seconds.", viewModel.pinError.value)
+        assertEquals("Too many incorrect attempts. Vault authentication is temporarily locked.", viewModel.pinError.value)
     }
 
     @Test
