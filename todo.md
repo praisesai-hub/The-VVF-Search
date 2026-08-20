@@ -45,4 +45,19 @@
 - [ ] Implement Vault authentication, biometric, migration, repository, and adapter coverage batches.
 - [ ] Add compatible Gradle/JaCoCo enforcement configuration and CI artifact paths.
 - [ ] Run one bounded hosted validation and record measured gate results.
+- [x] Collect one final active-run status only; do not poll or start another validation run until evidence requires it.
+- [ ] Inspect the current CI run and screenshot evidence once without dispatching or polling.
+- [ ] Diagnose and fix only the confirmed active-run blocker.
 - [ ] Report verified coverage results and unresolved release blockers.
+- [x] Complete bounded evidence-only adversarial audit of open PRs, issues, source defects, and CI blockers; do not dispatch another workflow run.
+- [x] Reconcile attached audit documents with the current repository and CI evidence.
+- [ ] Repair the two latest hosted JVM test failures without weakening fail-closed vault behavior.
+- [ ] Preserve reproducible Lint diagnostic artifacts and identify the `%1$s` report-rendering source.
+- [ ] Refactor Detekt-critical retry, vault, cloud-sync, destructive-storage, and generic-error-handling findings without blanket suppressions.
+- [ ] Close the measured instrumented coverage gaps in security, storage, vault, and cloud-sync scopes.
+- [ ] Continue JVM coverage hardening until the configured aggregate, security, data, vault, and cloud package gates pass.
+- [ ] Resolve dependency PRs through isolated compatible migrations or documented holds; do not bypass failed checks.
+- [ ] Resolve stale owner PR conflict/overlap decisions without force-merging conflicted branches.
+- [ ] Keep issues #33 and #34 open until their external closure evidence is independently verified.
+- [ ] Run exactly one bounded hosted validation after a batched correction and record results.
+- [ ] Produce an updated production-hardening report with evidence and remaining release blockers.

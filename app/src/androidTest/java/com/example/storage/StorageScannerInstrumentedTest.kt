@@ -156,6 +156,34 @@ class StorageScannerInstrumentedTest {
     }
 
     @Test
+    fun contentUriDocumentFingerprint_usesTailEvidenceForLargeDocuments(): Unit = runBlocking {
+        val prefix = "p".repeat(4_096)
+        val middle = "m".repeat(4_096)
+        val firstUri = insertMediaFile("vvf-candidate-a-${System.nanoTime()}.txt", "text/plain")
+        val secondUri = insertMediaFile("vvf-candidate-b-${System.nanoTime()}.txt", "text/plain")
+        try {
+            context.contentResolver.openOutputStream(firstUri)!!.use { output ->
+                output.write((prefix + middle + "a".repeat(4_096)).toByteArray())
+            }
+            context.contentResolver.openOutputStream(secondUri)!!.use { output ->
+                output.write((prefix + middle + "b".repeat(4_096)).toByteArray())
+            }
+            publishMediaFile(firstUri)
+            publishMediaFile(secondUri)
+
+            val firstFingerprint = scanner.computeContentUriDocumentCandidateFingerprint(firstUri)
+            val secondFingerprint = scanner.computeContentUriDocumentCandidateFingerprint(secondUri)
+
+            assertTrue(firstFingerprint.matches(Regex("[0-9a-f]{16}")))
+            assertTrue(secondFingerprint.matches(Regex("[0-9a-f]{16}")))
+            assertNotEquals(firstFingerprint, secondFingerprint)
+        } finally {
+            context.contentResolver.delete(firstUri, null, null)
+            context.contentResolver.delete(secondUri, null, null)
+        }
+    }
+
+    @Test
     fun scanDeviceStorage_discoversPublishedMediaStoreImageAndComputesHashes(): Unit = runBlocking {
         val displayName = "vvf-scanner-${System.nanoTime()}.png"
         val mediaUri = insertMediaFile(displayName, "image/png")

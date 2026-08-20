@@ -4,6 +4,7 @@ package com.example.data
 import com.example.ai.SearchTextTokenizer
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import android.net.Uri
 import android.util.Log
 import com.example.ai.SemanticEmbeddingProvider
@@ -17,6 +18,7 @@ import com.example.domain.retry.RetryPolicy
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -30,7 +32,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.TimeoutException
 
 open class SmartManagerRepository(
     private val context: Context,
@@ -269,24 +273,48 @@ open class SmartManagerRepository(
         for (attempt in 0 until maxAttempts) {
             try {
                 return block()
-            } catch (error: Exception) {
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: IOException) {
                 lastException = error
-                val decision = RetryPolicy.classify(operation, error)
-                Log.w(
-                    "SmartManagerRepository",
-                    "Retry decision operation=$operation attempt=${attempt + 1} reason=${decision.reasonCode} retryable=${decision.retryable}"
-                )
-                if (!RetryPolicy.shouldRetry(operation, error, attempt)) throw error
-                kotlinx.coroutines.delay(
-                    if (factor == RetryPolicy.BACKOFF_FACTOR && initialDelayMs == RetryPolicy.INITIAL_DELAY_MS) {
-                        RetryPolicy.delayForAttempt(attempt)
-                    } else {
-                        (initialDelayMs * factor.pow(attempt)).toLong()
-                    }
-                )
+                retryExpectedFailure(operation, error, attempt, initialDelayMs, factor)
+            } catch (error: SQLiteException) {
+                lastException = error
+                retryExpectedFailure(operation, error, attempt, initialDelayMs, factor)
+            } catch (error: TimeoutException) {
+                lastException = error
+                retryExpectedFailure(operation, error, attempt, initialDelayMs, factor)
+            } catch (error: SecurityException) {
+                lastException = error
+                retryExpectedFailure(operation, error, attempt, initialDelayMs, factor)
+            } catch (error: IllegalArgumentException) {
+                lastException = error
+                retryExpectedFailure(operation, error, attempt, initialDelayMs, factor)
             }
         }
         throw lastException ?: IllegalStateException("Operation failed without an exception")
+    }
+
+    private suspend fun retryExpectedFailure(
+        operation: RetryOperation,
+        error: Throwable,
+        attempt: Int,
+        initialDelayMs: Long,
+        factor: Double
+    ) {
+        val decision = RetryPolicy.classify(operation, error)
+        Log.w(
+            "SmartManagerRepository",
+            "Retry decision operation=$operation attempt=${attempt + 1} reason=${decision.reasonCode} retryable=${decision.retryable}"
+        )
+        if (!RetryPolicy.shouldRetry(operation, error, attempt)) throw error
+        kotlinx.coroutines.delay(
+            if (factor == RetryPolicy.BACKOFF_FACTOR && initialDelayMs == RetryPolicy.INITIAL_DELAY_MS) {
+                RetryPolicy.delayForAttempt(attempt)
+            } else {
+                (initialDelayMs * factor.pow(attempt)).toLong()
+            }
+        )
     }
 
     private fun Double.pow(exponent: Int): Double {

@@ -388,7 +388,8 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             if (firstRead == 0) return@withContext ""
             val size = try { context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L } catch (_: Exception) { -1L }
             digest.update("DOC_SIZE:$size:".toByteArray())
-            if (firstRead <= 8192) {
+            val needsBoundarySampling = size > first.size || (size < 0L && firstRead == first.size)
+            if (!needsBoundarySampling) {
                 digest.update(first, 0, firstRead)
             } else {
                 digest.update(first, 0, 4096)

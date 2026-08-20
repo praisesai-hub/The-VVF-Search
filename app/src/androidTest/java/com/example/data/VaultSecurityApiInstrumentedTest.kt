@@ -13,6 +13,7 @@ import java.security.GeneralSecurityException
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
@@ -66,6 +67,37 @@ class VaultSecurityApiInstrumentedTest {
         assertThrows(IllegalStateException::class.java) { security.unlockWithPin("00000000") }
         assertThrows(SecurityException::class.java) { security.requireAuthenticatedSession() }
         assertFalse(security.hasBiometricEnrollment())
+    }
+
+    @Test
+    fun repeatedInvalidPins_persistLockoutAndBlockCorrectAuthenticationUntilExpiry() {
+        var now = 1_000_000L
+        val controlledEngine = VaultManagerEngine(
+            context = context,
+            keystoreVaultManager = keystore,
+            injectedVaultPrefs = preferences,
+            nowMs = { now }
+        )
+        val controlledSecurity = VaultSecurityDelegate(controlledEngine)
+        assertTrue(controlledSecurity.initializeVaultPin("24682468"))
+
+        repeat(MAX_VAULT_FAILED_ATTEMPTS) {
+            assertThrows(IllegalStateException::class.java) {
+                controlledSecurity.unlockWithPin("00000000")
+            }
+        }
+        val locked = controlledSecurity.getVaultLockoutState()
+        assertEquals(MAX_VAULT_FAILED_ATTEMPTS, locked.failedAttempts)
+        assertEquals(now + VAULT_BASE_LOCKOUT_MS, locked.lockedUntilMs)
+
+        assertThrows(VaultAuthenticationLockedOutException::class.java) {
+            controlledSecurity.unlockWithPin("24682468")
+        }
+
+        now = locked.lockedUntilMs
+        assertTrue(controlledSecurity.unlockWithPin("24682468"))
+        assertEquals(0, controlledSecurity.getVaultLockoutState().failedAttempts)
+        assertEquals(0L, controlledSecurity.getVaultLockoutState().lockedUntilMs)
     }
 
     @Test

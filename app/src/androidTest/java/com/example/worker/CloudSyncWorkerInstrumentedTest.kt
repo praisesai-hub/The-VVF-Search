@@ -266,6 +266,26 @@ class CloudSyncWorkerInstrumentedTest {
     }
 
     @Test
+    fun successfulUpload_persistsRemoteAndResumableTransferCheckpoint(): Unit = runBlocking {
+        val file = createFile("worker_checkpoint")
+        fakeDao.cloudSyncItems += item(312L, file)
+        fakeAdapter.resultByRemotePath[file.name] = CloudSyncResult.Success(
+            bytesTransferred = file.length(),
+            remoteFileId = "remote-312",
+            resumableSessionUri = "https://upload.example.test/session-312",
+            bytesCommitted = file.length(),
+        )
+
+        assertEquals(ListenableWorker.Result.success(), createWorker().doWork())
+
+        val synced = fakeDao.getCloudSyncItems().first().single()
+        assertEquals("SYNCED", synced.status)
+        assertEquals("remote-312", synced.remoteFileId)
+        assertEquals("https://upload.example.test/session-312", synced.resumableSessionUri)
+        assertEquals(file.length(), synced.resumableBytesCommitted)
+    }
+
+    @Test
     fun mixedStatuses_reprocessesEligibleItemsAndSkipsDisabledProvider(): Unit = runBlocking {
         val failed = createFile("worker_failed")
         val uploading = createFile("worker_uploading")
@@ -298,6 +318,28 @@ class CloudSyncWorkerInstrumentedTest {
         assertEquals(1, retryItem.attemptCount)
         assertEquals(null, retryItem.leaseOwner)
         assertEquals(0L, retryItem.completedAtMs)
+    }
+
+    @Test
+    fun retryableFailure_persistsResumableCheckpointBeforeRequeue(): Unit = runBlocking {
+        val file = createFile("worker_retry_checkpoint")
+        fakeDao.cloudSyncItems += item(313L, file)
+        fakeAdapter.resultByRemotePath[file.name] = CloudSyncResult.Error(
+            message = "interrupted transfer",
+            isRetryable = true,
+            remoteFileId = "remote-313",
+            resumableSessionUri = "https://upload.example.test/session-313",
+            bytesCommitted = 7L,
+        )
+
+        assertEquals(ListenableWorker.Result.retry(), createWorker(runAttemptCount = 0).doWork())
+
+        val requeued = fakeDao.getCloudSyncItems().first().single()
+        assertEquals("QUEUED", requeued.status)
+        assertEquals("remote-313", requeued.remoteFileId)
+        assertEquals("https://upload.example.test/session-313", requeued.resumableSessionUri)
+        assertEquals(7L, requeued.resumableBytesCommitted)
+        assertEquals(null, requeued.leaseOwner)
     }
 
     @Test

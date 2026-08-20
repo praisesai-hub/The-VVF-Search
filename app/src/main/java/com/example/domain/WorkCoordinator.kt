@@ -7,6 +7,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.UUID
@@ -34,25 +35,29 @@ class WorkCoordinator(private val context: Context) {
         const val BACKGROUND_INDEXING = 15L
     }
 
-    fun enqueueDuplicateCleanupWork() {
+    private fun enqueueUniqueWork(workName: String, request: OneTimeWorkRequest) {
         try {
-            val constraints = Constraints.Builder()
-                .setRequiresBatteryNotLow(true)
-                .setRequiresStorageNotLow(true)
-                .build()
-            val request = OneTimeWorkRequestBuilder<DuplicateCleanupWorker>()
-                .setConstraints(constraints)
-                .setInputData(operationData())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.DUPLICATE_CLEANUP, TimeUnit.SECONDS)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "DuplicateCleanupWork",
-                ExistingWorkPolicy.KEEP,
-                request
-            )
-        } catch (error: Exception) {
-            Log.e("WorkCoordinator", "Failed to enqueue DuplicateCleanupWorker", error)
+            WorkManager.getInstance(context).enqueueUniqueWork(workName, ExistingWorkPolicy.KEEP, request)
+        } catch (error: IllegalStateException) {
+            Log.e("WorkCoordinator", "WorkManager is unavailable for $workName", error)
+        } catch (error: IllegalArgumentException) {
+            Log.e("WorkCoordinator", "Work request is invalid for $workName", error)
+        } catch (error: SecurityException) {
+            Log.e("WorkCoordinator", "Work scheduling is not permitted for $workName", error)
         }
+    }
+
+    fun enqueueDuplicateCleanupWork() {
+        val constraints = Constraints.Builder()
+            .setRequiresBatteryNotLow(true)
+            .setRequiresStorageNotLow(true)
+            .build()
+        val request = OneTimeWorkRequestBuilder<DuplicateCleanupWorker>()
+            .setConstraints(constraints)
+            .setInputData(operationData())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.DUPLICATE_CLEANUP, TimeUnit.SECONDS)
+            .build()
+        enqueueUniqueWork("DuplicateCleanupWork", request)
     }
 
     fun enqueueCloudSyncWork(allowed: Boolean) {
@@ -60,65 +65,41 @@ class WorkCoordinator(private val context: Context) {
             Log.i("WorkCoordinator", "Cloud sync enqueue blocked by release policy.")
             return
         }
-        try {
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .setRequiresBatteryNotLow(true)
-                .build()
-            val request = OneTimeWorkRequestBuilder<CloudSyncWorker>()
-                .setConstraints(constraints)
-                .setInputData(operationData())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.CLOUD_SYNC, TimeUnit.SECONDS)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "CloudSyncWork",
-                ExistingWorkPolicy.KEEP,
-                request
-            )
-        } catch (error: Exception) {
-            Log.e("WorkCoordinator", "Failed to enqueue CloudSyncWorker", error)
-        }
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+        val request = OneTimeWorkRequestBuilder<CloudSyncWorker>()
+            .setConstraints(constraints)
+            .setInputData(operationData())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.CLOUD_SYNC, TimeUnit.SECONDS)
+            .build()
+        enqueueUniqueWork("CloudSyncWork", request)
     }
 
     fun enqueueCacheCleanupWork() {
-        try {
-            val constraints = Constraints.Builder()
-                .setRequiresBatteryNotLow(true)
-                .setRequiresStorageNotLow(true)
-                .build()
-            val request = OneTimeWorkRequestBuilder<CacheCleanupWorker>()
-                .setConstraints(constraints)
-                .setInputData(operationData())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.CACHE_CLEANUP, TimeUnit.SECONDS)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "CacheCleanupWork",
-                ExistingWorkPolicy.KEEP,
-                request
-            )
-        } catch (error: Exception) {
-            Log.e("WorkCoordinator", "Failed to enqueue CacheCleanupWorker", error)
-        }
+        val constraints = Constraints.Builder()
+            .setRequiresBatteryNotLow(true)
+            .setRequiresStorageNotLow(true)
+            .build()
+        val request = OneTimeWorkRequestBuilder<CacheCleanupWorker>()
+            .setConstraints(constraints)
+            .setInputData(operationData())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.CACHE_CLEANUP, TimeUnit.SECONDS)
+            .build()
+        enqueueUniqueWork("CacheCleanupWork", request)
     }
 
     fun enqueueBackgroundIndexWork() {
-        try {
-            val constraints = Constraints.Builder()
-                .setRequiresBatteryNotLow(true)
-                .setRequiresStorageNotLow(true)
-                .build()
-            val request = OneTimeWorkRequestBuilder<BackgroundIndexWorker>()
-                .setConstraints(constraints)
-                .setInputData(operationData())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.BACKGROUND_INDEXING, TimeUnit.SECONDS)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "BackgroundIndexWork",
-                ExistingWorkPolicy.KEEP,
-                request
-            )
-        } catch (error: Exception) {
-            Log.e("WorkCoordinator", "Failed to enqueue BackgroundIndexWorker", error)
-        }
+        val constraints = Constraints.Builder()
+            .setRequiresBatteryNotLow(true)
+            .setRequiresStorageNotLow(true)
+            .build()
+        val request = OneTimeWorkRequestBuilder<BackgroundIndexWorker>()
+            .setConstraints(constraints)
+            .setInputData(operationData())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BackoffSeconds.BACKGROUND_INDEXING, TimeUnit.SECONDS)
+            .build()
+        enqueueUniqueWork("BackgroundIndexWork", request)
     }
 }

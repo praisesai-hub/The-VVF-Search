@@ -143,7 +143,19 @@ jobs:
         if-no-files-found: error
     - name: Run Lint
       if: always()
-      run: ./gradlew :app:lintDebug
+      run: ./gradlew --stacktrace :app:lintDebug
+    - name: Upload Lint Reports
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: android-lint-reports
+        path: |
+          app/build/reports/lint-results-debug.html
+          app/build/reports/lint-results-debug.xml
+          app/build/reports/lint-results-debug.txt
+          app/build/reports/lint-results-debug.sarif
+          app/build/reports/problems
+        if-no-files-found: warn
     - name: Run Detekt
       if: always()
       run: ./gradlew :app:detekt

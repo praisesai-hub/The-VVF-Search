@@ -80,7 +80,11 @@ class KeystoreVaultManagerJvmTest {
     @Test
     fun failsClosedWhenPortCannotProvideASecretKeyOrProvisionAKey() {
         val missingKeyStore = availableStore().apply { secretKeys.clear() }
-        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = missingKeyStore)
+        val manager = KeystoreVaultManager(
+            alias,
+            injectedKeyStorePort = missingKeyStore,
+            diagnosticLogger = { _, _ -> }
+        )
         val plaintext = "vault content".encodeToByteArray()
 
         val missingKey = runCatching { manager.encryptBytes(plaintext) }.exceptionOrNull()
@@ -91,7 +95,11 @@ class KeystoreVaultManagerJvmTest {
             failVaultCreation = true
         }
         val unavailable = runCatching {
-            KeystoreVaultManager(alias, injectedKeyStorePort = failingPort)
+            KeystoreVaultManager(
+                alias,
+                injectedKeyStorePort = failingPort,
+                diagnosticLogger = { _, _ -> }
+            )
         }.exceptionOrNull()
         assertTrue(unavailable is IllegalStateException)
     }

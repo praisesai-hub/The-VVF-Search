@@ -34,22 +34,32 @@ object RetryPolicy {
     const val BACKOFF_FACTOR = 2.0
 
     fun classify(operation: RetryOperation, cause: Throwable): RetryDecision {
-        val rootCause = cause.rootCause()
-        val reasonCode = when {
-            rootCause is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
-            rootCause is SocketTimeoutException || rootCause is TimeoutException -> "TIMEOUT"
-            rootCause is UnknownHostException ||
-                rootCause is ConnectException ||
-                rootCause.message?.contains("unable to resolve host", ignoreCase = true) == true -> "NETWORK_UNAVAILABLE"
-            rootCause is FileNotFoundException -> "SOURCE_UNAVAILABLE"
-            rootCause is SecurityException -> "PERMISSION_DENIED"
-            rootCause is IllegalArgumentException -> "INVALID_INPUT"
-            rootCause is IOException && isTemporaryIo(rootCause) -> "TEMPORARY_IO"
-            rootCause is IOException -> "IO_FAILURE"
-            else -> "NON_TRANSIENT_FAILURE"
-        }
+        val reasonCode = reasonCodeFor(cause.rootCause())
+        return RetryDecision(retryable = isRetryable(operation, reasonCode), reasonCode = reasonCode)
+    }
 
-        val retryable = when (operation) {
+    private fun reasonCodeFor(cause: Throwable): String = when (cause) {
+        is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
+        is SocketTimeoutException, is TimeoutException -> "TIMEOUT"
+        is FileNotFoundException -> "SOURCE_UNAVAILABLE"
+        is SecurityException -> "PERMISSION_DENIED"
+        is IllegalArgumentException -> "INVALID_INPUT"
+        is IOException -> ioReasonCode(cause)
+        else -> "NON_TRANSIENT_FAILURE"
+    }
+
+    private fun ioReasonCode(cause: IOException): String = when {
+        isNetworkUnavailable(cause) -> "NETWORK_UNAVAILABLE"
+        isTemporaryIo(cause) -> "TEMPORARY_IO"
+        else -> "IO_FAILURE"
+    }
+
+    private fun isNetworkUnavailable(cause: Throwable): Boolean = when (cause) {
+        is UnknownHostException, is ConnectException -> true
+        else -> cause.message?.contains("unable to resolve host", ignoreCase = true) == true
+    }
+
+    private fun isRetryable(operation: RetryOperation, reasonCode: String): Boolean = when (operation) {
             RetryOperation.DATABASE_READ,
             RetryOperation.DATABASE_WRITE -> reasonCode == "DATABASE_LOCKED"
             RetryOperation.FILE_STORAGE,
@@ -62,8 +72,6 @@ object RetryPolicy {
                 "TEMPORARY_IO"
             )
         }
-        return RetryDecision(retryable = retryable, reasonCode = reasonCode)
-    }
 
     fun shouldRetry(operation: RetryOperation, cause: Throwable, runAttemptCount: Int): Boolean {
         val decision = classify(operation, cause)

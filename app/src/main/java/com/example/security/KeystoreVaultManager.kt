@@ -12,7 +12,10 @@ import javax.crypto.spec.GCMParameterSpec
 class KeystoreVaultManager(
     private val keyAlias: String = DEFAULT_KEY_ALIAS,
     injectedKeyStore: KeyStore? = null,
-    private val injectedKeyStorePort: VaultKeyStorePort? = null
+    private val injectedKeyStorePort: VaultKeyStorePort? = null,
+    private val diagnosticLogger: (String, Throwable?) -> Unit = { message, cause ->
+        Log.e(TAG, message, cause)
+    }
 ) {
     companion object {
         private const val TAG = "KeystoreVaultManager"
@@ -43,7 +46,7 @@ class KeystoreVaultManager(
                 if (!port.containsAlias(keyAlias)) port.createVaultKey(keyAlias)
                 return
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to access Android Keystore: ${e.message}")
+                diagnosticLogger("Failed to access Android Keystore", e)
             }
         }
         throw IllegalStateException("Android Keystore is unavailable; refusing to create a non-persistent vault key")
@@ -61,7 +64,7 @@ class KeystoreVaultManager(
         ensureSecretKeyExists()
         getSecretKey(keyAlias)
     } catch (e: Exception) {
-        Log.w(TAG, "Error accessing legacy vault key: ${e.message}")
+        diagnosticLogger("Error accessing legacy vault key", e)
         throw IllegalStateException("No valid persistent Android Keystore key available", e)
     }
 

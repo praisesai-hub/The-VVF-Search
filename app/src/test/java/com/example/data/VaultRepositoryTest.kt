@@ -249,7 +249,7 @@ class VaultRepositoryTest {
         session.close()
         plaintext.fill(0)
         sessionKey.fill(0)
-        legacyFile.delete()
+        assertTrue(legacyFile.delete())
     }
 
     private fun fileItem(
