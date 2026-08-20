@@ -1,6 +1,7 @@
 package com.example.security
 
 import javax.crypto.spec.SecretKeySpec
+import java.security.MessageDigest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -104,6 +105,40 @@ class KeystoreVaultManagerJvmTest {
         assertTrue(unavailable is IllegalStateException)
     }
 
+    @Test
+    fun acceptsValidLegacySha256PinHashWithoutTreatingMalformedPbkdf2AsLegacy() {
+        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = availableStore())
+        val legacyHash = MessageDigest.getInstance("SHA-256")
+            .digest("VVF_SMART_MANAGER_SALT:946281".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+        assertTrue(manager.verifyPin("946281", legacyHash))
+        assertFalse(manager.verifyPin("946282", legacyHash))
+        assertFalse(manager.verifyPin("946281", "210000:invalid:00"))
+    }
+
+    @Test
+    fun biometricStatusAndProvisioningFailClosedWhenPortFails() {
+        val lookupFailingStore = availableStore().apply {
+            throwOnBiometricAliasLookup = true
+        }
+        val lookupFailingManager = KeystoreVaultManager(alias, injectedKeyStorePort = lookupFailingStore)
+        assertFalse(lookupFailingManager.biometricWrapKeyExists())
+
+        val provisioningFailingStore = availableStore().apply {
+            aliases.remove("VVF_VAULT_BIOMETRIC_WRAP_KEY_V2")
+            failBiometricCreation = true
+        }
+        val provisioningFailingManager = KeystoreVaultManager(
+            alias,
+            injectedKeyStorePort = provisioningFailingStore
+        )
+
+        val failure = runCatching { provisioningFailingManager.prepareBiometricEncryptionCipher() }
+            .exceptionOrNull()
+        assertTrue(failure is IllegalStateException)
+    }
+
     private fun availableStore(): FakeVaultKeyStorePort = FakeVaultKeyStorePort().apply {
         aliases += alias
         aliases += "VVF_VAULT_BIOMETRIC_WRAP_KEY_V2"
@@ -118,8 +153,15 @@ class KeystoreVaultManagerJvmTest {
         val createdBiometricAliases = mutableListOf<String>()
         val deletedAliases = mutableListOf<String>()
         var failVaultCreation = false
+        var failBiometricCreation = false
+        var throwOnBiometricAliasLookup = false
 
-        override fun containsAlias(alias: String): Boolean = aliases.contains(alias)
+        override fun containsAlias(alias: String): Boolean {
+            if (throwOnBiometricAliasLookup && alias == "VVF_VAULT_BIOMETRIC_WRAP_KEY_V2") {
+                throw IllegalStateException("test biometric lookup failure")
+            }
+            return aliases.contains(alias)
+        }
 
         override fun getSecretKey(alias: String): javax.crypto.SecretKey? = secretKeys[alias]
 
@@ -131,6 +173,7 @@ class KeystoreVaultManagerJvmTest {
         }
 
         override fun createBiometricWrapKey(alias: String) {
+            if (failBiometricCreation) throw IllegalStateException("test biometric provisioning failure")
             aliases += alias
             secretKeys[alias] = SecretKeySpec(ByteArray(32) { 5 }, "AES")
             createdBiometricAliases += alias
