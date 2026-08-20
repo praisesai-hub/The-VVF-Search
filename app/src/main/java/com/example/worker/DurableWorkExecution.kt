@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
 import com.example.data.AppDatabase
 import com.example.data.WorkOperationLease
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -59,10 +60,20 @@ internal suspend fun executeWithDurableLease(
         completed.workerResult
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (unexpected: Exception) {
-        lease.fail("UNEXPECTED_FAILURE")
-        throw unexpected
+    } catch (unexpected: IOException) {
+        failLeaseAndRethrow(lease, unexpected)
+    } catch (unexpected: IllegalArgumentException) {
+        failLeaseAndRethrow(lease, unexpected)
+    } catch (unexpected: IllegalStateException) {
+        failLeaseAndRethrow(lease, unexpected)
+    } catch (unexpected: SecurityException) {
+        failLeaseAndRethrow(lease, unexpected)
     } finally {
         heartbeat.cancel()
     }
+}
+
+private suspend fun failLeaseAndRethrow(lease: WorkOperationLease, error: Exception): Nothing {
+    lease.fail("UNEXPECTED_FAILURE")
+    throw error
 }
