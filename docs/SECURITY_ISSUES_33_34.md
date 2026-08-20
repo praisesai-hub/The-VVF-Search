@@ -8,6 +8,8 @@ Both issues should remain open. Issue #33 is an automatically managed weekly sec
 
 Issue #33 is managed by the weekly security-health workflow. Its August 18 report identified Dependabot alert #50 for `org.jetbrains.kotlin:kotlin-gradle-plugin`, advisory `GHSA-r937-wjx7-w2jp` / `CVE-2026-53914`, with first patched version `2.4.20-Beta1`.
 
+On August 20, the enabled GitHub connector returned `403 Resource not accessible by integration` for the Dependabot alerts endpoint. The response explicitly advertised the required GitHub App permission as `X-Accepted-Github-Permissions: vulnerability_alerts=read`; it did not expose a historical record of whether that permission had previously been granted. The alert's current state is therefore **unverified from this integration**, not assumed open or closed.
+
 The production version catalog currently declares Kotlin `2.4.20-RC`, which is at or above the advisory’s first patched version. Production Gradle task-output caching and Kotlin task caching remain disabled. The isolated CI branch additionally restricts Gradle User Home caching to dependency/wrapper-oriented content by excluding `caches/build-cache-1` and `caches/keyrings`; this does not by itself close a Dependabot alert.
 
 Issue #33 must remain open until GitHub’s authoritative Dependabot alert state confirms that alert #50 is closed after a resolved dependency graph submission. A local version comparison or compensating cache control is not sufficient evidence to close an automatically managed security-health issue.
@@ -24,7 +26,7 @@ Issue #34 should remain open until one of the following is true: hosted CodeQL s
 
 | Issue | Keep open because | Closure evidence required |
 |---|---|---|
-| #33 | Dependabot alert #50 is still reported as open by the weekly health issue. | GitHub Dependabot confirms alert #50 closed and the resolved dependency graph is successfully submitted. |
+| #33 | The weekly health issue identifies alert #50, but the connector cannot currently read Dependabot alerts to independently verify its state. | GitHub Dependabot confirms alert #50 closed and the resolved dependency graph is successfully submitted. |
 | #34 | The external CodeQL/Kotlin compatibility gap remains; the repository currently uses a compensating fallback. | Hosted CodeQL accepts the production Kotlin version, or the fallback is explicitly accepted as the release control and all required CI checks pass on the same release candidate. |
 
 ## References
