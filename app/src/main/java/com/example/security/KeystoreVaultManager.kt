@@ -12,7 +12,10 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
+class KeystoreVaultManager(
+    private val keyAlias: String = DEFAULT_KEY_ALIAS,
+    private val injectedKeyStore: KeyStore? = null
+) {
     companion object {
         private const val TAG = "KeystoreVaultManager"
         private const val DEFAULT_KEY_ALIAS = "VVF_SMART_MANAGER_VAULT_KEY"
@@ -26,7 +29,7 @@ class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
         private fun getKeyStore(): KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     }
 
-    private val keyStore: KeyStore? = try {
+    private val keyStore: KeyStore? = injectedKeyStore ?: try {
         getKeyStore()
     } catch (e: Throwable) {
         Log.e(TAG, "Android Keystore unavailable", e)
