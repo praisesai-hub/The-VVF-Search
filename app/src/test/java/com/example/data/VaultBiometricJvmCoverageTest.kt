@@ -87,6 +87,68 @@ class VaultBiometricJvmCoverageTest {
         session.close()
     }
 
+    @Test
+    fun changeVaultPin_rewrapsTheSameDekAndRejectsThePreviousPin() {
+        val manager = KeystoreVaultManager(
+            "vault-test-key",
+            injectedKeyStorePort = FakeVaultKeyStorePort()
+        )
+        val engine = VaultManagerEngine(context, manager, injectedVaultStore = MapStore())
+
+        assertTrue(engine.initializeVaultPin("12345678"))
+        val oldSession = engine.unlockWithPin("12345678")
+        val expectedDek = oldSession.copyKeyBytes()
+
+        assertTrue(engine.changeVaultPin("12345678", "87654321"))
+        assertThrows(IllegalStateException::class.java) { engine.unlockWithPin("12345678") }
+
+        val newSession = engine.unlockWithPin("87654321")
+        assertArrayEquals(expectedDek, newSession.copyKeyBytes())
+
+        expectedDek.fill(0)
+        oldSession.close()
+        newSession.close()
+    }
+
+    @Test
+    fun legacyPinState_migratesToEnvelopeAndRemainsUnlockable() {
+        val manager = KeystoreVaultManager(
+            "vault-test-key",
+            injectedKeyStorePort = FakeVaultKeyStorePort()
+        )
+        val store = MapStore()
+        val oldPin = "12345678"
+        assertTrue(store.commit(mapOf("vault_pin_hash" to manager.hashPin(oldPin))))
+        val engine = VaultManagerEngine(context, manager, injectedVaultStore = store)
+
+        val migratedSession = engine.unlockWithPin(oldPin)
+        val expectedDek = migratedSession.copyKeyBytes()
+        assertTrue(store.getString("vault_pin_wrap_ciphertext", "").orEmpty().isNotBlank())
+
+        val reopenedSession = engine.unlockWithPin(oldPin)
+        assertArrayEquals(expectedDek, reopenedSession.copyKeyBytes())
+
+        expectedDek.fill(0)
+        migratedSession.close()
+        reopenedSession.close()
+    }
+
+    @Test
+    fun changeVaultPin_failsClosedWhenStoredEnvelopeIsCorrupted() {
+        val manager = KeystoreVaultManager(
+            "vault-test-key",
+            injectedKeyStorePort = FakeVaultKeyStorePort()
+        )
+        val store = MapStore()
+        val engine = VaultManagerEngine(context, manager, injectedVaultStore = store)
+        assertTrue(engine.initializeVaultPin("12345678"))
+        assertTrue(store.commit(mapOf("vault_pin_wrap_ciphertext" to "not-base64")))
+
+        assertFalse(engine.changeVaultPin("12345678", "87654321"))
+        assertTrue(engine.verifyVaultPin("12345678"))
+        assertFalse(engine.verifyVaultPin("87654321"))
+    }
+
     private fun authenticationResult(cipher: javax.crypto.Cipher): BiometricPrompt.AuthenticationResult =
         mockk<BiometricPrompt.AuthenticationResult> {
             every { cryptoObject } returns BiometricPrompt.CryptoObject(cipher)
