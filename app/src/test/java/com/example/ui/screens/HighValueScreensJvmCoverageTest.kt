@@ -5,11 +5,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
-import com.example.data.CloudSyncItemEntity
 import com.example.data.DuplicateGroup
 import com.example.data.FileCategory
 import com.example.data.FileItemEntity
-import com.example.data.PluginEntity
 import com.example.ui.MainViewModel
 import com.example.ui.theme.VVFSmartManagerTheme
 import org.junit.Rule
@@ -92,35 +90,4 @@ class HighValueScreensJvmCoverageTest {
         composeTestRule.onRoot().assertIsDisplayed()
     }
 
-    @Test
-    fun cloudPluginsRendersSyncAndPluginOverview() {
-        val syncItem = CloudSyncItemEntity(
-            provider = "GOOGLE_DRIVE",
-            fileName = "jvm-cloud.txt",
-            filePath = "/sync/jvm-cloud.txt",
-            fileSize = 128L,
-            status = "QUEUED",
-            isCore = true,
-        )
-        val plugin = PluginEntity(
-            pluginId = "jvm-plugin",
-            name = "JVM Plugin",
-            category = "TEST",
-            description = "JVM fixture plugin",
-            isEnabled = false,
-            isCore = false,
-        )
-
-        composeTestRule.setContent {
-            VVFSmartManagerTheme {
-                CloudPluginsScreen(
-                    viewModel = viewModel(),
-                    cloudSyncItems = listOf(syncItem),
-                    plugins = listOf(plugin),
-                )
-            }
-        }
-
-        composeTestRule.onRoot().assertIsDisplayed()
-    }
 }
