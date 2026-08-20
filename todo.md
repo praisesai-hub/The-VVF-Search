@@ -32,4 +32,7 @@
 - [x] Audit JaCoCo generation, report artifacts, and package-specific coverage policies.
 - [x] Collect current hosted JVM and instrumented coverage evidence.
 - [x] Audit Codecov configuration and PR coverage-report integration.
+- [x] Inventory FOSSA, License Finder, and existing license-policy automation.
+- [x] Collect release license-policy and SBOM execution evidence.
+- [x] Assess license-compliance gaps and remediation priorities.
 - [ ] Report verified coverage results and unresolved release blockers.
