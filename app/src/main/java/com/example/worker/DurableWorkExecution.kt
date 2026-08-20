@@ -6,6 +6,8 @@ import androidx.work.ListenableWorker
 import com.example.data.AppDatabase
 import com.example.data.WorkOperationLease
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 
 suspend fun executeWithDurableLease(
     context: Context,
@@ -18,7 +20,7 @@ suspend fun executeWithDurableLease(
     val lease = WorkOperationLease(store, operationId, workName, worker.id.toString())
     if (!lease.claim()) return ListenableWorker.Result.success()
 
-    val heartbeat = lease.startHeartbeat(worker)
+    val heartbeat = lease.startHeartbeat(CoroutineScope(currentCoroutineContext()))
     return try {
         val result = block()
         when (result) {
