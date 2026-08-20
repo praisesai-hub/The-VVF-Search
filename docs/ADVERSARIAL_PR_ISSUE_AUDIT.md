@@ -157,7 +157,24 @@ A single follow-up validation, [Android CI/CD `32425402657`](https://github.com/
 | Lint report stage | `SarifReporter.writeQuickFixes` raised `MissingFormatArgumentException: Format specifier '%1$s'` | The crash is in Android Lint's SARIF renderer after analysis and HTML report emission. It is not evidence of a matching application string-resource defect. |
 | Detekt | `Analysis failed with 210 weighted issues` | The earlier targeted refactors reduced the recorded count from 217, but the gate remains failing. |
 
-The two JVM regressions were corrected in subsequent commit `e930080`: retry classification now recognizes hostname-resolution messages before exception-family dispatch, and the migration fixture explicitly establishes the test repository session. Lint is configured to keep HTML, XML, and text reports but disable only SARIF output, whose renderer was the crashing component. Android's Lint DSL documents these report types as independently configurable. [8] These corrections are **not yet CI-verified**; no second validation was dispatched in order to avoid another rapid-run cycle.
+The two JVM regressions were corrected in subsequent commit `e930080`: retry classification now recognizes hostname-resolution messages before exception-family dispatch, and the migration fixture explicitly establishes the test repository session. Lint is configured to keep HTML, XML, and text reports but disable only SARIF output, whose renderer was the crashing component. Android's Lint DSL documents these report types as independently configurable. [8]
+
+## 9. Validation at commit `43f1af1`
+
+A single validation, [Android CI/CD `32428262425`](https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32428262425), ran the `e930080` JVM and Lint-reporting corrections. Unit tests completed far enough to generate and enforce the JaCoCo report, so the two previous test regressions no longer blocked the unit-test gate. The remaining emulator job was cancelled only after the JVM coverage policy had conclusively failed. [9]
+
+| Gate | Verified result | Consequence |
+|---|---:|---|
+| JVM aggregate coverage | 49.37% / 70.00% | Fail |
+| Security coverage | 70.98% / 90.00% | Fail |
+| Data/repository coverage | 67.27% / 85.00% | Fail |
+| Vault class coverage | 82.62% / 95.00% | Fail |
+| Cloud-sync class coverage | 82.06% / 90.00% | Fail |
+| Lint reporting | SARIF renderer crash absent; HTML/XML/text report emitted | Reporter workaround verified |
+| Lint source checks | 13 errors and 34 warnings | Gate still fails on actual project defects |
+| Detekt | 210 weighted issues | Gate still fails |
+
+The downloaded Lint text report identified all 13 errors without relying on guesswork: three restricted WorkManager result-subclass checks, eight configuration-unaware `LocalContext.current.getString()` calls in `VaultScreen`, and two unescaped literal percentages in the English/Hindi `system_health` resources. Commits `2aab7b7`, `8f2da08`, and `17e53b5` contain targeted fixes for those enumerated sources; commits `11da2a0` and `8effb6e` add Vault and secure-store fail-closed tests. These later commits remain **unverified** until the next deliberately batched validation run.
 
 ## References
 
@@ -169,3 +186,4 @@ The two JVM regressions were corrected in subsequent commit `e930080`: retry cla
 [6]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32421178517 "Android CI/CD run 32421178517"
 [7]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32425402657 "Android CI/CD run 32425402657"
 [8]: https://developer.android.com/reference/tools/gradle-api/8.3/null/com/android/build/api/dsl/Lint "Android Lint Gradle DSL reference"
+[9]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32428262425 "Android CI/CD run 32428262425"

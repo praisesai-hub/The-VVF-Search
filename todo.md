@@ -51,7 +51,7 @@
 - [ ] Report verified coverage results and unresolved release blockers.
 - [x] Complete bounded evidence-only adversarial audit of open PRs, issues, source defects, and CI blockers; do not dispatch another workflow run.
 - [x] Reconcile attached audit documents with the current repository and CI evidence.
-- [ ] Repair the two latest hosted JVM test failures without weakening fail-closed vault behavior.
+- [x] Repair the two latest hosted JVM test failures without weakening fail-closed vault behavior.
 - [x] Preserve reproducible Lint diagnostic artifacts and identify the `%1$s` report-rendering source.
 - [ ] Refactor Detekt-critical retry, vault, cloud-sync, destructive-storage, and generic-error-handling findings without blanket suppressions.
 - [ ] Close the measured instrumented coverage gaps in security, storage, vault, and cloud-sync scopes.
@@ -61,3 +61,12 @@
 - [ ] Keep issues #33 and #34 open until their external closure evidence is independently verified.
 - [x] Run exactly one bounded hosted validation after a batched correction and record results.
 - [ ] Produce an updated production-hardening report with evidence and remaining release blockers.
+- [x] Reconcile the latest pasted production requirements with current source, audit, CI, and GitHub evidence.
+- [ ] Establish a green JVM baseline for the exact post-`e930080` branch head before expanding scope further.
+- [x] Verify the Lint HTML/XML/text workaround and preserve report artifacts without relying on SARIF.
+- [ ] Harden Vault, security, storage, and cloud-sync correctness with fail-closed and recovery-focused tests.
+- [ ] Raise JVM and instrumented package-specific coverage against the enforced production policy.
+- [ ] Reduce active Detekt violations through source refactoring, not blanket suppression.
+- [ ] Complete localization, architecture-boundary, and release-evidence remediation batches from the reconciled requirements.
+- [ ] Resolve or formally hold dependency and stale PRs using current green-baseline evidence.
+- [ ] Dispatch only one bounded CI validation after a complete correction batch and document terminal results.
