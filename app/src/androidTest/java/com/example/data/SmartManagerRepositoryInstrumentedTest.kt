@@ -100,6 +100,45 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun insertPlugins(plugins: List<PluginEntity>) = Unit
     }
 
+    private class InMemoryFileOperationStore : FileOperationStore {
+        private val rows = mutableMapOf<String, FileOperationEntity>()
+        private val openStatuses = setOf(FileOperationStatus.PREPARED, FileOperationStatus.PHYSICAL_COMPLETED)
+
+        override suspend fun getOpenOperations(): List<FileOperationEntity> =
+            rows.values.filter { it.status in openStatuses }.sortedBy { it.createdAtMs }
+
+        override suspend fun findOpenOperation(fileId: Long, operationType: String): FileOperationEntity? =
+            rows.values
+                .filter { it.fileId == fileId && it.operationType == operationType && it.status in openStatuses }
+                .maxByOrNull { it.createdAtMs }
+
+        override suspend fun insert(operation: FileOperationEntity) {
+            rows[operation.operationId] = operation
+        }
+
+        override suspend fun transition(
+            operationId: String,
+            status: String,
+            sourcePath: String,
+            targetPath: String,
+            nowMs: Long,
+            errorCode: String?
+        ): Int {
+            val existing = rows[operationId] ?: return 0
+            rows[operationId] = existing.copy(
+                status = status,
+                sourcePath = sourcePath,
+                targetPath = targetPath,
+                updatedAtMs = nowMs,
+                lastErrorCode = errorCode
+            )
+            return 1
+        }
+
+        override suspend fun delete(operationId: String): Int =
+            if (rows.remove(operationId) != null) 1 else 0
+    }
+
     private class TestOcrEngine : OcrEngine {
         var text: String = ""
 
@@ -113,7 +152,12 @@ class SmartManagerRepositoryInstrumentedTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
         fakeDao = TestFileDao()
         fakeOcr = TestOcrEngine()
-        repository = SmartManagerRepository(context, fakeDao, fakeOcr)
+        repository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            ocrEngine = fakeOcr,
+            fileOperationStoreOverride = InMemoryFileOperationStore()
+        )
     }
 
     @Test
