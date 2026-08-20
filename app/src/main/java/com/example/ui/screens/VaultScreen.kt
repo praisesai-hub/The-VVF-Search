@@ -112,6 +112,15 @@ fun VaultScreen(
     val context = LocalContext.current
     val activity = remember(context) { context as? FragmentActivity }
     val executor = remember(context) { ContextCompat.getMainExecutor(context) }
+    val biometricAuthUnavailable = stringResource(R.string.biometric_auth_unavailable)
+    val authenticationFailed = stringResource(R.string.authentication_failed)
+    val protectVaultWithBiometrics = stringResource(R.string.protect_vault_biometrics)
+    val unlockVaultWithBiometrics = stringResource(R.string.unlock_vault)
+    val authenticateStrongBiometric = stringResource(R.string.authenticate_strong_biometric)
+    val usePin = stringResource(R.string.use_pin)
+    val pinMismatch = stringResource(R.string.pin_mismatch)
+    val invalidVaultPin = stringResource(R.string.pin_exactly_digits)
+    val pinUpdateFailed = stringResource(R.string.pin_update_failed)
 
     DisposableEffect(activity) {
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -136,7 +145,13 @@ fun VaultScreen(
         isBiometricAvailable,
         biometricEnabled,
         biometricKeyReady,
-        isUnlocked
+        isUnlocked,
+        biometricAuthUnavailable,
+        authenticationFailed,
+        protectVaultWithBiometrics,
+        unlockVaultWithBiometrics,
+        authenticateStrongBiometric,
+        usePin,
     ) {
         {
             if (activity != null && isBiometricAvailable && biometricEnabled) {
@@ -149,7 +164,7 @@ fun VaultScreen(
                     null
                 }
                 if (cipher == null) {
-                    viewModel.onBiometricError(context.getString(R.string.biometric_auth_unavailable))
+                    viewModel.onBiometricError(biometricAuthUnavailable)
                 } else {
                     val biometricPrompt = BiometricPrompt(
                         activity,
@@ -175,15 +190,15 @@ fun VaultScreen(
 
                             override fun onAuthenticationFailed() {
                                 super.onAuthenticationFailed()
-                                viewModel.onBiometricError(context.getString(R.string.authentication_failed))
+                                viewModel.onBiometricError(authenticationFailed)
                             }
                         }
                     )
 
                     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                        .setTitle(context.getString(if (enrollment) R.string.protect_vault_biometrics else R.string.unlock_vault))
-                        .setSubtitle(context.getString(R.string.authenticate_strong_biometric))
-                        .setNegativeButtonText(context.getString(R.string.use_pin))
+                        .setTitle(if (enrollment) protectVaultWithBiometrics else unlockVaultWithBiometrics)
+                        .setSubtitle(authenticateStrongBiometric)
+                        .setNegativeButtonText(usePin)
                         .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                         .build()
 
@@ -227,14 +242,14 @@ fun VaultScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    if (changePinNew != changePinConfirm) changePinError = context.getString(R.string.pin_mismatch)
-                    else if (changePinNew.length < MIN_VAULT_PIN_LENGTH || changePinNew.length > MAX_VAULT_PIN_LENGTH || !changePinNew.any { it.isDigit() } || changePinNew.any { it.isWhitespace() }) changePinError = context.getString(R.string.pin_exactly_digits)
+                    if (changePinNew != changePinConfirm) changePinError = pinMismatch
+                    else if (changePinNew.length < MIN_VAULT_PIN_LENGTH || changePinNew.length > MAX_VAULT_PIN_LENGTH || !changePinNew.any { it.isDigit() } || changePinNew.any { it.isWhitespace() }) changePinError = invalidVaultPin
                     else {
                         val success = viewModel.changeVaultPin(changePinOld, changePinNew)
                         if (success) {
                             showChangePinDialog = false
                             changePinOld = ""; changePinNew = ""; changePinConfirm = ""; changePinError = null
-                        } else changePinError = context.getString(R.string.pin_update_failed)
+                        } else changePinError = pinUpdateFailed
                     }
                 }, colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange)) { Text(stringResource(R.string.change)) }
             },
