@@ -3,6 +3,7 @@ package com.example.security
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
+import java.security.GeneralSecurityException
 import java.nio.file.Files
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -91,6 +92,45 @@ class SecureKeyValueStoreTest {
         )
 
         assertThrows(IllegalStateException::class.java) { failing.getString("token") }
+    }
+
+    @Test
+    fun `general security decrypt failure fails closed`() {
+        val writer = store()
+        writer.commit(mapOf("token" to "secret"))
+        val failing = SecureKeyValueStore(
+            context = context,
+            fileName = FILE_NAME,
+            keyAlias = "unused",
+            directory = directory,
+            crypto = object : SecureStoreCrypto {
+                override fun encrypt(plaintext: ByteArray): EncryptedPayload = error("not used")
+
+                override fun decrypt(payload: EncryptedPayload): ByteArray {
+                    throw GeneralSecurityException("tamper")
+                }
+            }
+        )
+
+        assertThrows(IllegalStateException::class.java) { failing.getString("token") }
+    }
+
+    @Test
+    fun `atomic write failure fails closed and does not create the destination store`() {
+        val fileName = "blocked-store"
+        assertTrue(File(directory, "$fileName.tmp").mkdir())
+        val blocked = SecureKeyValueStore(
+            context = context,
+            fileName = fileName,
+            keyAlias = "unused",
+            directory = directory,
+            crypto = crypto
+        )
+
+        assertThrows(IllegalStateException::class.java) {
+            blocked.commit(mapOf("token" to "secret"))
+        }
+        assertFalse(File(directory, fileName).exists())
     }
 
     @Test
