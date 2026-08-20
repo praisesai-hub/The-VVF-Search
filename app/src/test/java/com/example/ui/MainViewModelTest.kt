@@ -56,6 +56,8 @@ class FakeSmartManagerRepository(context: Context) : SmartManagerRepository(cont
         return unlockPinResult
     }
 
+    override fun hasBiometricEnrollment(): Boolean = false
+
     var lockVaultSessionCalls = 0
     override fun lockVaultSession() { lockVaultSessionCalls += 1 }
 
