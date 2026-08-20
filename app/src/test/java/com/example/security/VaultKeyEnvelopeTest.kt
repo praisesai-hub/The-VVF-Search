@@ -19,4 +19,42 @@ class VaultKeyEnvelopeTest {
             VaultKeyEnvelope.wrapWithPin(ByteArray(32), "1234")
         }
     }
+
+    @Test
+    fun wrapRejectsInvalidDekAndCredentialPoliciesBeforeEncrypting() {
+        assertThrows(IllegalArgumentException::class.java) {
+            VaultKeyEnvelope.wrapWithPin(ByteArray(31), "12345678")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            VaultKeyEnvelope.wrapWithPin(ByteArray(32), "abcdefgh")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            VaultKeyEnvelope.wrapWithPin(ByteArray(32), "1234 5678")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            VaultKeyEnvelope.wrapWithPin(ByteArray(32), "1".repeat(129))
+        }
+    }
+
+    @Test
+    fun unwrapFailsClosedForWrongCredentialMalformedSaltAndTamperedCiphertext() {
+        val wrapped = VaultKeyEnvelope.wrapWithPin(ByteArray(32) { 3 }, "12345678")
+
+        assertThrows(Exception::class.java) {
+            VaultKeyEnvelope.unwrapWithPin(wrapped, "87654321")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            VaultKeyEnvelope.unwrapWithPin(
+                VaultKeyEnvelope.PinWrap(ByteArray(15), wrapped.iv, wrapped.ciphertext),
+                "12345678"
+            )
+        }
+        val tampered = wrapped.ciphertext.copyOf().also { it[0] = (it[0].toInt() xor 0x01).toByte() }
+        assertThrows(Exception::class.java) {
+            VaultKeyEnvelope.unwrapWithPin(
+                VaultKeyEnvelope.PinWrap(wrapped.salt, wrapped.iv, tampered),
+                "12345678"
+            )
+        }
+    }
 }

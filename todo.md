@@ -35,4 +35,14 @@
 - [x] Inventory FOSSA, License Finder, and existing license-policy automation.
 - [x] Collect release license-policy and SBOM execution evidence.
 - [x] Assess license-compliance gaps and remediation priorities.
+- [x] Classify recent isolated-branch GitHub Actions runs by trigger and final outcome.
+- [x] Trace exact failed, cancelled, and skipped job causes from run logs.
+- [x] Document workflow/process corrections that prevent unnecessary runs and ambiguous statuses.
+- [x] Map measured Vault and Security coverage deficits to production classes and methods.
+- [x] Design safe refactoring seams around device-only Keystore and pure cryptographic logic.
+- [x] Define phased JVM and instrumented test milestones for the 95% Vault and 90% Security gates.
+- [ ] Implement JVM-testable Security/Keystore boundary refactors and focused tests.
+- [ ] Implement Vault authentication, biometric, migration, repository, and adapter coverage batches.
+- [ ] Add compatible Gradle/JaCoCo enforcement configuration and CI artifact paths.
+- [ ] Run one bounded hosted validation and record measured gate results.
 - [ ] Report verified coverage results and unresolved release blockers.

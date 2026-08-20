@@ -1,11 +1,5 @@
 package com.example.security
 
-import io.mockk.Runs
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
-import io.mockk.verify
-import java.security.KeyStore
 import javax.crypto.spec.SecretKeySpec
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
@@ -20,7 +14,7 @@ class KeystoreVaultManagerJvmTest {
     @Test
     fun encryptsDecryptsAndPreparesLegacyAndBiometricCiphersFromPersistentKeyMaterial() {
         val store = availableStore()
-        val manager = KeystoreVaultManager(alias, store)
+        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = store)
         val plaintext = "vault content".encodeToByteArray()
 
         val encrypted = manager.encryptBytes(plaintext)
@@ -44,7 +38,7 @@ class KeystoreVaultManagerJvmTest {
 
     @Test
     fun createsHighEntropyDeksVerifiesPbkdf2PinsAndRejectsMalformedHashes() {
-        val manager = KeystoreVaultManager(alias, availableStore())
+        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = availableStore())
 
         val firstDek = manager.randomVaultDek()
         val secondDek = manager.randomVaultDek()
@@ -64,17 +58,80 @@ class KeystoreVaultManagerJvmTest {
     @Test
     fun reportsAndDeletesBiometricWrapKeyUsingTheProvidedPersistentStore() {
         val store = availableStore()
-        val manager = KeystoreVaultManager(alias, store)
+        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = store)
 
         assertTrue(manager.biometricWrapKeyExists())
         manager.deleteBiometricWrapKey()
 
-        verify { store.deleteEntry(any()) }
+        assertTrue(store.deletedAliases.isNotEmpty())
     }
 
-    private fun availableStore(): KeyStore = mockk<KeyStore> {
-        every { containsAlias(any()) } returns true
-        every { getEntry(any(), any()) } returns KeyStore.SecretKeyEntry(secretKey)
-        every { deleteEntry(any()) } just Runs
+    @Test
+    fun provisionsMissingLegacyAndBiometricKeysThroughThePort() {
+        val store = availableStore().apply { aliases.clear() }
+        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = store)
+
+        assertTrue(store.createdVaultAliases.contains(alias))
+        manager.prepareBiometricEncryptionCipher()
+
+        assertTrue(store.createdBiometricAliases.isNotEmpty())
+    }
+
+    @Test
+    fun failsClosedWhenPortCannotProvideASecretKeyOrProvisionAKey() {
+        val missingKeyStore = availableStore().apply { secretKeys.clear() }
+        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = missingKeyStore)
+        val plaintext = "vault content".encodeToByteArray()
+
+        val missingKey = runCatching { manager.encryptBytes(plaintext) }.exceptionOrNull()
+        assertTrue(missingKey is IllegalStateException)
+
+        val failingPort = availableStore().apply {
+            aliases.clear()
+            failVaultCreation = true
+        }
+        val unavailable = runCatching {
+            KeystoreVaultManager(alias, injectedKeyStorePort = failingPort)
+        }.exceptionOrNull()
+        assertTrue(unavailable is IllegalStateException)
+    }
+
+    private fun availableStore(): FakeVaultKeyStorePort = FakeVaultKeyStorePort().apply {
+        aliases += alias
+        aliases += "VVF_VAULT_BIOMETRIC_WRAP_KEY_V2"
+        secretKeys[alias] = secretKey
+        secretKeys["VVF_VAULT_BIOMETRIC_WRAP_KEY_V2"] = secretKey
+    }
+
+    private class FakeVaultKeyStorePort : VaultKeyStorePort {
+        val aliases = mutableSetOf<String>()
+        val secretKeys = mutableMapOf<String, javax.crypto.SecretKey>()
+        val createdVaultAliases = mutableListOf<String>()
+        val createdBiometricAliases = mutableListOf<String>()
+        val deletedAliases = mutableListOf<String>()
+        var failVaultCreation = false
+
+        override fun containsAlias(alias: String): Boolean = aliases.contains(alias)
+
+        override fun getSecretKey(alias: String): javax.crypto.SecretKey? = secretKeys[alias]
+
+        override fun createVaultKey(alias: String) {
+            if (failVaultCreation) throw IllegalStateException("test key provisioning failed")
+            aliases += alias
+            secretKeys[alias] = SecretKeySpec(ByteArray(32) { 4 }, "AES")
+            createdVaultAliases += alias
+        }
+
+        override fun createBiometricWrapKey(alias: String) {
+            aliases += alias
+            secretKeys[alias] = SecretKeySpec(ByteArray(32) { 5 }, "AES")
+            createdBiometricAliases += alias
+        }
+
+        override fun deleteKey(alias: String) {
+            aliases -= alias
+            secretKeys.remove(alias)
+            deletedAliases += alias
+        }
     }
 }

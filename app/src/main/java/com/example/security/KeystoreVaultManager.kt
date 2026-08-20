@@ -1,8 +1,5 @@
 package com.example.security
 
-import android.os.Build
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import android.util.Log
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -14,23 +11,24 @@ import javax.crypto.spec.GCMParameterSpec
 
 class KeystoreVaultManager(
     private val keyAlias: String = DEFAULT_KEY_ALIAS,
-    private val injectedKeyStore: KeyStore? = null
+    injectedKeyStore: KeyStore? = null,
+    private val injectedKeyStorePort: VaultKeyStorePort? = null
 ) {
     companion object {
         private const val TAG = "KeystoreVaultManager"
         private const val DEFAULT_KEY_ALIAS = "VVF_SMART_MANAGER_VAULT_KEY"
         private const val BIOMETRIC_WRAP_KEY_ALIAS = "VVF_VAULT_BIOMETRIC_WRAP_KEY_V2"
-        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_TAG_LENGTH = 128
         private const val PBKDF2_ITERATIONS = 210_000
         private const val AES_KEY_SIZE_BYTES = 32
 
-        private fun getKeyStore(): KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     }
 
-    private val keyStore: KeyStore? = injectedKeyStore ?: try {
-        getKeyStore()
+    private val keyStorePort: VaultKeyStorePort? = injectedKeyStorePort
+        ?: injectedKeyStore?.let(AndroidVaultKeyStorePort::fromKeyStore)
+        ?: try {
+        AndroidVaultKeyStorePort.open()
     } catch (e: Throwable) {
         Log.e(TAG, "Android Keystore unavailable", e)
         null
@@ -39,21 +37,10 @@ class KeystoreVaultManager(
     init { ensureSecretKeyExists() }
 
     private fun ensureSecretKeyExists() {
-        if (keyStore != null) {
+        val port = keyStorePort
+        if (port != null) {
             try {
-                if (!keyStore.containsAlias(keyAlias)) {
-                    val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-                    val spec = KeyGenParameterSpec.Builder(
-                        keyAlias,
-                        KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                    )
-                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .setKeySize(256)
-                        .build()
-                    keyGenerator.init(spec)
-                    keyGenerator.generateKey()
-                }
+                if (!port.containsAlias(keyAlias)) port.createVaultKey(keyAlias)
                 return
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to access Android Keystore: ${e.message}")
@@ -63,9 +50,9 @@ class KeystoreVaultManager(
     }
 
     private fun getSecretKey(alias: String): SecretKey {
-        val store = checkNotNull(keyStore) { "Android Keystore is unavailable" }
-        check(store.containsAlias(alias)) { "No Android Keystore key available for alias $alias" }
-        return checkNotNull((store.getEntry(alias, null) as? KeyStore.SecretKeyEntry)?.secretKey) {
+        val port = checkNotNull(keyStorePort) { "Android Keystore is unavailable" }
+        check(port.containsAlias(alias)) { "No Android Keystore key available for alias $alias" }
+        return checkNotNull(port.getSecretKey(alias)) {
             "No valid persistent Android Keystore key available for alias $alias"
         }
     }
@@ -125,39 +112,20 @@ class KeystoreVaultManager(
     }
 
     fun biometricWrapKeyExists(): Boolean = try {
-        keyStore?.containsAlias(BIOMETRIC_WRAP_KEY_ALIAS) == true
+        keyStorePort?.containsAlias(BIOMETRIC_WRAP_KEY_ALIAS) == true
     } catch (_: Exception) {
         false
     }
 
     fun deleteBiometricWrapKey() {
-        keyStore?.let { if (it.containsAlias(BIOMETRIC_WRAP_KEY_ALIAS)) it.deleteEntry(BIOMETRIC_WRAP_KEY_ALIAS) }
+        keyStorePort?.let { if (it.containsAlias(BIOMETRIC_WRAP_KEY_ALIAS)) it.deleteKey(BIOMETRIC_WRAP_KEY_ALIAS) }
     }
 
     private fun ensureBiometricWrapKeyExists() {
-        val store = checkNotNull(keyStore) { "Android Keystore is unavailable" }
-        if (store.containsAlias(BIOMETRIC_WRAP_KEY_ALIAS)) return
-        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-        val builder = KeyGenParameterSpec.Builder(
-            BIOMETRIC_WRAP_KEY_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
-            .setUserAuthenticationRequired(true)
-            .setInvalidatedByBiometricEnrollment(true)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setUserAuthenticationParameters(
-                0,
-                KeyProperties.AUTH_BIOMETRIC_STRONG
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            builder.setUserAuthenticationValidityDurationSeconds(-1)
+        val port = checkNotNull(keyStorePort) { "Android Keystore is unavailable" }
+        if (!port.containsAlias(BIOMETRIC_WRAP_KEY_ALIAS)) {
+            port.createBiometricWrapKey(BIOMETRIC_WRAP_KEY_ALIAS)
         }
-        keyGenerator.init(builder.build())
-        keyGenerator.generateKey()
     }
 
     /** PBKDF2-HMAC-SHA256 with a random salt and a deliberately expensive work factor. */

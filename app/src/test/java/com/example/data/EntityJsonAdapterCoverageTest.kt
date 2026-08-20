@@ -1,7 +1,10 @@
 package com.example.data
 
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.JsonAdapter
+import com.squareup.moshi.JsonDataException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class EntityJsonAdapterCoverageTest {
@@ -91,7 +94,7 @@ class EntityJsonAdapterCoverageTest {
             ),
         )
 
-        val vaultAdapter = moshi.adapter(VaultItemEntity::class.java)
+        val vaultAdapter = directVaultAdapter()
         val cloudAdapter = moshi.adapter(CloudSyncItemEntity::class.java)
         val pluginAdapter = moshi.adapter(PluginEntity::class.java)
         val duplicateAdapter = moshi.adapter(DuplicateGroup::class.java)
@@ -100,5 +103,40 @@ class EntityJsonAdapterCoverageTest {
         assertEquals(cloud, cloudAdapter.fromJson(requireNotNull(cloudAdapter.toJson(cloud))))
         assertEquals(plugin, pluginAdapter.fromJson(requireNotNull(pluginAdapter.toJson(plugin))))
         assertEquals(duplicate, duplicateAdapter.fromJson(requireNotNull(duplicateAdapter.toJson(duplicate))))
+    }
+
+    @Test
+    fun generatedVaultAdapterRejectsMissingRequiredFieldsAndSerializesAllVaultFields() {
+        val adapter = directVaultAdapter()
+        val source = VaultItemEntity(
+            id = 24L,
+            originalName = "contract.txt",
+            encryptedName = "contract.vvf",
+            encryptedFilePath = "/vault/contract.vvf",
+            ivBase64 = "iv-value",
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = 4096L,
+            encryptedAtMs = 99L,
+            isBiometricProtected = true,
+            vaultFormatVersion = 2,
+        )
+
+        val json = adapter.toJson(source)
+
+        assertEquals(source, adapter.fromJson(json))
+        assertThrows(JsonDataException::class.java) {
+            adapter.fromJson("""{"id":24,"encryptedName":"contract.vvf"}""")
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun directVaultAdapter(): JsonAdapter<VaultItemEntity> {
+        val adapterClass = Class.forName("com.example.data.VaultItemEntityJsonAdapter")
+        val adapter = runCatching {
+            adapterClass.getDeclaredConstructor(Moshi::class.java).newInstance(moshi)
+        }.getOrElse {
+            adapterClass.getDeclaredConstructor().newInstance()
+        }
+        return adapter as JsonAdapter<VaultItemEntity>
     }
 }

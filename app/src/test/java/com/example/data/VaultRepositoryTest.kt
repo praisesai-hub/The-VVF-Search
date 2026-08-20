@@ -3,6 +3,7 @@ package com.example.data
 import android.content.Context
 import com.example.security.KeystoreVaultManager
 import com.example.security.VaultCryptoSession
+import com.example.security.VaultKeyStorePort
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.VaultStorageResult
 import io.mockk.Runs
@@ -27,6 +28,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.IOException
+import java.io.File
+import java.security.SecureRandom
+import javax.crypto.SecretKey
+import javax.crypto.spec.SecretKeySpec
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -195,6 +200,58 @@ class VaultRepositoryTest {
         coVerify(exactly = 0) { dao.deleteVaultItemById(any()) }
     }
 
+    @Test
+    fun unlockFromVault_migratesLegacyV1FileToV2BeforeRestoringIt() = runBlocking {
+        val port = LegacyMigrationKeyStorePort()
+        val legacyKeystore = KeystoreVaultManager(
+            "legacy-migration-key",
+            injectedKeyStorePort = port
+        )
+        val sessionKey = ByteArray(32).also(SecureRandom()::nextBytes)
+        val session = VaultCryptoSession.fromKeyBytes(sessionKey)
+        val legacyFile = File.createTempFile("legacy-vault", ".vvf", context.cacheDir)
+        val plaintext = "legacy vault content".encodeToByteArray()
+        val encrypted = legacyKeystore.encryptBytes(plaintext)
+        legacyFile.writeBytes(encrypted.ciphertext)
+        val vaultItem = VaultItemEntity(
+            id = 71L,
+            originalName = "legacy.txt",
+            encryptedName = legacyFile.name,
+            encryptedFilePath = legacyFile.absolutePath,
+            ivBase64 = android.util.Base64.encodeToString(encrypted.iv, android.util.Base64.NO_WRAP),
+            category = "DOCUMENTS",
+            sizeBytes = plaintext.size.toLong(),
+            vaultFormatVersion = 1
+        )
+        val target = fileItem(id = 72L, name = "legacy.txt", path = "/restore/legacy.txt")
+        val legacyEngine = mockk<VaultManagerEngine>(relaxed = true)
+        every { legacyEngine.unlockWithPin(any()) } returns session
+        every { legacyEngine.hasBiometricEnrollment } returns true
+        val legacyRepository = VaultRepository(context, dao, legacyKeystore, legacyEngine)
+        val migrated = slot<VaultItemEntity>()
+
+        coEvery { dao.insertVaultItem(capture(migrated)) } returns vaultItem.id
+        coEvery { dao.updateFile(any()) } just Runs
+        coEvery { dao.deleteVaultItemById(any()) } just Runs
+        every {
+            PhysicalStorageManager.decryptAndRestoreStreaming(context, any(), any())
+        } returns Result.success(target.path)
+
+        assertTrue(legacyRepository.unlockFromVault(vaultItem, target))
+
+        assertEquals(2, migrated.captured.vaultFormatVersion)
+        assertTrue(migrated.captured.isBiometricProtected)
+        assertTrue(legacyFile.exists())
+        assertTrue(legacyFile.length() > 0L)
+        coVerify(exactly = 1) { dao.insertVaultItem(any()) }
+        coVerify(exactly = 1) { dao.updateFile(any()) }
+        coVerify(exactly = 1) { dao.deleteVaultItemById(vaultItem.id) }
+        session.close()
+        plaintext.fill(0)
+        sessionKey.fill(0)
+        legacyFile.delete()
+    }
+
     private fun fileItem(
         id: Long = 1L,
         name: String,
@@ -223,4 +280,28 @@ class VaultRepositoryTest {
         encryptedAtMs = 1_700_000_000_000L,
         vaultFormatVersion = 2
     )
+
+    private class LegacyMigrationKeyStorePort : VaultKeyStorePort {
+        private val aliases = mutableSetOf<String>()
+        private val keys = mutableMapOf<String, SecretKey>()
+
+        override fun containsAlias(alias: String): Boolean = aliases.contains(alias)
+
+        override fun getSecretKey(alias: String): SecretKey? = keys[alias]
+
+        override fun createVaultKey(alias: String) {
+            aliases += alias
+            keys[alias] = SecretKeySpec(ByteArray(32) { 21 }, "AES")
+        }
+
+        override fun createBiometricWrapKey(alias: String) {
+            aliases += alias
+            keys[alias] = SecretKeySpec(ByteArray(32) { 22 }, "AES")
+        }
+
+        override fun deleteKey(alias: String) {
+            aliases -= alias
+            keys.remove(alias)
+        }
+    }
 }
