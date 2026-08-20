@@ -101,6 +101,54 @@ class SecureKeyValueStoreTest {
     }
 
     @Test
+    fun `contains store file reflects durable state and oversized values are rejected`() {
+        val store = store()
+
+        assertFalse(store.containsStoreFile())
+        assertTrue(store.commit(mapOf("state" to "stored")))
+        assertTrue(store.containsStoreFile())
+        assertThrows(IllegalArgumentException::class.java) {
+            store.commit(mapOf("oversized" to "x".repeat(16_385)))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store.commit((1..33).associate { "key-$it" to "value-$it" })
+        }
+    }
+
+    @Test
+    fun `invalid crypto output is rejected before any encrypted envelope is written`() {
+        val invalidIvStore = SecureKeyValueStore(
+            context = context,
+            fileName = "invalid-iv-store",
+            keyAlias = "unused",
+            directory = directory,
+            crypto = object : SecureStoreCrypto {
+                override fun encrypt(plaintext: ByteArray) = EncryptedPayload(ByteArray(11), ByteArray(11))
+                override fun decrypt(payload: EncryptedPayload): ByteArray = error("not used")
+            }
+        )
+        val invalidCiphertextStore = SecureKeyValueStore(
+            context = context,
+            fileName = "invalid-ciphertext-store",
+            keyAlias = "unused",
+            directory = directory,
+            crypto = object : SecureStoreCrypto {
+                override fun encrypt(plaintext: ByteArray) = EncryptedPayload(ByteArray(0), ByteArray(12))
+                override fun decrypt(payload: EncryptedPayload): ByteArray = error("not used")
+            }
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            invalidIvStore.commit(mapOf("token" to "value"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            invalidCiphertextStore.commit(mapOf("token" to "value"))
+        }
+        assertFalse(File(directory, "invalid-iv-store").exists())
+        assertFalse(File(directory, "invalid-ciphertext-store").exists())
+    }
+
+    @Test
     fun `migration copies only allow-listed non-null entries`() {
         val target = RecordingStore()
 
@@ -134,6 +182,34 @@ class SecureKeyValueStoreTest {
                 setOf("pin")
             )
         )
+    }
+
+    @Test
+    fun `migration is a no-op when secure state already exists or legacy file is absent`() {
+        val migrated = store()
+        migrated.commit(mapOf("access_token" to "current"))
+        LegacyEncryptedPreferencesMigration.migrateIfNeeded(
+            context = context,
+            legacyName = "missing-legacy-${System.nanoTime()}",
+            target = migrated,
+            keys = setOf("access_token")
+        )
+        assertEquals("current", migrated.getString("access_token"))
+
+        val emptyTarget = SecureKeyValueStore(
+            context = context,
+            fileName = "empty-target-${System.nanoTime()}",
+            keyAlias = "unused",
+            directory = directory,
+            crypto = crypto
+        )
+        LegacyEncryptedPreferencesMigration.migrateIfNeeded(
+            context = context,
+            legacyName = "missing-legacy-${System.nanoTime()}",
+            target = emptyTarget,
+            keys = setOf("access_token")
+        )
+        assertFalse(emptyTarget.containsStoreFile())
     }
 
     private fun store(): SecureKeyValueStore = SecureKeyValueStore(
