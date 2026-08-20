@@ -17,4 +17,7 @@
 - [x] Inventory Gradle build, test, Detekt, and ktlintCheck task availability.
 - [x] Collect hosted compilation and JVM test execution evidence.
 - [x] Assess build and quality-gate outcomes for remediation priorities.
+- [x] Inventory OWASP, Snyk, Gradle dependency-audit, and repository security-policy automation.
+- [x] Audit ProGuard/R8 release shrinker configuration and rule coverage.
+- [x] Collect hosted dependency-security and release-validation evidence.
 - [ ] Report verified coverage results and unresolved release blockers.
