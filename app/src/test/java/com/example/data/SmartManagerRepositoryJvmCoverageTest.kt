@@ -1,0 +1,101 @@
+package com.example.data
+
+import android.content.Context
+import android.database.sqlite.SQLiteDatabaseLockedException
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
+class SmartManagerRepositoryJvmCoverageTest {
+    private lateinit var database: AppDatabase
+    private lateinit var dao: FileDao
+    private lateinit var context: Context
+
+    @Before
+    fun setUp() {
+        context = ApplicationProvider.getApplicationContext()
+        database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        dao = database.fileDao()
+    }
+
+    @After
+    fun tearDown() {
+        database.close()
+    }
+
+    @Test
+    fun cloudQueueRejectsDeniedDisabledAndUnsupportedTransfersWithoutSchedulingWork() = runBlocking {
+        val denied = repository { false }
+        assertFalse(denied.enqueueCloudSyncItem("GOOGLE_DRIVE", "denied.txt", 1L))
+
+        dao.insertPlugins(
+            listOf(PluginEntity("gdrive_sync", "Drive", "CLOUD_PROVIDER", "Drive", false, true))
+        )
+        val enabledByPolicy = repository { true }
+        assertFalse(enabledByPolicy.enqueueCloudSyncItem("GOOGLE_DRIVE", "disabled.txt", 1L))
+        assertFalse(enabledByPolicy.enqueueCloudSyncItem("UNSUPPORTED", "unsupported.txt", 1L))
+        assertTrue(dao.getCloudSyncItems().first().isEmpty())
+    }
+
+    @Test
+    fun cloudCancellationOnlyRemovesNonSyncedRowsAndRetryRejectsMissingOrSyncedRows() = runBlocking {
+        val syncedId = dao.insertCloudSyncItem(cloudItem("SYNCED"))
+        val queuedId = dao.insertCloudSyncItem(cloudItem("QUEUED"))
+        val repository = repository { true }
+
+        assertFalse(repository.retryCloudSyncItem(-1L))
+        assertFalse(repository.retryCloudSyncItem(syncedId))
+        assertFalse(repository.cancelCloudSyncItem(syncedId))
+        assertTrue(repository.cancelCloudSyncItem(queuedId))
+        assertEquals(listOf(syncedId), dao.getCloudSyncItems().first().map { it.id })
+    }
+
+    @Test
+    fun databaseLockRetriesOnceAndThenReturnsSuccessfulResult() = runBlocking {
+        val repository = repository { false }
+        var attempts = 0
+
+        val result = repository.withRetry(
+            operation = com.example.domain.retry.RetryOperation.DATABASE_WRITE,
+            maxAttempts = 2,
+            initialDelayMs = 0L,
+            factor = 1.0
+        ) {
+            attempts += 1
+            if (attempts == 1) throw SQLiteDatabaseLockedException("fixture lock")
+            "written"
+        }
+
+        assertEquals("written", result)
+        assertEquals(2, attempts)
+    }
+
+    private fun repository(transferAllowed: (Context) -> Boolean) = SmartManagerRepository(
+        context = context,
+        dao = dao,
+        cloudTransferAllowed = transferAllowed
+    )
+
+    private fun cloudItem(status: String) = CloudSyncItemEntity(
+        provider = "GOOGLE_DRIVE",
+        fileName = "${status.lowercase()}-${System.nanoTime()}.txt",
+        filePath = "/sync/$status.txt",
+        fileSize = 1L,
+        status = status,
+        operationId = "operation-$status-${System.nanoTime()}"
+    )
+}
