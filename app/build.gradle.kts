@@ -1,5 +1,7 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -88,7 +90,17 @@ android {
     buildConfig = true
     resValues = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all { test ->
+        test.extensions.configure<JacocoTaskExtension> {
+          includes = listOf("com.example.*")
+          isIncludeNoLocationClasses = true
+        }
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
