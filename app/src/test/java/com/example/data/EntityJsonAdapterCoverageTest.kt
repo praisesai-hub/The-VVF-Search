@@ -129,6 +129,48 @@ class EntityJsonAdapterCoverageTest {
         }
     }
 
+    @Test
+    fun generatedVaultAdapter_appliesDefaultsAndSkipsUnknownFields() {
+        val adapter = directVaultAdapter()
+        val beforeDecode = System.currentTimeMillis()
+
+        val decoded = requireNotNull(
+            adapter.fromJson(
+                """{
+                    "originalName":"legacy.txt",
+                    "encryptedName":"legacy.vvf",
+                    "category":"DOCUMENTS",
+                    "sizeBytes":12,
+                    "unknownFutureField":"ignored"
+                }"""
+            )
+        )
+
+        assertEquals(0L, decoded.id)
+        assertEquals("", decoded.encryptedFilePath)
+        assertEquals("", decoded.ivBase64)
+        assertEquals(12L, decoded.sizeBytes)
+        assertEquals(true, decoded.isBiometricProtected)
+        assertEquals(1, decoded.vaultFormatVersion)
+        assertEquals(true, decoded.encryptedAtMs >= beforeDecode)
+    }
+
+    @Test
+    fun generatedVaultAdapter_rejectsNullRequiredFields() {
+        val adapter = directVaultAdapter()
+
+        assertThrows(JsonDataException::class.java) {
+            adapter.fromJson(
+                """{
+                    "originalName":null,
+                    "encryptedName":"broken.vvf",
+                    "category":"DOCUMENTS",
+                    "sizeBytes":1
+                }"""
+            )
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun directVaultAdapter(): JsonAdapter<VaultItemEntity> {
         val adapterClass = Class.forName("com.example.data.VaultItemEntityJsonAdapter")
