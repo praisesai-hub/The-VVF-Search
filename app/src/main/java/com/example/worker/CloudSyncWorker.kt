@@ -20,6 +20,7 @@ import com.example.domain.retry.RetryOperation
 import com.example.domain.retry.RetryPolicy
 import com.example.domain.WorkCoordinator
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -36,8 +37,6 @@ class CloudSyncWorker @JvmOverloads constructor(
     private val authManagerOverride: DriveAuthorizationPort? = null,
     private val transferAllowed: (() -> Boolean)? = null
 ) : CoroutineWorker(appContext, workerParams) {
-
-    @Suppress("ReturnCount", "LongMethod", "CyclomaticComplexMethod", "NestedBlockDepth")
     override suspend fun doWork(): Result = executeWithDurableLease(
         context = applicationContext,
         worker = this,
@@ -61,21 +60,7 @@ class CloudSyncWorker @JvmOverloads constructor(
             val nowMs = System.currentTimeMillis()
             leaseStore.releaseExpiredLeases(nowMs)
 
-            val syncItems = dao.getCloudSyncItems().first()
-            val enabledProviders = dao.getAllPlugins().first()
-                .filter { it.isEnabled }
-                .mapNotNull { plugin ->
-                    when (plugin.pluginId) {
-                        "gdrive_sync" -> "GOOGLE_DRIVE"
-                        "onedrive_sync" -> "ONEDRIVE"
-                        "dropbox_sync" -> "DROPBOX"
-                        else -> null
-                    }
-                }.toSet()
-
-            val pendingOrQueued = syncItems
-                .filter { it.status == "PENDING" || it.status == "QUEUED" || it.status == "UPLOADING" }
-                .filter { it.provider in enabledProviders }
+            val pendingOrQueued = pendingSyncItems(dao)
 
             if (pendingOrQueued.isEmpty()) {
                 Log.i(TAG, "No pending cloud sync items for enabled plugins.")
@@ -92,107 +77,16 @@ class CloudSyncWorker @JvmOverloads constructor(
                 operationStore = leaseStore
             )
 
-            var syncedCount = 0
-            var failedCount = 0
-            var retryableFailedCount = 0
-
-            for (item in pendingOrQueued) {
-                val operationId = item.operationId.ifBlank { "legacy-${item.id}" }
-                val claimTimeMs = System.currentTimeMillis()
-                val claimed = leaseStore.claim(
-                    operationId = operationId,
-                    leaseOwner = leaseOwner,
-                    nowMs = claimTimeMs,
-                    leaseExpiresAtMs = claimTimeMs + LEASE_DURATION_MS
-                )
-                if (claimed == 0) continue
-
-                val heartbeatJob: Job = launch {
-                    while (isActive) {
-                        delay(HEARTBEAT_INTERVAL_MS)
-                        val heartbeatMs = System.currentTimeMillis()
-                        leaseStore.heartbeat(
-                            operationId = operationId,
-                            leaseOwner = leaseOwner,
-                            nowMs = heartbeatMs,
-                            leaseExpiresAtMs = heartbeatMs + LEASE_DURATION_MS
-                        )
-                    }
-                }
-
-                try {
-                    val claimedItem = item.copy(
-                        operationId = operationId,
-                        status = "UPLOADING",
-                        leaseOwner = leaseOwner,
-                        heartbeatAtMs = claimTimeMs
-                    )
-                    when (val syncResult = syncEngine.syncItem(claimedItem)) {
-                        is CloudSyncResult.Success -> {
-                            leaseStore.updateTransferState(
-                                operationId = operationId,
-                                leaseOwner = leaseOwner,
-                                remoteFileId = syncResult.remoteFileId.orEmpty(),
-                                resumableSessionUri = syncResult.resumableSessionUri.orEmpty(),
-                                bytesCommitted = syncResult.bytesCommitted
-                            )
-                            if (leaseStore.markCompleted(operationId, leaseOwner, System.currentTimeMillis()) > 0) {
-                                syncedCount++
-                            } else {
-                                Log.w(TAG, "Completion ignored because the cloud operation lease was lost.")
-                            }
-                        }
-                        is CloudSyncResult.Error -> {
-                            leaseStore.updateTransferState(
-                                operationId = operationId,
-                                leaseOwner = leaseOwner,
-                                remoteFileId = syncResult.remoteFileId.orEmpty(),
-                                resumableSessionUri = syncResult.resumableSessionUri.orEmpty(),
-                                bytesCommitted = syncResult.bytesCommitted
-                            )
-                            val canRetry = syncResult.isRetryable &&
-                                runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS
-                            val errorCode = syncResult.domainError?.diagnostics?.reasonCode
-                                ?: if (syncResult.isRetryable) "RETRYABLE_TRANSFER_FAILURE" else "TRANSFER_FAILURE"
-                            val nextStatus = if (canRetry) "QUEUED" else "FAILED"
-                            leaseStore.markFailed(
-                                operationId = operationId,
-                                leaseOwner = leaseOwner,
-                                status = nextStatus,
-                                errorCode = errorCode,
-                                nowMs = System.currentTimeMillis()
-                            )
-                            failedCount++
-                            if (canRetry) retryableFailedCount++
-                        }
-                        is CloudSyncResult.NotSupported -> {
-                            leaseStore.markFailed(
-                                operationId = operationId,
-                                leaseOwner = leaseOwner,
-                                status = "FAILED",
-                                errorCode = "PROVIDER_NOT_SUPPORTED",
-                                nowMs = System.currentTimeMillis()
-                            )
-                            failedCount++
-                        }
-                    }
-                } finally {
-                    heartbeatJob.cancel()
-                }
-            }
-
-            Log.i(TAG, "CloudSyncWorker finished. Synced: $syncedCount, Failed: $failedCount (Retryable: $retryableFailedCount)")
-            if (retryableFailedCount > 0) {
-                if (runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS) {
-                    DurableWorkResult.retry()
-                } else {
-                    DurableWorkResult.failure()
-                }
-            } else if (failedCount > 0) {
-                DurableWorkResult.failure()
-            } else {
-                DurableWorkResult.success()
-            }
+            val summary = processSyncItems(
+                items = pendingOrQueued,
+                leaseStore = leaseStore,
+                syncEngine = syncEngine,
+                leaseOwner = leaseOwner
+            )
+            Log.i(TAG, summary.logMessage())
+            summary.toWorkerResult()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             val diagnostic = DomainErrorMapper.fromThrowable("CLOUD_SYNC_WORKER", e)
             DiagnosticLogger.log(TAG, diagnostic)
@@ -204,10 +98,174 @@ class CloudSyncWorker @JvmOverloads constructor(
         }
     }
 
+    private suspend fun pendingSyncItems(dao: FileDao): List<CloudSyncItemEntity> {
+        val enabledProviders = dao.getAllPlugins().first()
+            .filter { it.isEnabled }
+            .mapNotNull { plugin ->
+                when (plugin.pluginId) {
+                    "gdrive_sync" -> "GOOGLE_DRIVE"
+                    "onedrive_sync" -> "ONEDRIVE"
+                    "dropbox_sync" -> "DROPBOX"
+                    else -> null
+                }
+            }.toSet()
+        return dao.getCloudSyncItems().first()
+            .filter { it.status == "PENDING" || it.status == "QUEUED" || it.status == "UPLOADING" }
+            .filter { it.provider in enabledProviders }
+    }
+
+    private suspend fun processSyncItems(
+        items: List<CloudSyncItemEntity>,
+        leaseStore: CloudSyncOperationStore,
+        syncEngine: com.example.data.CloudSyncEngine,
+        leaseOwner: String
+    ): CloudSyncRunSummary = coroutineScope {
+        var summary = CloudSyncRunSummary()
+        for (item in items) {
+            summary = summary.record(processSyncItem(item, leaseStore, syncEngine, leaseOwner))
+        }
+        summary
+    }
+    }
+
+    private suspend fun kotlinx.coroutines.CoroutineScope.processSyncItem(
+        item: CloudSyncItemEntity,
+        leaseStore: CloudSyncOperationStore,
+        syncEngine: com.example.data.CloudSyncEngine,
+        leaseOwner: String
+    ): CloudSyncItemOutcome {
+        val operationId = item.operationId.ifBlank { "legacy-${item.id}" }
+        val claimTimeMs = System.currentTimeMillis()
+        val claimed = leaseStore.claim(
+            operationId = operationId,
+            leaseOwner = leaseOwner,
+            nowMs = claimTimeMs,
+            leaseExpiresAtMs = claimTimeMs + LEASE_DURATION_MS
+        )
+        if (claimed == 0) return CloudSyncItemOutcome.SKIPPED
+
+        val heartbeatJob = startHeartbeat(operationId, leaseStore, leaseOwner)
+        return try {
+            val claimedItem = item.copy(
+                operationId = operationId,
+                status = "UPLOADING",
+                leaseOwner = leaseOwner,
+                heartbeatAtMs = claimTimeMs
+            )
+            resolveSyncResult(operationId, syncEngine.syncItem(claimedItem), leaseStore, leaseOwner)
+        } finally {
+            heartbeatJob.cancel()
+        }
+    }
+
+    private fun kotlinx.coroutines.CoroutineScope.startHeartbeat(
+        operationId: String,
+        leaseStore: CloudSyncOperationStore,
+        leaseOwner: String
+    ): Job = launch {
+        while (isActive) {
+            delay(HEARTBEAT_INTERVAL_MS)
+            val heartbeatMs = System.currentTimeMillis()
+            leaseStore.heartbeat(
+                operationId = operationId,
+                leaseOwner = leaseOwner,
+                nowMs = heartbeatMs,
+                leaseExpiresAtMs = heartbeatMs + LEASE_DURATION_MS
+            )
+        }
+    }
+
+    private suspend fun resolveSyncResult(
+        operationId: String,
+        result: CloudSyncResult,
+        leaseStore: CloudSyncOperationStore,
+        leaseOwner: String
+    ): CloudSyncItemOutcome = when (result) {
+        is CloudSyncResult.Success -> {
+            persistTransferState(operationId, result, leaseStore, leaseOwner)
+            if (leaseStore.markCompleted(operationId, leaseOwner, System.currentTimeMillis()) > 0) {
+                CloudSyncItemOutcome.SYNCED
+            } else {
+                Log.w(TAG, "Completion ignored because the cloud operation lease was lost.")
+                CloudSyncItemOutcome.SKIPPED
+            }
+        }
+        is CloudSyncResult.Error -> {
+            persistTransferState(operationId, result, leaseStore, leaseOwner)
+            val canRetry = result.isRetryable && runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS
+            leaseStore.markFailed(
+                operationId = operationId,
+                leaseOwner = leaseOwner,
+                status = if (canRetry) "QUEUED" else "FAILED",
+                errorCode = result.domainError?.diagnostics?.reasonCode
+                    ?: if (result.isRetryable) "RETRYABLE_TRANSFER_FAILURE" else "TRANSFER_FAILURE",
+                nowMs = System.currentTimeMillis()
+            )
+            if (canRetry) CloudSyncItemOutcome.RETRYABLE_FAILURE else CloudSyncItemOutcome.FAILURE
+        }
+        is CloudSyncResult.NotSupported -> {
+            leaseStore.markFailed(
+                operationId = operationId,
+                leaseOwner = leaseOwner,
+                status = "FAILED",
+                errorCode = "PROVIDER_NOT_SUPPORTED",
+                nowMs = System.currentTimeMillis()
+            )
+            CloudSyncItemOutcome.FAILURE
+        }
+    }
+
+    private suspend fun persistTransferState(
+        operationId: String,
+        result: CloudSyncResult,
+        leaseStore: CloudSyncOperationStore,
+        leaseOwner: String
+    ) {
+        leaseStore.updateTransferState(
+            operationId = operationId,
+            leaseOwner = leaseOwner,
+            remoteFileId = result.remoteFileId.orEmpty(),
+            resumableSessionUri = result.resumableSessionUri.orEmpty(),
+            bytesCommitted = result.bytesCommitted
+        )
+    }
+
     companion object {
         const val WORK_NAME = "VVF_CLOUD_SYNC_WORK"
         const val LEASE_DURATION_MS = 120_000L
         const val HEARTBEAT_INTERVAL_MS = 30_000L
         private const val TAG = "CloudSyncWorker"
+    }
+
+    private enum class CloudSyncItemOutcome {
+        SYNCED,
+        RETRYABLE_FAILURE,
+        FAILURE,
+        SKIPPED,
+    }
+
+    private data class CloudSyncRunSummary(
+        val syncedCount: Int = 0,
+        val failedCount: Int = 0,
+        val retryableFailedCount: Int = 0
+    ) {
+        fun record(outcome: CloudSyncItemOutcome): CloudSyncRunSummary = when (outcome) {
+            CloudSyncItemOutcome.SYNCED -> copy(syncedCount = syncedCount + 1)
+            CloudSyncItemOutcome.RETRYABLE_FAILURE -> copy(
+                failedCount = failedCount + 1,
+                retryableFailedCount = retryableFailedCount + 1
+            )
+            CloudSyncItemOutcome.FAILURE -> copy(failedCount = failedCount + 1)
+            CloudSyncItemOutcome.SKIPPED -> this
+        }
+
+        fun toWorkerResult(): DurableWorkResult = when {
+            retryableFailedCount > 0 -> DurableWorkResult.retry()
+            failedCount > 0 -> DurableWorkResult.failure()
+            else -> DurableWorkResult.success()
+        }
+
+        fun logMessage(): String =
+            "CloudSyncWorker finished. Synced: $syncedCount, Failed: $failedCount (Retryable: $retryableFailedCount)"
     }
 }
