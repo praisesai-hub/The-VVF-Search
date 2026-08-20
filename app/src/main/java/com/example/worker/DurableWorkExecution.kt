@@ -37,7 +37,7 @@ internal data class DurableWorkResult(
     }
 }
 
-suspend fun executeWithDurableLease(
+internal suspend fun executeWithDurableLease(
     context: Context,
     worker: CoroutineWorker,
     workName: String,
