@@ -11,4 +11,7 @@
 - [x] Inventory JUnit, mocking, Kotlin Flow/StateFlow, and AI semantic test tooling.
 - [x] Collect hosted JVM unit-test result and coverage artifact evidence.
 - [x] Assess ViewModel, repository, AI semantic logic, and Flow test gaps.
+- [x] Inventory Robolectric Activity, Room, and Android component integration tests.
+- [x] Audit Hilt or alternative dependency-injection test configuration and execution evidence.
+- [x] Verify JVM integration-test execution results from hosted CI artifacts.
 - [ ] Report verified coverage results and unresolved release blockers.
