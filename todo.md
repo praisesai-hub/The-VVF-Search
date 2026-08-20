@@ -29,4 +29,7 @@
 - [x] Audit README setup guidance and AI feature claims against current implementation.
 - [x] Audit GitHub Actions test automation, quality gates, and release evidence.
 - [x] Audit Android manifest permissions, exported components, and deep-link exposure.
+- [x] Audit JaCoCo generation, report artifacts, and package-specific coverage policies.
+- [x] Collect current hosted JVM and instrumented coverage evidence.
+- [x] Audit Codecov configuration and PR coverage-report integration.
 - [ ] Report verified coverage results and unresolved release blockers.
