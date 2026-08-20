@@ -106,8 +106,20 @@ class GoogleDriveProviderAdapter(
                                     resumableSessionUri = sessionUri,
                                     bytesCommitted = endExclusive
                                 )
-                            onProgress(CloudTransferProgress(remoteId, sessionUri, file.length()))
-                            return CloudSyncResult.Success(file.length(), remoteId, sessionUri, file.length())
+                            val completedBytes = file.length()
+                            onProgress(
+                                CloudTransferProgress(
+                                    remoteFileId = remoteId,
+                                    resumableSessionUri = sessionUri,
+                                    bytesCommitted = completedBytes
+                                )
+                            )
+                            return CloudSyncResult.Success(
+                                bytesTransferred = completedBytes,
+                                remoteFileId = remoteId,
+                                resumableSessionUri = sessionUri,
+                                bytesCommitted = completedBytes
+                            )
                         }
                         else -> return classifyHttpError(
                             "File upload failed",
