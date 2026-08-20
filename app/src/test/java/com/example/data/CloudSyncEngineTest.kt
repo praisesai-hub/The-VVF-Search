@@ -1,6 +1,8 @@
 package com.example.data
 
 import android.content.Context
+import io.mockk.coVerify
+import io.mockk.mockk
 import java.io.File
 import java.net.UnknownHostException
 import kotlinx.coroutines.runBlocking
@@ -21,6 +23,8 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     var uploadedFile: File? = null
     var uploadedRemotePath: String? = null
     var uploadedOperationId: String? = null
+    var receivedTransferState: CloudTransferState? = null
+    var progressToEmit: CloudTransferProgress? = null
     var result: CloudSyncResult = CloudSyncResult.Success()
     var exceptionToThrow: Exception? = null
 
@@ -34,6 +38,18 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     override suspend fun uploadFile(file: File, remotePath: String, operationId: String): CloudSyncResult {
         uploadedOperationId = operationId
         return uploadFile(file, remotePath)
+    }
+
+    override suspend fun uploadFile(
+        file: File,
+        remotePath: String,
+        operationId: String,
+        transferState: CloudTransferState,
+        onProgress: suspend (CloudTransferProgress) -> Unit
+    ): CloudSyncResult {
+        receivedTransferState = transferState
+        progressToEmit?.let(onProgress)
+        return uploadFile(file, remotePath, operationId)
     }
 
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult =
@@ -182,6 +198,48 @@ class CloudSyncEngineTest {
         assertEquals(true, result.isRetryable)
         assertEquals("Network connection is unavailable.", result.message)
         assertFalse(result.message.contains("storage.example"))
+    }
+
+    @Test
+    fun resumableProgress_isPersistedOnlyForTheCurrentLeaseOwner(): Unit = runBlocking {
+        val file = createFile()
+        val operationStore = mockk<CloudSyncOperationStore>(relaxed = true)
+        val adapter = RecordingCloudProviderAdapter().apply {
+            progressToEmit = CloudTransferProgress(
+                remoteFileId = "remote-41",
+                resumableSessionUri = "https://upload.example/session-41",
+                bytesCommitted = 128L
+            )
+        }
+        val engine = CloudSyncEngine(
+            context,
+            FakeFileDaoForCloudSyncEngine(),
+            authManager,
+            adapter,
+            operationStore
+        )
+        val item = item(file = file, operationId = "operation-41").copy(
+            leaseOwner = "worker-41",
+            remoteFileId = "prior-remote",
+            resumableSessionUri = "prior-session",
+            resumableBytesCommitted = 64L
+        )
+
+        engine.syncItem(item)
+
+        assertEquals(
+            CloudTransferState("prior-remote", "prior-session", 64L),
+            adapter.receivedTransferState
+        )
+        coVerify(exactly = 1) {
+            operationStore.updateTransferState(
+                operationId = "operation-41",
+                leaseOwner = "worker-41",
+                remoteFileId = "remote-41",
+                resumableSessionUri = "https://upload.example/session-41",
+                bytesCommitted = 128L
+            )
+        }
     }
 }
 
