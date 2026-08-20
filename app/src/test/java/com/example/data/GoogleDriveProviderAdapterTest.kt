@@ -439,6 +439,7 @@ class GoogleDriveProviderAdapterTest {
                     .message("Resume Incomplete")
                     .header("Range", "bytes=0-2")
                     .header("Content-Range", "bytes 0-2/10")
+                    .body("".toResponseBody(null))
                     .build()
             } else {
                 Response.Builder()
