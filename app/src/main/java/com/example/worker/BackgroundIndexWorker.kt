@@ -30,7 +30,7 @@ class BackgroundIndexWorker(
         block = { runWork() }
     )
 
-    private suspend fun runWork(): androidx.work.ListenableWorker.Result {
+    private suspend fun runWork(): DurableWorkResult {
         Log.i(TAG, "Starting background file storage indexing...")
         return try {
             val scanner = StorageScanner(applicationContext)
@@ -56,14 +56,14 @@ class BackgroundIndexWorker(
                 Log.w(TAG, "Worker was stopped before stale record reconciliation could run.")
             }
 
-            androidx.work.ListenableWorker.Result.success()
+            DurableWorkResult.success()
         } catch (e: Exception) {
             val diagnostic = DomainErrorMapper.fromThrowable("BACKGROUND_INDEXING", e)
             DiagnosticLogger.log(TAG, diagnostic)
             if (RetryPolicy.shouldRetry(RetryOperation.INDEXING, e, runAttemptCount)) {
-                androidx.work.ListenableWorker.Result.retry()
+                DurableWorkResult.retry()
             } else {
-                androidx.work.ListenableWorker.Result.failure()
+                DurableWorkResult.failure()
             }
         }
     }

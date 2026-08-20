@@ -46,10 +46,10 @@ class CloudSyncWorker @JvmOverloads constructor(
         block = { runWork() }
     )
 
-    private suspend fun runWork(): Result = coroutineScope {
+    private suspend fun runWork(): DurableWorkResult = coroutineScope {
         if (!(transferAllowed?.invoke() ?: CloudSyncPolicy.canTransfer(applicationContext))) {
             Log.i(TAG, "Cloud transfer blocked: explicit opt-in or build provisioning is missing.")
-            return@coroutineScope Result.success()
+            return@coroutineScope DurableWorkResult.success()
         }
 
         val leaseOwner = id.toString()
@@ -79,7 +79,7 @@ class CloudSyncWorker @JvmOverloads constructor(
 
             if (pendingOrQueued.isEmpty()) {
                 Log.i(TAG, "No pending cloud sync items for enabled plugins.")
-                return@coroutineScope Result.success()
+                return@coroutineScope DurableWorkResult.success()
             }
 
             val driveAuthorization = authManagerOverride
@@ -183,19 +183,23 @@ class CloudSyncWorker @JvmOverloads constructor(
 
             Log.i(TAG, "CloudSyncWorker finished. Synced: $syncedCount, Failed: $failedCount (Retryable: $retryableFailedCount)")
             if (retryableFailedCount > 0) {
-                if (runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS) Result.retry() else Result.failure()
+                if (runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS) {
+                    DurableWorkResult.retry()
+                } else {
+                    DurableWorkResult.failure()
+                }
             } else if (failedCount > 0) {
-                Result.failure()
+                DurableWorkResult.failure()
             } else {
-                Result.success()
+                DurableWorkResult.success()
             }
         } catch (e: Exception) {
             val diagnostic = DomainErrorMapper.fromThrowable("CLOUD_SYNC_WORKER", e)
             DiagnosticLogger.log(TAG, diagnostic)
             if (RetryPolicy.shouldRetry(RetryOperation.CLOUD_TRANSFER, e, runAttemptCount)) {
-                Result.retry()
+                DurableWorkResult.retry()
             } else {
-                Result.failure()
+                DurableWorkResult.failure()
             }
         }
     }

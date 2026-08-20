@@ -33,14 +33,14 @@ class DuplicateCleanupWorker(
         block = { runWork() }
     )
 
-    private suspend fun runWork(): Result {
+    private suspend fun runWork(): DurableWorkResult {
         Log.i(TAG, "Starting background DuplicateCleanupWorker...")
         return try {
             val prefs = applicationContext.getSharedPreferences("vvf_app_settings", Context.MODE_PRIVATE)
             val isAutoCleanEnabled = prefs.getBoolean("auto_clean_duplicates_bg", false)
             if (!isAutoCleanEnabled) {
                 Log.i(TAG, "Auto-clean duplicates in background is disabled in settings. Skipping cleanup execution.")
-                return Result.success()
+                return DurableWorkResult.success()
             }
 
             val db = AppDatabase.getDatabase(applicationContext)
@@ -107,7 +107,7 @@ class DuplicateCleanupWorker(
                 Log.i(TAG, "DuplicateCleanupWorker completed. No exact duplicate clutter found.")
             }
 
-            Result.success()
+            DurableWorkResult.success()
         } catch (e: Exception) {
             val diagnostic = DomainError.OperationFailed(
                 userMessage = UserMessage("Duplicate cleanup could not be completed."),
@@ -119,9 +119,9 @@ class DuplicateCleanupWorker(
             )
             DiagnosticLogger.log(TAG, diagnostic)
             if (RetryPolicy.shouldRetry(RetryOperation.DUPLICATE_CLEANUP, e, runAttemptCount)) {
-                Result.retry()
+                DurableWorkResult.retry()
             } else {
-                Result.failure()
+                DurableWorkResult.failure()
             }
         }
     }

@@ -24,7 +24,7 @@ class CacheCleanupWorker(
         block = { runWork() }
     )
 
-    private suspend fun runWork(): Result {
+    private suspend fun runWork(): DurableWorkResult {
         Log.i(TAG, "Starting CacheCleanupWorker...")
         return try {
             val cacheDir = applicationContext.cacheDir
@@ -50,14 +50,14 @@ class CacheCleanupWorker(
 
             Log.i(TAG, "Cache cleanup complete. Deleted $deletedFilesCount files, freeing ${deletedSize / 1024} KB.")
             
-            Result.success()
+            DurableWorkResult.success()
         } catch (e: Exception) {
             val diagnostic = DomainErrorMapper.fromThrowable("CACHE_CLEANUP", e)
             DiagnosticLogger.log(TAG, diagnostic)
             if (RetryPolicy.shouldRetry(RetryOperation.CACHE_CLEANUP, e, runAttemptCount)) {
-                Result.retry()
+                DurableWorkResult.retry()
             } else {
-                Result.failure()
+                DurableWorkResult.failure()
             }
         }
     }
