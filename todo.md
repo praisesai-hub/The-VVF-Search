@@ -14,4 +14,7 @@
 - [x] Inventory Robolectric Activity, Room, and Android component integration tests.
 - [x] Audit Hilt or alternative dependency-injection test configuration and execution evidence.
 - [x] Verify JVM integration-test execution results from hosted CI artifacts.
+- [x] Inventory Gradle build, test, Detekt, and ktlintCheck task availability.
+- [x] Collect hosted compilation and JVM test execution evidence.
+- [x] Assess build and quality-gate outcomes for remediation priorities.
 - [ ] Report verified coverage results and unresolved release blockers.
