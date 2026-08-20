@@ -8,4 +8,7 @@
 - [x] Inventory Android Lint, Detekt/ktlint, and external code-quality tooling configuration.
 - [x] Run available static-analysis checks and collect reproducible output.
 - [x] Assess SonarQube/CodeClimate integration readiness and report verified gaps.
+- [x] Inventory JUnit, mocking, Kotlin Flow/StateFlow, and AI semantic test tooling.
+- [x] Collect hosted JVM unit-test result and coverage artifact evidence.
+- [x] Assess ViewModel, repository, AI semantic logic, and Flow test gaps.
 - [ ] Report verified coverage results and unresolved release blockers.
