@@ -88,7 +88,7 @@ class VaultManagerEngine(
         }
         if (!verifyVaultPin(pin)) {
             recordFailedAuthentication(currentState.failedAttempts, now)
-            throw IllegalStateException("Invalid vault PIN")
+            error("Invalid vault PIN")
         }
         val dek = if (hasPinEnvelope(vaultStore)) {
             unwrapPinDek(vaultStore, pin)
