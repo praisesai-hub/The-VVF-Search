@@ -178,6 +178,57 @@ class VaultManagerEngineTest {
         assertTrue(reopened.getVaultLockoutState().lockedUntilMs > now)
     }
 
+    @Test
+    fun lockoutState_sanitizesMalformedAndNegativePersistedValues() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_failed_attempts", "not-a-number")
+            putPersistedValue("vault_locked_until_ms", "-1")
+        }
+
+        val state = VaultManagerEngine(context, keystore, prefs).getVaultLockoutState()
+
+        assertEquals(0, state.failedAttempts)
+        assertEquals(0L, state.lockedUntilMs)
+    }
+
+    @Test
+    fun changeVaultPin_rejectsPersistedLockoutWithoutCheckingCredentials() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "stored-hash")
+            putPersistedValue("vault_failed_attempts", MAX_VAULT_FAILED_ATTEMPTS.toString())
+            putPersistedValue("vault_locked_until_ms", "2000")
+        }
+        val engine = VaultManagerEngine(context, keystore, prefs, nowMs = { 1000L })
+
+        assertFalse(engine.changeVaultPin("11111111", "22222222"))
+
+        verify(exactly = 0) { keystore.verifyPin(any(), any()) }
+        verify(exactly = 0) { keystore.hashPin(any()) }
+    }
+
+    @Test
+    fun failedAuthentication_failsClosedWhenLockoutStateCannotBePersisted() {
+        val prefs = CommitControlledPreferences(commitResult = false).apply {
+            putPersistedValue("vault_pin_hash", "stored-hash")
+        }
+        every { keystore.verifyPin("00000000", "stored-hash") } returns false
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertThrows(IllegalStateException::class.java) {
+            engine.unlockWithPin("00000000")
+        }
+    }
+
+    @Test
+    fun disableBiometricEnrollment_failsClosedWithoutDeletingKeyWhenCommitFails() {
+        val prefs = CommitControlledPreferences(commitResult = false)
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertFalse(engine.disableBiometricEnrollment())
+
+        verify(exactly = 0) { keystore.deleteBiometricWrapKey() }
+    }
+
     private class CommitControlledPreferences(
         private val commitResult: Boolean
     ) : SharedPreferences {
