@@ -1,5 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 
+import org.gradle.api.tasks.Exec
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
@@ -204,4 +205,22 @@ tasks.configureEach {
   if (name.startsWith("uploadCrashlyticsMappingFile")) {
     enabled = file("google-services.json").isFile
   }
+}
+
+val verifyDebugUnitTestCoverage by tasks.registering(Exec::class) {
+  group = "verification"
+  description = "Enforces the configured JaCoCo JVM instruction coverage floors."
+  dependsOn("createDebugUnitTestCoverageReport")
+  commandLine(
+    "python3",
+    rootProject.file("scripts/check_coverage_floor.py").absolutePath,
+    "--report",
+    layout.buildDirectory.file("reports/coverage/test/debug/report.xml").get().asFile.absolutePath,
+    "--policy",
+    rootProject.file("scripts/coverage-policy.json").absolutePath,
+  )
+}
+
+tasks.matching { it.name == "check" }.configureEach {
+  dependsOn(verifyDebugUnitTestCoverage)
 }

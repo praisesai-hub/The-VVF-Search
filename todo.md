@@ -43,7 +43,7 @@
 - [x] Define phased JVM and instrumented test milestones for the 95% Vault and 90% Security gates.
 - [ ] Implement JVM-testable Security/Keystore boundary refactors and focused tests.
 - [ ] Implement Vault authentication, biometric, migration, repository, and adapter coverage batches.
-- [ ] Add compatible Gradle/JaCoCo enforcement configuration and CI artifact paths.
+- [x] Add compatible Gradle/JaCoCo enforcement configuration and CI artifact paths.
 - [ ] Run one bounded hosted validation and record measured gate results.
 - [x] Collect one final active-run status only; do not poll or start another validation run until evidence requires it.
 - [ ] Inspect the current CI run and screenshot evidence once without dispatching or polling.
