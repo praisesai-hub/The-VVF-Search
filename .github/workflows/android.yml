@@ -267,12 +267,7 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 300
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            if [ "${GRADLE_OFFLINE_READY:-false}" = "true" ]; then
-              ./gradlew --offline :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
-            else
-              ./gradlew :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
-            fi
+          script: if [ "${GRADLE_OFFLINE_READY:-false}" = "true" ]; then ./gradlew --offline :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport; else ./gradlew :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport; fi
       - name: Enforce Instrumented Android Coverage Policy
         run: |
           python3 scripts/check_coverage_floor.py \
