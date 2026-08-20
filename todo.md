@@ -20,4 +20,7 @@
 - [x] Inventory OWASP, Snyk, Gradle dependency-audit, and repository security-policy automation.
 - [x] Audit ProGuard/R8 release shrinker configuration and rule coverage.
 - [x] Collect hosted dependency-security and release-validation evidence.
+- [x] Inventory ONNX/TensorFlow Lite model assets and model runtime input-output contracts.
+- [x] Audit model card, integrity metadata, bias disclosure, and limitations documentation.
+- [x] Verify embedding and semantic-search test evidence and remaining gaps.
 - [ ] Report verified coverage results and unresolved release blockers.
