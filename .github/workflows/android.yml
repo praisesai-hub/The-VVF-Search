@@ -229,7 +229,9 @@ jobs:
           ./gradlew :app:dependencies --configuration debugAndroidTestRuntimeClasspath
       - name: Check Gradle offline readiness
         run: |
-          if ./gradlew --offline :app:dependencies --configuration debugAndroidTestRuntimeClasspath >/dev/null 2>&1; then
+          # Dependency reports do not resolve AAPT2's detached configuration. Verify the actual
+          # debug build path so missing build-tools artifacts retain the online fallback.
+          if ./gradlew --offline :app:assembleDebug >/dev/null 2>&1; then
             echo "GRADLE_OFFLINE_READY=true" >> "$GITHUB_ENV"
           else
             echo "GRADLE_OFFLINE_READY=false" >> "$GITHUB_ENV"
