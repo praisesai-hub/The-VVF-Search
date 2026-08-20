@@ -96,7 +96,7 @@ class GoogleDriveProviderAdapter(
                     when {
                         response.code == 308 -> {
                             offset = parseCommittedOffset(
-                                response.header("Range") ?: response.header("Content-Range"),
+                                response.header("Content-Range") ?: response.header("Range"),
                                 offset,
                                 endExclusive
                             )
@@ -223,7 +223,7 @@ class GoogleDriveProviderAdapter(
                 when {
                     response.code == 308 -> UploadProbe.Offset(
                         parseCommittedOffset(
-                            response.header("Range") ?: response.header("Content-Range"),
+                            response.header("Content-Range") ?: response.header("Range"),
                             0L,
                             0L
                         )
