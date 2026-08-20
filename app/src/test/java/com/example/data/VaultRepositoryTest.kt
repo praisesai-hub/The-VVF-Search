@@ -253,6 +253,31 @@ class VaultRepositoryTest {
         assertTrue(legacyFile.delete())
     }
 
+    @Test
+    fun unlockFromVault_failsClosedWhenLegacyV1FileIsMissing() = runBlocking {
+        val session = VaultCryptoSession.fromKeyBytes(ByteArray(32) { 9 })
+        val legacyEngine = mockk<VaultManagerEngine>(relaxed = true)
+        every { legacyEngine.unlockWithPin(any()) } returns session
+        val legacyRepository = VaultRepository(context, dao, keystore, legacyEngine)
+        val missingLegacyItem = vaultItem(id = 73L, originalName = "missing-legacy.txt").copy(
+            encryptedFilePath = File(context.cacheDir, "missing-${System.nanoTime()}.vvf").absolutePath,
+            vaultFormatVersion = 1
+        )
+
+        legacyRepository.unlockWithPin("12345678")
+        try {
+            legacyRepository.unlockFromVault(missingLegacyItem, fileItem(name = "missing-legacy.txt", path = "/restore/missing-legacy.txt"))
+            fail("Expected missing legacy vault file to fail closed")
+        } catch (error: IllegalStateException) {
+            assertTrue(error.message.orEmpty().contains("Legacy vault file is missing"))
+        }
+
+        coVerify(exactly = 0) { dao.insertVaultItem(any()) }
+        coVerify(exactly = 0) { dao.updateFile(any()) }
+        coVerify(exactly = 0) { dao.deleteVaultItemById(any()) }
+        session.close()
+    }
+
     private fun fileItem(
         id: Long = 1L,
         name: String,
