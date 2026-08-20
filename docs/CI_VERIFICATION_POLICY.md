@@ -17,6 +17,12 @@ Android emulator jobs are authoritative for device-specific behavior, but they a
 
 The expected sequence is: dispatch or push the isolated branch; wait once for a bounded interval; inspect job-level state; retrieve uploaded reports if a prerequisite job fails; cancel an overlong run when appropriate; apply only evidence-based fixes; and dispatch a fresh verification run. The agent should provide a progress checkpoint instead of repeatedly waiting without new information.
 
+## Gradle and emulator cache policy
+
+Gradle User Home caching is enabled through `gradle/actions/setup-gradle@v6` with the open-source basic provider. Non-main branches are read-only, and Gradle task-output and keyring directories are excluded from the cache. This preserves dependency and wrapper reuse without enabling the project’s disabled task-output/Kotlin caches.
+
+The instrumented job prefetches the debug and debugAndroidTest runtime dependency graphs before emulator startup. It caches the AVD directory and ADB metadata with a versioned API/target/architecture key. A cache miss creates a snapshot; the test invocation then reuses the snapshot with `-no-snapshot-save`. Gradle offline mode is used only when the cached dependency probe succeeds; otherwise the workflow falls back to online resolution rather than failing for an incomplete cache.
+
 ## Current issue context
 
 Issue #33 remains open while Dependabot alert #50 is still visible. Issue #34 remains open as a tracking item for the underlying Kotlin/CodeQL compatibility gap, although the repository has a workspace-only CodeQL compatibility fallback and the CodeQL workflow has passed on the isolated branch. Neither issue should be marked resolved solely because a compensating control passes.
