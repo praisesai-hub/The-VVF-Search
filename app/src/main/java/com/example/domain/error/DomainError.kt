@@ -59,7 +59,9 @@ object DomainErrorMapper {
     ): DomainError {
         val reasonCode = when {
             cause is SecurityException -> "AUTH_REQUIRED"
-            cause is UnknownHostException || cause is ConnectException -> "NETWORK_UNAVAILABLE"
+            cause is UnknownHostException ||
+                cause is ConnectException ||
+                cause.message?.contains("unable to resolve host", ignoreCase = true) == true -> "NETWORK_UNAVAILABLE"
             cause.message?.contains("ENOSPC", ignoreCase = true) == true -> "NO_SPACE"
             cause is IOException -> "IO_FAILURE"
             else -> "UNEXPECTED_FAILURE"

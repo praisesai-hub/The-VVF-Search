@@ -189,7 +189,7 @@ class MainViewModelTest {
         assertTrue(result)
         assertNull(viewModel.pinError.value)
         assertEquals("12345678", fakeRepository.lastChangedOldPin)
-        assertEquals("5678", fakeRepository.lastChangedNewPin)
+        assertEquals("56785678", fakeRepository.lastChangedNewPin)
     }
 
     @Test

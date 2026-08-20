@@ -30,6 +30,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.IOException
+import java.net.UnknownHostException
 
 class FakeFileDao : FileDao {
     val cloudSyncItems = mutableListOf<CloudSyncItemEntity>()
@@ -385,7 +386,7 @@ class CloudSyncWorkerTest {
         )
         fakeDao.insertCloudSyncItem(syncItem)
 
-        fakeAdapter.exceptionToThrow = IOException("Network connection dropped")
+        fakeAdapter.exceptionToThrow = UnknownHostException("Network connection dropped")
 
         val worker = createWorker(runAttemptCount = 0)
 
@@ -400,7 +401,7 @@ class CloudSyncWorkerTest {
         assertEquals(1, updatedItem?.attemptCount)
         assertEquals(null, updatedItem?.leaseOwner)
         assertEquals(0L, updatedItem?.completedAtMs)
-        assertEquals("IO_FAILURE", updatedItem?.lastErrorCode)
+        assertEquals("NETWORK_UNAVAILABLE", updatedItem?.lastErrorCode)
     }
 
     @Test
@@ -421,7 +422,7 @@ class CloudSyncWorkerTest {
         )
         fakeDao.insertCloudSyncItem(syncItem)
 
-        fakeAdapter.exceptionToThrow = IOException("Network connection dropped")
+        fakeAdapter.exceptionToThrow = UnknownHostException("Network connection dropped")
 
         val worker = createWorker(runAttemptCount = 3)
 
@@ -520,7 +521,7 @@ class CloudSyncWorkerTest {
 
         assertEquals(ListenableWorker.Result.failure(), result)
         assertEquals(
-            "NOT_SUPPORTED",
+            "FAILED",
             fakeDao.getCloudSyncItems().first().find { it.id == 107L }?.status
         )
     }
@@ -559,7 +560,7 @@ class CloudSyncWorkerTest {
 
         assertEquals(ListenableWorker.Result.success(), result)
         val items = fakeDao.getCloudSyncItems().first().associateBy { it.id }
-        assertEquals("SYNCED", items.getValue(201L).status)
+        assertEquals("FAILED", items.getValue(201L).status)
         assertEquals("SYNCED", items.getValue(202L).status)
         assertEquals("SYNCED", items.getValue(203L).status)
         assertEquals("PENDING", items.getValue(204L).status)

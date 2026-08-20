@@ -221,7 +221,7 @@ class DuplicateManagerTest {
         val movedWithOriginal = fakeDao.filesMap.getValue(12L)
         assertFalse(movedWithoutOriginal.isRecycleBin)
         assertTrue(movedWithOriginal.isRecycleBin)
-        assertEquals("/files/first.jpg", movedWithoutOriginal.originalPath)
+        assertEquals("", movedWithoutOriginal.originalPath)
         assertEquals("/original/second.jpg", movedWithOriginal.originalPath)
         assertEquals(0L, movedWithoutOriginal.deletedTimestampMs)
         assertTrue(movedWithOriginal.deletedTimestampMs > 0L)

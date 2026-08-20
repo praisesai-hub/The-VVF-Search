@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import com.example.context.drive.DriveAuthorizationPort
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.every
 import io.mockk.mockk
@@ -41,8 +42,12 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         preferences.edit().clear().commit()
         authManager = GoogleAuthManager(preferences)
         fakeInterceptor = RecordingInterceptor()
+        val driveAuthorization = object : DriveAuthorizationPort {
+            override fun authorizationHeader(): String? = authManager.authorizationHeader()
+            override fun isAuthorized(): Boolean = authManager.isAuthorized()
+        }
         adapter = GoogleDriveProviderAdapter(
-            authManager = authManager,
+            driveAuthorization = driveAuthorization,
             httpClient = OkHttpClient.Builder().addInterceptor(fakeInterceptor).build(),
         )
     }
@@ -146,7 +151,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         assertTrue(networkFailure is CloudSyncResult.Error)
         val networkFailureError = networkFailure as CloudSyncResult.Error
         assertTrue(networkFailureError.isRetryable)
-        assertEquals("offline", networkFailureError.message)
+        assertEquals("Network connection is unavailable.", networkFailureError.message)
         file.delete()
     }
 
@@ -213,7 +218,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         assertTrue(networkFailure is CloudSyncResult.Error)
         val networkFailureError = networkFailure as CloudSyncResult.Error
         assertTrue(networkFailureError.isRetryable)
-        assertEquals("no network", networkFailureError.message)
+        assertEquals("Network connection is unavailable.", networkFailureError.message)
         destination.delete()
     }
 

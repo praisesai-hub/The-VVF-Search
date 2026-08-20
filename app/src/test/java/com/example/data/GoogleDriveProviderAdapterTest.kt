@@ -277,7 +277,7 @@ class GoogleDriveProviderAdapterTest {
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
         assertTrue(error.isRetryable)
-        assertEquals("offline", error.message)
+        assertEquals("Network connection is unavailable.", error.message)
     }
 
     @Test
@@ -387,7 +387,7 @@ class GoogleDriveProviderAdapterTest {
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
         assertTrue(error.isRetryable)
-        assertEquals("no network", error.message)
+        assertEquals("Network connection is unavailable.", error.message)
     }
 
     @Test

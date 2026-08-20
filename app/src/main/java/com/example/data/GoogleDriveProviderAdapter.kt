@@ -144,7 +144,7 @@ class GoogleDriveProviderAdapter(
                 authorization,
                 "name = '${escapeDriveQueryValue(remotePath)}' and trashed = false"
             ).firstOrNull() ?: return CloudSyncResult.Error(
-                "The requested cloud file was not found.", false
+                "File not found in Google Drive.", false
             )
             val request = Request.Builder()
                 .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")

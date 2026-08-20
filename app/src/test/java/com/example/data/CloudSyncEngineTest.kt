@@ -180,7 +180,7 @@ class CloudSyncEngineTest {
         assertTrue(result is CloudSyncResult.Error)
         result as CloudSyncResult.Error
         assertEquals(true, result.isRetryable)
-        assertEquals("The operation could not be completed.", result.message)
+        assertEquals("Network connection is unavailable.", result.message)
         assertFalse(result.message.contains("storage.example"))
     }
 }
