@@ -27,6 +27,8 @@ class GoogleDriveProviderAdapterTest {
         authManager = GoogleAuthManager(sharedPrefs)
         fakeInterceptor = FakeInterceptor()
         httpClient = OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
             .addInterceptor(fakeInterceptor)
             .build()
         adapter = GoogleDriveProviderAdapter(authManager, httpClient)

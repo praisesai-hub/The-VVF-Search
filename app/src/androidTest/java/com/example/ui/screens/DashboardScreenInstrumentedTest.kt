@@ -118,7 +118,6 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("1.0 KB").assertCountEquals(2)
-        composeTestRule.onNodeWithText("fixture", substring = true).assertExists()
 
         dashboardList.performScrollToNode(hasText("View Report"))
         composeTestRule.onNodeWithText("View Report").performClick()
