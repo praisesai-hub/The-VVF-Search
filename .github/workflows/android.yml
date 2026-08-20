@@ -142,8 +142,10 @@ jobs:
         path: app/build/reports/coverage/test/debug
         if-no-files-found: error
     - name: Run Lint
+      if: always()
       run: ./gradlew :app:lintDebug
     - name: Run Detekt
+      if: always()
       run: ./gradlew :app:detekt
     - name: Build Debug APK
       run: ./gradlew :app:assembleDebug
