@@ -21,6 +21,7 @@ import com.example.domain.retry.RetryPolicy
 import com.example.domain.WorkCoordinator
 import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -127,7 +128,7 @@ class CloudSyncWorker @JvmOverloads constructor(
         summary
     }
 
-    private suspend fun kotlinx.coroutines.CoroutineScope.processSyncItem(
+    private suspend fun CoroutineScope.processSyncItem(
         item: CloudSyncItemEntity,
         leaseStore: CloudSyncOperationStore,
         syncEngine: com.example.data.CloudSyncEngine,
@@ -157,7 +158,7 @@ class CloudSyncWorker @JvmOverloads constructor(
         }
     }
 
-    private fun kotlinx.coroutines.CoroutineScope.startHeartbeat(
+    private fun CoroutineScope.startHeartbeat(
         operationId: String,
         leaseStore: CloudSyncOperationStore,
         leaseOwner: String
