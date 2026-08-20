@@ -153,7 +153,6 @@ jobs:
           app/build/reports/lint-results-debug.html
           app/build/reports/lint-results-debug.xml
           app/build/reports/lint-results-debug.txt
-          app/build/reports/lint-results-debug.sarif
           app/build/reports/problems
         if-no-files-found: warn
     - name: Run Detekt

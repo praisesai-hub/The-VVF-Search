@@ -80,6 +80,13 @@ android {
     checkReleaseBuilds = true
     abortOnError = true
     lintConfig = file("lint.xml")
+    htmlReport = true
+    xmlReport = true
+    textReport = true
+    // Android Lint's SARIF quick-fix renderer currently aborts this task with
+    // MissingFormatArgumentException. Keep analysis and stable report formats
+    // enabled; SARIF can be restored after the upstream renderer is compatible.
+    sarifReport = false
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17

@@ -237,6 +237,7 @@ class VaultRepositoryTest {
             PhysicalStorageManager.decryptAndRestoreStreaming(context, any(), any())
         } returns Result.success(target.path)
 
+        legacyRepository.unlockWithPin("legacy-test-pin")
         assertTrue(legacyRepository.unlockFromVault(vaultItem, target))
 
         assertEquals(2, migrated.captured.vaultFormatVersion)

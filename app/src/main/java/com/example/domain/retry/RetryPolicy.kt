@@ -38,14 +38,17 @@ object RetryPolicy {
         return RetryDecision(retryable = isRetryable(operation, reasonCode), reasonCode = reasonCode)
     }
 
-    private fun reasonCodeFor(cause: Throwable): String = when (cause) {
-        is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
-        is SocketTimeoutException, is TimeoutException -> "TIMEOUT"
-        is FileNotFoundException -> "SOURCE_UNAVAILABLE"
-        is SecurityException -> "PERMISSION_DENIED"
-        is IllegalArgumentException -> "INVALID_INPUT"
-        is IOException -> ioReasonCode(cause)
-        else -> "NON_TRANSIENT_FAILURE"
+    private fun reasonCodeFor(cause: Throwable): String {
+        if (isNetworkUnavailable(cause)) return "NETWORK_UNAVAILABLE"
+        return when (cause) {
+            is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
+            is SocketTimeoutException, is TimeoutException -> "TIMEOUT"
+            is FileNotFoundException -> "SOURCE_UNAVAILABLE"
+            is SecurityException -> "PERMISSION_DENIED"
+            is IllegalArgumentException -> "INVALID_INPUT"
+            is IOException -> ioReasonCode(cause)
+            else -> "NON_TRANSIENT_FAILURE"
+        }
     }
 
     private fun ioReasonCode(cause: IOException): String = when {
