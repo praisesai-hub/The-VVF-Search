@@ -23,4 +23,7 @@
 - [x] Inventory ONNX/TensorFlow Lite model assets and model runtime input-output contracts.
 - [x] Audit model card, integrity metadata, bias disclosure, and limitations documentation.
 - [x] Verify embedding and semantic-search test evidence and remaining gaps.
+- [x] Audit ViewModel, Flow, Room, and WorkManager production architecture.
+- [x] Validate Navigation Component or Compose navigation configuration.
+- [x] Audit DataStore and SharedPreferences persistence boundaries.
 - [ ] Report verified coverage results and unresolved release blockers.
