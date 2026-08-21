@@ -275,7 +275,8 @@ fun DashboardScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showRoadmapModal = !showRoadmapModal },
+                    .clickable { showRoadmapModal = !showRoadmapModal }
+                    .testTag("toggle_dashboard_roadmap"),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(14.dp)
             ) {
