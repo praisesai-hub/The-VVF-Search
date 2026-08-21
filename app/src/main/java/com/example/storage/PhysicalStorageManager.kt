@@ -368,7 +368,12 @@ object PhysicalStorageManager {
         if (originalPath.startsWith("content://")) {
             return try {
                 val vaultFile = File(vaultFilePath)
-                if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
+                if (!vaultFile.exists()) {
+                    return sanitizedFailure(
+                        "PHYSICAL_STORAGE_VAULT",
+                        java.io.FileNotFoundException("vault file unavailable")
+                    )
+                }
                 if (vaultFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("Vault file exceeds the maximum secure vault limit of 50MB."))
                 val decryptedBytes = decryptAction(vaultFile.readBytes())
                 val uri = originalPath.toUri()
@@ -387,11 +392,19 @@ object PhysicalStorageManager {
                 }
             } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
             catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
-            catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
+            catch (e: Exception) {
+                Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e)
+                sanitizedFailure("PHYSICAL_STORAGE", e)
+            }
         }
         return try {
             val vaultFile = File(vaultFilePath)
-            if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
+            if (!vaultFile.exists()) {
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_VAULT",
+                    java.io.FileNotFoundException("vault file unavailable")
+                )
+            }
             if (vaultFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("Vault file exceeds the maximum secure vault limit of 50MB."))
             val targetFile = File(originalPath)
             targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
@@ -402,14 +415,22 @@ object PhysicalStorageManager {
             Result.success(targetFile.absolutePath)
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
         catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) {
+            Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e)
+            sanitizedFailure("PHYSICAL_STORAGE", e)
+        }
     }
 
     fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, iv: ByteArray, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result<String> {
         if (originalPath.startsWith("content://")) {
             return try {
                 val vaultFile = File(vaultFilePath)
-                if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
+                if (!vaultFile.exists()) {
+                    return sanitizedFailure(
+                        "PHYSICAL_STORAGE_VAULT",
+                        java.io.FileNotFoundException("vault file unavailable")
+                    )
+                }
                 val uri = originalPath.toUri()
                 fun decryptTo(output: java.io.OutputStream) {
                     val cipher = keystoreVaultManager.getDecryptionCipher(iv)
@@ -436,11 +457,19 @@ object PhysicalStorageManager {
                 }
             } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
             catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
-            catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
+            catch (e: Exception) {
+                Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e)
+                sanitizedFailure("PHYSICAL_STORAGE", e)
+            }
         }
         return try {
             val vaultFile = File(vaultFilePath)
-            if (!vaultFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("vault file unavailable"))
+            if (!vaultFile.exists()) {
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_VAULT",
+                    java.io.FileNotFoundException("vault file unavailable")
+                )
+            }
             val targetFile = File(originalPath)
             targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
             val cipher = keystoreVaultManager.getDecryptionCipher(iv)
@@ -458,7 +487,10 @@ object PhysicalStorageManager {
             Result.success(targetFile.absolutePath)
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
         catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) {
+            Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e)
+            sanitizedFailure("PHYSICAL_STORAGE", e)
+        }
     }
 
     /**
