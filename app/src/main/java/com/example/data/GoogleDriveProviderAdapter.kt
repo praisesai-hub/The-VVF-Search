@@ -122,6 +122,7 @@ class GoogleDriveProviderAdapter(
             metadata["appProperties"] = mapOf("vvf_operation_id" to operationId)
         }
         return initiateResumableUpload(
+            httpClient,
             authorization,
             determineMimeType(file),
             file.length(),
@@ -242,26 +243,6 @@ class GoogleDriveProviderAdapter(
         }
     }
 
-    private fun initiateResumableUpload(
-        authorization: String,
-        mimeType: String,
-        size: Long,
-        metadataJson: String
-    ): String? {
-        val request = Request.Builder()
-            .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable")
-            .header("Authorization", authorization)
-            .header("Content-Type", "application/json; charset=UTF-8")
-            .header("X-Upload-Content-Type", mimeType)
-            .header("X-Upload-Content-Length", size.toString())
-            .post(metadataJson.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
-            .build()
-        return httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw DriveHttpException(response.code)
-            response.header("Location") ?: throw MissingUploadLocationException()
-        }
-    }
-
     private fun queryUploadOffset(authorization: String, sessionUri: String, size: Long): UploadProbe {
         val request = Request.Builder()
             .url(sessionUri)
@@ -318,19 +299,6 @@ class GoogleDriveProviderAdapter(
         return ids
     }
 
-    private fun extractFileIdFromJson(json: String): String? =
-        """"(?:id|fileId)"\s*:\s*"([^"]+)""".toRegex().find(json)?.groupValues?.get(FILE_ID_CAPTURE_GROUP)
-
-    private fun parseCommittedOffset(range: String?, currentOffset: Long, endExclusive: Long): Long {
-        val end = range
-            ?.trim()
-            ?.let { value ->
-                Regex("bytes\\s*[= ]\\s*\\d+-(\\d+)(?:/\\d+)?").find(value)?.groupValues?.getOrNull(1)?.toLongOrNull()
-                    ?: value.substringAfterLast('-').substringBefore('/').toLongOrNull()
-            }
-        return if (end != null) maxOf(currentOffset, end + 1L) else endExclusive.coerceAtLeast(currentOffset)
-    }
-
     private fun classifyHttpError(
         context: String,
         code: Int,
@@ -379,9 +347,6 @@ class GoogleDriveProviderAdapter(
         )
     }
 
-    private class DriveHttpException(val code: Int) : IOException("HTTP $code")
-    private class MissingUploadLocationException : IOException("Missing Location header")
-
     private sealed class UploadProbe {
         data class Offset(val offset: Long) : UploadProbe()
         data class Completed(val fileId: String) : UploadProbe()
@@ -419,7 +384,6 @@ class GoogleDriveProviderAdapter(
         private const val HTTP_SERVER_ERROR_MIN = 500
         private const val HTTP_NOT_FOUND = 404
         private const val DRIVE_QUERY_PAGE_SIZE = 1_000
-        private const val FILE_ID_CAPTURE_GROUP = 1
         private const val TRANSFER_COPY_BUFFER_BYTES = 64 * 1024
     }
 }
@@ -435,3 +399,41 @@ private fun determineMimeType(file: File): String = when (file.extension.lowerca
 
 private fun escapeDriveQueryValue(value: String): String =
     value.replace("\\", "\\\\").replace("'", "\\'")
+
+private fun initiateResumableUpload(
+    httpClient: OkHttpClient,
+    authorization: String,
+    mimeType: String,
+    size: Long,
+    metadataJson: String
+): String? {
+    val request = Request.Builder()
+        .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable")
+        .header("Authorization", authorization)
+        .header("Content-Type", "application/json; charset=UTF-8")
+        .header("X-Upload-Content-Type", mimeType)
+        .header("X-Upload-Content-Length", size.toString())
+        .post(metadataJson.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
+        .build()
+    return httpClient.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) throw DriveHttpException(response.code)
+        response.header("Location") ?: throw MissingUploadLocationException()
+    }
+}
+
+private fun extractFileIdFromJson(json: String): String? =
+    """"(?:id|fileId)"\s*:\s*"([^"]+)""".toRegex().find(json)?.groupValues?.getOrNull(1)
+
+private fun parseCommittedOffset(range: String?, currentOffset: Long, endExclusive: Long): Long {
+    val end = range
+        ?.trim()
+        ?.let { value ->
+            Regex("bytes\\s*[= ]\\s*\\d+-(\\d+)(?:/\\d+)?").find(value)?.groupValues?.getOrNull(1)?.toLongOrNull()
+                ?: value.substringAfterLast('-').substringBefore('/').toLongOrNull()
+        }
+    return if (end != null) maxOf(currentOffset, end + 1L) else endExclusive.coerceAtLeast(currentOffset)
+}
+
+private class DriveHttpException(val code: Int) : IOException("HTTP $code")
+
+private class MissingUploadLocationException : IOException("Missing Location header")
