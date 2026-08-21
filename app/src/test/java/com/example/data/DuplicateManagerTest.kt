@@ -86,7 +86,11 @@ class DuplicateManagerTest {
             sizeBytes = 2048L,
             md5Hash = "content_hash_12345"
         )
-        val matchingFile = testFile.copy(id = 102L, name = "matching_duplicate.png", path = "/storage/emulated/0/Pictures/matching_duplicate.png")
+        val matchingFile = testFile.copy(
+            id = 102L,
+            name = "matching_duplicate.png",
+            path = "/storage/emulated/0/Pictures/matching_duplicate.png"
+        )
         fakeDao.filesMap[testFile.id] = testFile
         fakeDao.filesMap[matchingFile.id] = matchingFile
         fakeDao.duplicateFiles.addAll(listOf(testFile, matchingFile))

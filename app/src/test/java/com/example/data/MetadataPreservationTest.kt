@@ -64,7 +64,11 @@ class MetadataPreservationTest {
             tags = if (freshScanned.tags.isNotBlank()) freshScanned.tags else existing.tags,
             originalPath = if (freshScanned.originalPath.isNotBlank()) freshScanned.originalPath else existing.originalPath,
             visualSimilarityHash = if (freshScanned.visualSimilarityHash.isNotBlank()) freshScanned.visualSimilarityHash else existing.visualSimilarityHash,
-            documentCandidateFingerprint = if (freshScanned.documentCandidateFingerprint.isNotBlank()) freshScanned.documentCandidateFingerprint else existing.documentCandidateFingerprint,
+            documentCandidateFingerprint = if (freshScanned.documentCandidateFingerprint.isNotBlank()) {
+                freshScanned.documentCandidateFingerprint
+            } else {
+                existing.documentCandidateFingerprint
+            },
             semanticEmbeddingVersion = if (freshScanned.semanticEmbeddingVersion > 0) freshScanned.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
             semanticIndexed = freshScanned.semanticIndexed || existing.semanticIndexed,
             semanticEmbeddingString = if (freshScanned.semanticEmbeddingString.isNotBlank()) freshScanned.semanticEmbeddingString else existing.semanticEmbeddingString,

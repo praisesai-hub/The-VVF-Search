@@ -447,7 +447,12 @@ class OcrEngineTest {
     fun withRetry_returnsOnFirstSuccessfulAttemptAfterTransientFailures() = runBlocking {
         var attempts = 0
 
-        val result = repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 3, initialDelayMs = 0, factor = 2.0) {
+        val result = repository.withRetry(
+            RetryOperation.DATABASE_WRITE,
+            maxAttempts = 3,
+            initialDelayMs = 0,
+            factor = 2.0
+        ) {
             attempts++
             if (attempts < 3) throw SQLiteDatabaseLockedException("database locked")
             "persisted"

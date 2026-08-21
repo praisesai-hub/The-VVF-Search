@@ -195,7 +195,11 @@ class FileDaoJvmCoverageTest {
                 md5Hash = "duplicate-hash"
             )
         }
-        val duplicate = additional.copy(id = 0L, name = "${fixturePrefix}duplicate.txt", path = "/data/${fixturePrefix}duplicate.txt")
+        val duplicate = additional.copy(
+            id = 0L,
+            name = "${fixturePrefix}duplicate.txt",
+            path = "/data/${fixturePrefix}duplicate.txt"
+        )
         dao.upsertFilesPreservingMetadata(listOf(additional, duplicate))
         assertEquals(2, dao.getDuplicateFilesByHash().first().size)
 
