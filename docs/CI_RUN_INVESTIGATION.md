@@ -34,6 +34,7 @@ GitHub run `32421178517` (Android CI/CD #355) remained in progress at the time o
 | `32440000409` | `8b49184` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.37%, security 76.22%, data 69.35%, vault 90.36%, cloud 90.44% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 | `32440986821` | `1507dd2` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.82%, security 76.45%, data 70.56%, vault 90.36%, cloud 90.44% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 | `32441466581` | `0216834` | Failed: JVM coverage and Detekt. | Failed-step-log verified: aggregate 50.81%, security 76.45%, data 70.56%, vault 90.36%, cloud 90.44% (cloud floor passed); Detekt 138 weighted issues. Artifact download timed out during TLS handshake. | Skipped by the successful-build dependency; no emulator was provisioned. |
+| `32442093960` | `7afc16f` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.96%, security 80.22%, data 70.60%, vault 90.62%, cloud 90.44% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 
 The `Run Instrumented Android Tests` job now declares a successful `Build & Test Android App` dependency. This changes the prior failure mode: a JVM coverage failure prevents emulator allocation rather than requiring a later cancellation. The earlier cancellation used the workflow-run operation because GitHub documents cancellation at run scope rather than as a per-job REST operation.[1]
 
@@ -46,6 +47,8 @@ Run `32440000409` measured the first cloud-gate success: 3,527 of 3,900 cloud-sy
 Run `32440986821` raised aggregate coverage by 0.45 percentage points and repository/data coverage by 1.21 points. The newly measured FileItem generated-adapter tests removed that adapter from the top eight repository/data misses, while the Microsoft null-user test raised FirebaseAuthManager from 63.25% to 65.09%. Security and Vault remain materially below their 90% and 95% floors, respectively; no green or release-ready claim is made.
 
 Run `32441466581` reproduced the coverage values at the displayed two-decimal precision and measured Detekt at **138 weighted issues**. The coverage artifact endpoint timed out during its signed blob download; the row is intentionally marked log-derived and does not claim an unavailable artifact-level class analysis. The current branch has later unvalidated Security coverage commits, so this run is not evidence for them.
+
+Run `32442093960` verified the Security test seams and Firebase result-branch tests: Security coverage rose from **76.45%** to **80.22%**, FirebaseAuthManager rose to **87.66%**, and AndroidKeystoreCrypto became directly covered at **70.00%**. Vault rose to **90.62%**. These are measurable improvements, but Security remains 9.78 points and Vault 4.38 points below their enforced floors; aggregate and repository/data gates also remain failed, so the branch is not eligible for merge.
 
 ## References
 
