@@ -44,6 +44,57 @@ class EntityJsonAdapterCoverageTest {
     }
 
     @Test
+    fun generatedFileAdapter_appliesDefaultsCachesConstructorAndSkipsUnknownFields() {
+        val adapter = directFileAdapter()
+        val beforeDecode = System.currentTimeMillis()
+        val defaultsPayload = """{
+            "name":"legacy.txt",
+            "path":"/files/legacy.txt",
+            "category":"DOCUMENTS",
+            "sizeBytes":12,
+            "unknownFutureField":"ignored"
+        }"""
+
+        val first = requireNotNull(adapter.fromJson(defaultsPayload))
+        val second = requireNotNull(adapter.fromJson(defaultsPayload))
+
+        assertEquals("legacy.txt", first.name)
+        assertEquals("/files/legacy.txt", second.path)
+        assertEquals("DOCUMENTS", second.category)
+        assertEquals(12L, second.sizeBytes)
+        assertEquals("", second.originalPath)
+        assertEquals("", second.videoChunkHash)
+        assertEquals(false, second.semanticIndexed)
+        assertEquals(true, first.dateModifiedMs >= beforeDecode)
+    }
+
+    @Test
+    fun generatedFileAdapter_rejectsMissingOrNullRequiredFieldsAndNullSerialization() {
+        val adapter = directFileAdapter()
+        val missingRequiredPayloads = listOf(
+            """{"path":"/files/source.txt","category":"DOCUMENTS","sizeBytes":1}""",
+            """{"name":"source.txt","category":"DOCUMENTS","sizeBytes":1}""",
+            """{"name":"source.txt","path":"/files/source.txt","sizeBytes":1}""",
+            """{"name":"source.txt","path":"/files/source.txt","category":"DOCUMENTS"}"""
+        )
+        val nullRequiredPayloads = listOf(
+            """{"name":null,"path":"/files/source.txt","category":"DOCUMENTS","sizeBytes":1}""",
+            """{"name":"source.txt","path":null,"category":"DOCUMENTS","sizeBytes":1}""",
+            """{"name":"source.txt","path":"/files/source.txt","category":null,"sizeBytes":1}""",
+            """{"name":"source.txt","path":"/files/source.txt","category":"DOCUMENTS","sizeBytes":null}"""
+        )
+
+        missingRequiredPayloads.forEach { payload ->
+            assertThrows(JsonDataException::class.java) { adapter.fromJson(payload) }
+        }
+        nullRequiredPayloads.forEach { payload ->
+            assertThrows(JsonDataException::class.java) { adapter.fromJson(payload) }
+        }
+        assertEquals("GeneratedJsonAdapter(FileItemEntity)", adapter.toString())
+        assertThrows(NullPointerException::class.java) { adapter.toJson(null) }
+    }
+
+    @Test
     fun vaultCloudPluginAndDuplicateGroupRoundTrip() {
         val vault = VaultItemEntity(
             id = 9L,
@@ -340,6 +391,17 @@ class EntityJsonAdapterCoverageTest {
             adapterClass.getDeclaredConstructor().newInstance()
         }
         return adapter as JsonAdapter<VaultItemEntity>
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun directFileAdapter(): JsonAdapter<FileItemEntity> {
+        val adapterClass = Class.forName("com.example.data.FileItemEntityJsonAdapter")
+        val adapter = runCatching {
+            adapterClass.getDeclaredConstructor(Moshi::class.java).newInstance(moshi)
+        }.getOrElse {
+            adapterClass.getDeclaredConstructor().newInstance()
+        }
+        return adapter as JsonAdapter<FileItemEntity>
     }
 
     @Suppress("UNCHECKED_CAST")
