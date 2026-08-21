@@ -182,6 +182,11 @@ jobs:
 
   instrumented-tests:
     name: Run Instrumented Android Tests
+    # A job-level dependency prevents emulator provisioning when the faster JVM
+    # quality gates have already failed. GitHub's public Actions API supports
+    # run cancellation, not cancellation of one active job.
+    needs: build-and-test
+    if: ${{ needs.build-and-test.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
