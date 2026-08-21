@@ -707,26 +707,42 @@ object PhysicalStorageManager {
                 )
             }
             if (srcFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))
-            val (encryptedBytes, iv) = encryptAction(srcFile.readBytes())
-            val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
-            try { FileOutputStream(vaultFile).use { it.write(encryptedBytes) } } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
-            if (!secureWipeFile(context, srcFile)) {
-                try {
-                    vaultFile.delete()
-                } catch (_: Exception) {
-                }
-                return sanitizedFailure(
-                    "PHYSICAL_STORAGE_VAULT",
-                    java.io.IOException("source cleanup failed")
-                )
-            }
-            Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
+            encryptAndWipeLocalBytes(context, srcFile, encryptAction)
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
         catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
         catch (e: Exception) {
             Log.e(TAG, "Failed to encrypt and wipe source: ${e.message}", e)
             sanitizedFailure("PHYSICAL_STORAGE", e)
         }
+    }
+
+    private fun encryptAndWipeLocalBytes(
+        context: Context,
+        srcFile: File,
+        encryptAction: (ByteArray) -> Pair<ByteArray, ByteArray>
+    ): Result<VaultStorageResult> {
+        val (encryptedBytes, iv) = encryptAction(srcFile.readBytes())
+        val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
+        try {
+            FileOutputStream(vaultFile).use { it.write(encryptedBytes) }
+        } catch (e: Exception) {
+            try {
+                vaultFile.delete()
+            } catch (_: Exception) {
+            }
+            throw e
+        }
+        if (!secureWipeFile(context, srcFile)) {
+            try {
+                vaultFile.delete()
+            } catch (_: Exception) {
+            }
+            return sanitizedFailure(
+                "PHYSICAL_STORAGE_VAULT",
+                java.io.IOException("source cleanup failed")
+            )
+        }
+        return Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
     }
 
     fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result<VaultStorageResult> {
