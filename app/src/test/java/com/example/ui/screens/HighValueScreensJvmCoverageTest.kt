@@ -188,11 +188,11 @@ class HighValueScreensJvmCoverageTest {
             lastErrorCode = "NETWORK_UNAVAILABLE"
         )
         val plugin = PluginEntity(
-            id = "local-plugin",
+            pluginId = "local-plugin",
             name = "Local Plugin",
-            type = "LOCAL",
+            category = "CLOUD_PROVIDER",
             description = "Deterministic render fixture",
-            enabled = false,
+            isEnabled = false,
             isCore = false
         )
 

@@ -103,7 +103,7 @@ class GoogleDriveProviderAdapter(
         val operationQuery =
             "appProperties has { key='vvf_operation_id' " +
                 "and value='${escapeDriveQueryValue(operationId)}' } and trashed = false"
-        return findFileIds(authorization, operationQuery).firstOrNull()
+        return findFileIds(httpClient, authorization, operationQuery).firstOrNull()
     }
 
     private fun resolveResumableSessionUri(
@@ -210,6 +210,7 @@ class GoogleDriveProviderAdapter(
         )
         return try {
             val fileId = findFileIds(
+                httpClient,
                 authorization,
                 "name = '${escapeDriveQueryValue(remotePath)}' and trashed = false"
             ).firstOrNull() ?: return CloudSyncResult.Error(
@@ -267,36 +268,6 @@ class GoogleDriveProviderAdapter(
                 }
             }
         }.getOrDefault(UploadProbe.Unknown)
-    }
-
-    private fun findFileIds(authorization: String, query: String): List<String> {
-        val ids = mutableListOf<String>()
-        var pageToken: String? = null
-        do {
-            val urlBuilder = "https://www.googleapis.com/drive/v3/files".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("spaces", "drive")
-                .addQueryParameter("fields", "nextPageToken,incompleteSearch,files(id)")
-                .addQueryParameter("pageSize", DRIVE_QUERY_PAGE_SIZE.toString())
-            pageToken?.let { urlBuilder.addQueryParameter("pageToken", it) }
-            val request = Request.Builder()
-                .url(urlBuilder.build())
-                .header("Authorization", authorization)
-                .get()
-                .build()
-            val body = httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw DriveHttpException(response.code)
-                response.body?.string().orEmpty()
-            }
-            val root = Gson().fromJson(body, Map::class.java)
-            val files = root["files"] as? List<*> ?: emptyList<Any>()
-            files.mapNotNullTo(ids) {
-                val file = it as? Map<*, *>
-                (file?.get("id") ?: file?.get("fileId"))?.toString()
-            }
-            pageToken = root["nextPageToken"]?.toString()?.takeIf { it.isNotBlank() && it != "null" }
-        } while (pageToken != null)
-        return ids
     }
 
     private fun classifyHttpError(
@@ -383,7 +354,6 @@ class GoogleDriveProviderAdapter(
         private const val HTTP_RATE_LIMITED = 429
         private const val HTTP_SERVER_ERROR_MIN = 500
         private const val HTTP_NOT_FOUND = 404
-        private const val DRIVE_QUERY_PAGE_SIZE = 1_000
         private const val TRANSFER_COPY_BUFFER_BYTES = 64 * 1024
     }
 }
@@ -434,6 +404,38 @@ private fun parseCommittedOffset(range: String?, currentOffset: Long, endExclusi
     return if (end != null) maxOf(currentOffset, end + 1L) else endExclusive.coerceAtLeast(currentOffset)
 }
 
+private fun findFileIds(httpClient: OkHttpClient, authorization: String, query: String): List<String> {
+    val ids = mutableListOf<String>()
+    var pageToken: String? = null
+    do {
+        val urlBuilder = "https://www.googleapis.com/drive/v3/files".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("spaces", "drive")
+            .addQueryParameter("fields", "nextPageToken,incompleteSearch,files(id)")
+            .addQueryParameter("pageSize", DRIVE_QUERY_PAGE_SIZE.toString())
+        pageToken?.let { urlBuilder.addQueryParameter("pageToken", it) }
+        val request = Request.Builder()
+            .url(urlBuilder.build())
+            .header("Authorization", authorization)
+            .get()
+            .build()
+        val body = httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw DriveHttpException(response.code)
+            response.body?.string().orEmpty()
+        }
+        val root = Gson().fromJson(body, Map::class.java)
+        val files = root["files"] as? List<*> ?: emptyList<Any>()
+        files.mapNotNullTo(ids) {
+            val file = it as? Map<*, *>
+            (file?.get("id") ?: file?.get("fileId"))?.toString()
+        }
+        pageToken = root["nextPageToken"]?.toString()?.takeIf { it.isNotBlank() && it != "null" }
+    } while (pageToken != null)
+    return ids
+}
+
 private class DriveHttpException(val code: Int) : IOException("HTTP $code")
 
 private class MissingUploadLocationException : IOException("Missing Location header")
+
+private const val DRIVE_QUERY_PAGE_SIZE = 1_000
