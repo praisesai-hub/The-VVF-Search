@@ -142,7 +142,10 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = stringResource(R.string.dashboard_title, stringResource(R.string.app_name)),
+                                        text = stringResource(
+                                            R.string.dashboard_title,
+                                            stringResource(R.string.app_name)
+                                        ),
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -305,7 +308,11 @@ fun DashboardScreen(
                         }
                     }
                     Text(
-                        text = if (showRoadmapModal) stringResource(R.string.hide) else stringResource(R.string.view_report),
+                        text = if (showRoadmapModal) {
+                            stringResource(R.string.hide)
+                        } else {
+                            stringResource(R.string.view_report)
+                        },
                         fontSize = 12.sp,
                         color = BhagwaOrange,
                         fontWeight = FontWeight.Bold
