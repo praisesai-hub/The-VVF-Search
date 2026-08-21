@@ -45,9 +45,12 @@ class GoogleDriveProviderAdapter(
         )
         return try {
             if (operationId.isNotBlank()) {
+                val operationQuery =
+                    "appProperties has { key='vvf_operation_id' " +
+                        "and value='${escapeDriveQueryValue(operationId)}' } and trashed = false"
                 val existing = findFileIds(
                     authorization,
-                    "appProperties has { key='vvf_operation_id' and value='${escapeDriveQueryValue(operationId)}' } and trashed = false"
+                    operationQuery
                 ).firstOrNull()
                 if (existing != null) return CloudSyncResult.Success(file.length(), existing)
             }
@@ -63,7 +66,10 @@ class GoogleDriveProviderAdapter(
                 transferState.resumableSessionUri
             } else {
                 initiateResumableUpload(authorization, mimeType, file.length(), metadataJson)
-                    ?: return CloudSyncResult.Error("Cloud upload could not be initialized: Missing 'Location' header.", false)
+                    ?: return CloudSyncResult.Error(
+                        "Cloud upload could not be initialized: Missing 'Location' header.",
+                        false
+                    )
             }
 
             onProgress(
@@ -141,7 +147,12 @@ class GoogleDriveProviderAdapter(
                 bytesCommitted = offset
             )
         } catch (e: DriveHttpException) {
-            classifyHttpError("Resumable upload preparation failed", e.code, transferState.resumableSessionUri, transferState.bytesCommitted)
+            classifyHttpError(
+                "Resumable upload preparation failed",
+                e.code,
+                transferState.resumableSessionUri,
+                transferState.bytesCommitted
+            )
         } catch (_: MissingUploadLocationException) {
             CloudSyncResult.Error("Cloud upload could not be initialized: Missing 'Location' header.", false)
         } catch (e: Exception) {
