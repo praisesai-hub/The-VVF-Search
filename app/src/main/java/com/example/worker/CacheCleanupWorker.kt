@@ -30,25 +30,12 @@ class CacheCleanupWorker(
             val cacheDir = applicationContext.cacheDir
             val externalCacheDir = applicationContext.externalCacheDir
             
-            var deletedFilesCount = 0
-            var deletedSize = 0L
-
             val dirsToClean = listOfNotNull(cacheDir, externalCacheDir)
-            for (dir in dirsToClean) {
-                if (dir.exists()) {
-                    dir.walkBottomUp().forEach { file ->
-                        if (file.isFile) {
-                            val size = file.length()
-                            if (file.delete()) {
-                                deletedFilesCount++
-                                deletedSize += size
-                            }
-                        }
-                    }
-                }
+            val cleanup = dirsToClean.fold(CacheCleanupTotals()) { totals, dir ->
+                totals + cleanDirectory(dir)
             }
 
-            Log.i(TAG, "Cache cleanup complete. Deleted $deletedFilesCount files, freeing ${deletedSize / 1024} KB.")
+            Log.i(TAG, "Cache cleanup complete. Deleted ${cleanup.files} files, freeing ${cleanup.bytes / 1024} KB.")
             
             DurableWorkResult.success()
         } catch (e: Exception) {
@@ -60,6 +47,22 @@ class CacheCleanupWorker(
                 DurableWorkResult.failure()
             }
         }
+    }
+
+    private fun cleanDirectory(directory: File): CacheCleanupTotals {
+        if (!directory.exists()) return CacheCleanupTotals()
+        return directory.walkBottomUp()
+            .filter(File::isFile)
+            .fold(CacheCleanupTotals()) { totals, file ->
+                if (!file.delete()) totals else totals + CacheCleanupTotals(files = 1, bytes = file.length())
+            }
+    }
+
+    private data class CacheCleanupTotals(val files: Int = 0, val bytes: Long = 0L) {
+        operator fun plus(other: CacheCleanupTotals) = CacheCleanupTotals(
+            files = files + other.files,
+            bytes = bytes + other.bytes
+        )
     }
 
     companion object {
