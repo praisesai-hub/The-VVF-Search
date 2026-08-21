@@ -98,6 +98,33 @@ class SmartManagerRepositoryJvmCoverageTest {
     }
 
     @Test
+    fun cloudRetryRequeuesFailedItemAndClearsItsExpiredTransferState() = runBlocking {
+        dao.insertPlugins(
+            listOf(PluginEntity("gdrive_sync", "Drive", "CLOUD_PROVIDER", "Drive", true, true))
+        )
+        val failedId = dao.insertCloudSyncItem(
+            cloudItem("FAILED").copy(
+                leaseOwner = "previous-worker",
+                leaseExpiresAtMs = 99L,
+                heartbeatAtMs = 88L,
+                completedAtMs = 77L,
+                lastErrorCode = "NETWORK_TIMEOUT"
+            )
+        )
+        val repository = repository { true }
+
+        assertTrue(repository.retryCloudSyncItem(failedId))
+
+        val retried = dao.getCloudSyncItems().first().single()
+        assertEquals("QUEUED", retried.status)
+        assertEquals(null, retried.leaseOwner)
+        assertEquals(0L, retried.leaseExpiresAtMs)
+        assertEquals(0L, retried.heartbeatAtMs)
+        assertEquals(0L, retried.completedAtMs)
+        assertEquals(null, retried.lastErrorCode)
+    }
+
+    @Test
     fun databaseLockRetriesOnceAndThenReturnsSuccessfulResult() = runBlocking {
         val repository = repository { false }
         var attempts = 0
