@@ -227,12 +227,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(coroutineExceptionHandler) {
             val context = getApplication<Application>().applicationContext
             try {
-                val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, takeFlags); savePersistedFolderUri(uri.toString())
+                val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                savePersistedFolderUri(uri.toString())
                 val discovered = repository.scanSafTree(uri)
                 if (discovered > 0) { resetPagination(); repository.enqueueBackgroundIndexWork() }
             } catch (e: Exception) {
-                DiagnosticLogger.log("MainViewModel", DomainErrorMapper.fromThrowable("SAF_FOLDER_PERMISSION_OR_SCAN", e))
+                DiagnosticLogger.log(
+                    "MainViewModel",
+                    DomainErrorMapper.fromThrowable("SAF_FOLDER_PERMISSION_OR_SCAN", e)
+                )
             }
         }
     }
