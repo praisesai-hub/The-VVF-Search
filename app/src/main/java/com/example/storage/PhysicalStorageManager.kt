@@ -170,19 +170,13 @@ object PhysicalStorageManager {
             val oldFile = File(oldPath)
             val parentDir = oldFile.parentFile
             val newFile = if (parentDir != null) File(parentDir, newName) else File(newName)
-            var success = false
-            if (oldFile.exists()) {
-                try { success = oldFile.renameTo(newFile) } catch (e: Exception) { Log.w(TAG, "Direct File.renameTo failed: ${e.message}") }
-                if (!success) {
-                    try {
-                        oldFile.copyTo(newFile, overwrite = true)
-                        if (oldFile.delete()) success = true else try { if (newFile.exists()) newFile.delete() } catch (_: Exception) {}
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Fallback copy-and-delete failed: ${e.message}")
-                        try { if (newFile.exists()) newFile.delete() } catch (_: Exception) {}
-                    }
-                }
-            } else return sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.FileNotFoundException("source unavailable"))
+            if (!oldFile.exists()) {
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_RENAME",
+                    java.io.FileNotFoundException("source unavailable")
+                )
+            }
+            val success = renameOrCopyAndDelete(oldFile, newFile)
             updateMediaStoreDisplayName(context, oldPath, newName)
             val finalPath = if (newFile.exists()) newFile.absolutePath else if (success) newFile.absolutePath else oldPath
             if (success || newFile.exists()) {
@@ -192,6 +186,40 @@ object PhysicalStorageManager {
         } catch (e: Exception) {
             Log.e(TAG, "Error renaming file physically: ${e.message}", e)
             sanitizedFailure("PHYSICAL_STORAGE", e)
+        }
+    }
+
+    private fun renameOrCopyAndDelete(oldFile: File, newFile: File): Boolean {
+        if (tryDirectRename(oldFile, newFile)) return true
+        return tryCopyAndDelete(oldFile, newFile)
+    }
+
+    private fun tryDirectRename(oldFile: File, newFile: File): Boolean = try {
+        oldFile.renameTo(newFile)
+    } catch (error: Exception) {
+        Log.w(TAG, "Direct File.renameTo failed: ${error.message}")
+        false
+    }
+
+    private fun tryCopyAndDelete(oldFile: File, newFile: File): Boolean = try {
+        oldFile.copyTo(newFile, overwrite = true)
+        if (oldFile.delete()) {
+            true
+        } else {
+            deleteRenameCopyTarget(newFile)
+            false
+        }
+    } catch (error: Exception) {
+        Log.e(TAG, "Fallback copy-and-delete failed: ${error.message}")
+        deleteRenameCopyTarget(newFile)
+        false
+    }
+
+    private fun deleteRenameCopyTarget(newFile: File) {
+        try {
+            if (newFile.exists()) newFile.delete()
+        } catch (_: Exception) {
+            // Best-effort rollback after a failed rename fallback.
         }
     }
 
@@ -423,9 +451,16 @@ object PhysicalStorageManager {
             targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
             val decryptedBytes = decryptAction(vaultFile.readBytes())
             FileOutputStream(targetFile).use { it.write(decryptedBytes) }
-            if (!vaultFile.delete() && vaultFile.exists()) { try { targetFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete encrypted vault source file.")) }
-            notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
-            Result.success(targetFile.absolutePath)
+            if (!vaultFile.delete() && vaultFile.exists()) {
+                try {
+                    targetFile.delete()
+                } catch (_: Exception) {
+                }
+                Result.failure(IllegalStateException("Failed to delete encrypted vault source file."))
+            } else {
+                notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
+                Result.success(targetFile.absolutePath)
+            }
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
         catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
         catch (e: Exception) {
@@ -445,24 +480,18 @@ object PhysicalStorageManager {
                     )
                 }
                 val uri = originalPath.toUri()
-                fun decryptTo(output: java.io.OutputStream) {
-                    val cipher = keystoreVaultManager.getDecryptionCipher(iv)
-                    java.io.FileInputStream(vaultFile).use { fis ->
-                        javax.crypto.CipherInputStream(fis, cipher).use { input ->
-                            val buffer = ByteArray(65536)
-                            var n: Int
-                            while (input.read(buffer).also { n = it } != -1) output.write(buffer, 0, n)
-                        }
-                    }
-                }
                 try {
-                    context.contentResolver.openOutputStream(uri)?.use { decryptTo(it) } ?: throw java.io.IOException("Unable to write original content URI")
+                    context.contentResolver.openOutputStream(uri)?.use {
+                        decryptVaultFileTo(vaultFile, iv, keystoreVaultManager, it)
+                    } ?: throw java.io.IOException("Unable to write original content URI")
                     if (!vaultFile.delete() && vaultFile.exists()) return Result.failure(IllegalStateException("Failed to delete encrypted vault source file."))
                     notifyMediaStoreFileChanged(context, "", originalPath)
                     Result.success(originalPath)
                 } catch (_: Exception) {
                     val restoredFile = File(getRestoredDir(context), getFileNameFromVaultPathOrUri(context, vaultFilePath, uri))
-                    FileOutputStream(restoredFile).use { decryptTo(it) }
+                    FileOutputStream(restoredFile).use {
+                        decryptVaultFileTo(vaultFile, iv, keystoreVaultManager, it)
+                    }
                     if (!restoredFile.exists() || restoredFile.length() == 0L) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Failed to write restored file")) }
                     if (!vaultFile.delete() && vaultFile.exists()) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete encrypted vault source file.")) }
                     notifyMediaStoreFileChanged(context, "", restoredFile.absolutePath)
@@ -485,15 +514,8 @@ object PhysicalStorageManager {
             }
             val targetFile = File(originalPath)
             targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
-            val cipher = keystoreVaultManager.getDecryptionCipher(iv)
-            java.io.FileInputStream(vaultFile).use { fis ->
-                javax.crypto.CipherInputStream(fis, cipher).use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        val buffer = ByteArray(65536)
-                        var n: Int
-                        while (input.read(buffer).also { n = it } != -1) output.write(buffer, 0, n)
-                    }
-                }
+            FileOutputStream(targetFile).use { output ->
+                decryptVaultFileTo(vaultFile, iv, keystoreVaultManager, output)
             }
             if (!vaultFile.delete() && vaultFile.exists()) { try { targetFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete encrypted vault source file.")) }
             notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
@@ -503,6 +525,24 @@ object PhysicalStorageManager {
         catch (e: Exception) {
             Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e)
             sanitizedFailure("PHYSICAL_STORAGE", e)
+        }
+    }
+
+    private fun decryptVaultFileTo(
+        vaultFile: File,
+        iv: ByteArray,
+        keystoreVaultManager: com.example.security.KeystoreVaultManager,
+        output: java.io.OutputStream
+    ) {
+        val cipher = keystoreVaultManager.getDecryptionCipher(iv)
+        java.io.FileInputStream(vaultFile).use { fileInput ->
+            javax.crypto.CipherInputStream(fileInput, cipher).use { decryptedInput ->
+                val buffer = ByteArray(65536)
+                var bytesRead: Int
+                while (decryptedInput.read(buffer).also { bytesRead = it } != -1) {
+                    output.write(buffer, 0, bytesRead)
+                }
+            }
         }
     }
 
@@ -745,74 +785,115 @@ object PhysicalStorageManager {
         return Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
     }
 
-    fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result<VaultStorageResult> {
-        if (srcPath.startsWith("content://")) {
-            return try {
-                val uri = srcPath.toUri()
-                val docName = getFileNameFromContentUri(context, uri)
-                val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${docName}.vvf")
-                val cipher = keystoreVaultManager.getEncryptionCipher()
-                val iv = cipher.iv
-                val inputStream = context.contentResolver.openInputStream(uri)
-                    ?: return sanitizedFailure(
-                        "PHYSICAL_STORAGE_VAULT",
-                        java.io.FileNotFoundException("content unavailable")
-                    )
-                try {
-                    inputStream.use { fis ->
-                        FileOutputStream(vaultFile).use { fos ->
-                            javax.crypto.CipherOutputStream(fos, cipher).use { output ->
-                                val buffer = ByteArray(65536)
-                                var n: Int
-                                while (fis.read(buffer).also { n = it } != -1) output.write(buffer, 0, n)
-                            }
-                        }
-                    }
-                } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
-                if (!vaultFile.exists() || vaultFile.length() == 0L) { try { vaultFile.delete() } catch (_: Exception) {}; return Result.failure(java.io.IOException("Vault file creation failed or empty.")) }
-                val originalDeleted = deleteContentUri(context, uri)
-                if (originalDeleted) { notifyMediaStoreFileDeleted(context, srcPath); Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv)) }
-                else { try { vaultFile.delete() } catch (_: Exception) {}; sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
-            } catch (e: Exception) { Log.e(TAG, "Error encrypting content URI $srcPath: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
+    fun encryptAndWipeSource(
+        context: Context,
+        srcPath: String,
+        keystoreVaultManager: com.example.security.KeystoreVaultManager
+    ): Result<VaultStorageResult> = if (srcPath.startsWith("content://")) {
+        encryptContentUriToVault(context, srcPath, keystoreVaultManager)
+    } else {
+        encryptLocalFileToVault(context, srcPath, keystoreVaultManager)
+    }
+
+    private fun encryptContentUriToVault(
+        context: Context,
+        srcPath: String,
+        keystoreVaultManager: com.example.security.KeystoreVaultManager
+    ): Result<VaultStorageResult> = try {
+        val uri = srcPath.toUri()
+        val docName = getFileNameFromContentUri(context, uri)
+        val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${docName}.vvf")
+        val cipher = keystoreVaultManager.getEncryptionCipher()
+        val iv = cipher.iv
+        val inputStream = context.contentResolver.openInputStream(uri)
+            ?: return sanitizedFailure(
+                "PHYSICAL_STORAGE_VAULT",
+                java.io.FileNotFoundException("content unavailable")
+            )
+        encryptInputStreamToVault(inputStream, vaultFile, cipher)
+        if (!vaultFile.exists() || vaultFile.length() == 0L) {
+            deleteVaultFileQuietly(vaultFile)
+            return Result.failure(java.io.IOException("Vault file creation failed or empty."))
         }
+        if (deleteContentUri(context, uri)) {
+            notifyMediaStoreFileDeleted(context, srcPath)
+            Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
+        } else {
+            deleteVaultFileQuietly(vaultFile)
+            sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed"))
+        }
+    } catch (error: Exception) {
+        Log.e(TAG, "Error encrypting content URI $srcPath: ${error.message}", error)
+        sanitizedFailure("PHYSICAL_STORAGE", error)
+    }
+
+    private fun encryptLocalFileToVault(
+        context: Context,
+        srcPath: String,
+        keystoreVaultManager: com.example.security.KeystoreVaultManager
+    ): Result<VaultStorageResult> = try {
         val srcFile = File(srcPath)
-        return try {
-            if (!srcFile.exists() || !srcFile.canRead()) {
-                return sanitizedFailure(
-                    "PHYSICAL_STORAGE_VAULT",
-                    java.io.FileNotFoundException("source unavailable")
-                )
-            }
-            val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
-            val cipher = keystoreVaultManager.getEncryptionCipher()
-            val iv = cipher.iv
-            try {
-                java.io.FileInputStream(srcFile).use { fis ->
-                    FileOutputStream(vaultFile).use { fos ->
-                        javax.crypto.CipherOutputStream(fos, cipher).use { output ->
-                            val buffer = ByteArray(65536)
-                            var n: Int
-                            while (fis.read(buffer).also { n = it } != -1) output.write(buffer, 0, n)
+        if (!srcFile.exists() || !srcFile.canRead()) {
+            return sanitizedFailure(
+                "PHYSICAL_STORAGE_VAULT",
+                java.io.FileNotFoundException("source unavailable")
+            )
+        }
+        val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
+        val cipher = keystoreVaultManager.getEncryptionCipher()
+        val iv = cipher.iv
+        encryptInputStreamToVault(FileInputStream(srcFile), vaultFile, cipher)
+        if (!secureWipeFile(context, srcFile)) {
+            deleteVaultFileQuietly(vaultFile)
+            return sanitizedFailure(
+                "PHYSICAL_STORAGE_VAULT",
+                java.io.IOException("source cleanup failed")
+            )
+        }
+        Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
+    } catch (error: javax.crypto.AEADBadTagException) {
+        Result.failure(
+            java.security.GeneralSecurityException(
+                "Encryption failed: Incorrect key or tampered data.",
+                error
+            )
+        )
+    } catch (error: OutOfMemoryError) {
+        System.gc()
+        sanitizedFailure("PHYSICAL_STORAGE", error)
+    } catch (error: Exception) {
+        Log.e(TAG, "Failed to encrypt and wipe source Stream: ${error.message}", error)
+        sanitizedFailure("PHYSICAL_STORAGE", error)
+    }
+
+    private fun encryptInputStreamToVault(
+        inputStream: InputStream,
+        vaultFile: File,
+        cipher: javax.crypto.Cipher
+    ) {
+        try {
+            inputStream.use { input ->
+                FileOutputStream(vaultFile).use { fileOutput ->
+                    javax.crypto.CipherOutputStream(fileOutput, cipher).use { output ->
+                        val buffer = ByteArray(65536)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
                         }
                     }
                 }
-            } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
-            if (!secureWipeFile(context, srcFile)) {
-                try {
-                    vaultFile.delete()
-                } catch (_: Exception) {
-                }
-                return sanitizedFailure(
-                    "PHYSICAL_STORAGE_VAULT",
-                    java.io.IOException("source cleanup failed")
-                )
             }
-            Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
-        } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
-        catch (e: Exception) {
-            Log.e(TAG, "Failed to encrypt and wipe source Stream: ${e.message}", e)
-            sanitizedFailure("PHYSICAL_STORAGE", e)
+        } catch (error: Exception) {
+            deleteVaultFileQuietly(vaultFile)
+            throw error
+        }
+    }
+
+    private fun deleteVaultFileQuietly(vaultFile: File) {
+        try {
+            vaultFile.delete()
+        } catch (_: Exception) {
+            // Best-effort cleanup for a failed vault operation.
         }
     }
 

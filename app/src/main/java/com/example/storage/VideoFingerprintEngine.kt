@@ -35,7 +35,13 @@ internal class VideoFingerprintEngine(
                 audioSignature = metadata.audioSignature,
                 chunkHash = computeContentUriChunkHash(uri)
             )
-        } catch (error: Exception) {
+        } catch (error: IllegalArgumentException) {
+            Log.w(TAG, "Content URI video fingerprint failed: ${error.message}")
+            null
+        } catch (error: SecurityException) {
+            Log.w(TAG, "Content URI video fingerprint failed: ${error.message}")
+            null
+        } catch (error: IllegalStateException) {
             Log.w(TAG, "Content URI video fingerprint failed: ${error.message}")
             null
         } finally {
@@ -60,7 +66,13 @@ internal class VideoFingerprintEngine(
                 audioSignature = metadata.audioSignature,
                 chunkHash = computeFileChunkHash(file)
             )
-        } catch (error: Exception) {
+        } catch (error: IllegalArgumentException) {
+            Log.e(TAG, "Video multi-sample fingerprint failed for ${file.name}: ${error.message}")
+            null
+        } catch (error: SecurityException) {
+            Log.e(TAG, "Video multi-sample fingerprint failed for ${file.name}: ${error.message}")
+            null
+        } catch (error: IllegalStateException) {
             Log.e(TAG, "Video multi-sample fingerprint failed for ${file.name}: ${error.message}")
             null
         } finally {
@@ -86,7 +98,13 @@ internal class VideoFingerprintEngine(
                     it.recycle()
                 }
             }.orEmpty()
-        } catch (error: Exception) {
+        } catch (error: IllegalArgumentException) {
+            Log.e(TAG, "Video keyframe dHash failed for ${file.name}: ${error.message}")
+            ""
+        } catch (error: SecurityException) {
+            Log.e(TAG, "Video keyframe dHash failed for ${file.name}: ${error.message}")
+            ""
+        } catch (error: IllegalStateException) {
             Log.e(TAG, "Video keyframe dHash failed for ${file.name}: ${error.message}")
             ""
         } finally {

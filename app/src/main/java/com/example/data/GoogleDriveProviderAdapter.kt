@@ -96,7 +96,12 @@ class GoogleDriveProviderAdapter(
         } catch (_: MissingUploadLocationException) {
             CloudSyncResult.Error("Cloud upload could not be initialized: Missing 'Location' header.", false)
         } catch (e: Exception) {
-            classifyException(e, transferState.resumableSessionUri, transferState.bytesCommitted)
+            classifyException(
+                exception = e,
+                providerId = providerId,
+                sessionUri = transferState.resumableSessionUri,
+                bytesCommitted = transferState.bytesCommitted
+            )
         }
     }
 
@@ -267,7 +272,7 @@ class GoogleDriveProviderAdapter(
         } catch (e: DriveHttpException) {
             classifyHttpError("File search failed", e.code)
         } catch (e: Exception) {
-            classifyException(e)
+            classifyException(exception = e, providerId = providerId)
         }
     }
 
@@ -315,31 +320,6 @@ class GoogleDriveProviderAdapter(
                 cause = IOException("HTTP $code"),
                 provider = providerId
             ),
-            resumableSessionUri = sessionUri,
-            bytesCommitted = bytesCommitted
-        )
-    }
-
-    private fun classifyException(
-        exception: Exception,
-        sessionUri: String? = null,
-        bytesCommitted: Long = 0L
-    ): CloudSyncResult.Error {
-        val retryable = exception is java.net.UnknownHostException ||
-            exception is java.net.ConnectException ||
-            exception is IOException ||
-            exception.message?.contains("Unable to resolve host") == true
-        val domainError = DomainErrorMapper.fromThrowable(
-            operation = "DRIVE_TRANSFER",
-            cause = exception,
-            provider = providerId
-        )
-        DiagnosticLogger.log("GoogleDriveProviderAdapter", domainError)
-        return CloudSyncResult.Error(
-            message = domainError.userMessage.value,
-            isRetryable = retryable,
-            cause = exception,
-            domainError = domainError,
             resumableSessionUri = sessionUri,
             bytesCommitted = bytesCommitted
         )
@@ -429,6 +409,32 @@ private fun parseCommittedOffset(range: String?, currentOffset: Long, endExclusi
                 ?: value.substringAfterLast('-').substringBefore('/').toLongOrNull()
         }
     return if (end != null) maxOf(currentOffset, end + 1L) else endExclusive.coerceAtLeast(currentOffset)
+}
+
+private fun classifyException(
+    exception: Exception,
+    providerId: String,
+    sessionUri: String? = null,
+    bytesCommitted: Long = 0L
+): CloudSyncResult.Error {
+    val retryable = exception is java.net.UnknownHostException ||
+        exception is java.net.ConnectException ||
+        exception is IOException ||
+        exception.message?.contains("Unable to resolve host") == true
+    val domainError = DomainErrorMapper.fromThrowable(
+        operation = "DRIVE_TRANSFER",
+        cause = exception,
+        provider = providerId
+    )
+    DiagnosticLogger.log("GoogleDriveProviderAdapter", domainError)
+    return CloudSyncResult.Error(
+        message = domainError.userMessage.value,
+        isRetryable = retryable,
+        cause = exception,
+        domainError = domainError,
+        resumableSessionUri = sessionUri,
+        bytesCommitted = bytesCommitted
+    )
 }
 
 private fun findFileIds(httpClient: OkHttpClient, authorization: String, query: String): List<String> {

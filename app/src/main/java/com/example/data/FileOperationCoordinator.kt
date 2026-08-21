@@ -11,8 +11,9 @@ internal class FileOperationCoordinator(
     private val operationStore: FileOperationStore
 ) {
     suspend fun moveToRecycleBin(file: FileItemEntity) {
-        val currentFile = dao.getFileById(file.id) ?: return
-        if (currentFile.isRecycleBin) return
+        val currentFile = dao.getFileById(file.id)
+            ?.takeUnless { it.isRecycleBin }
+            ?: return
         val operation = prepare(
             type = MOVE_TO_TRASH,
             fileId = currentFile.id,
@@ -20,7 +21,7 @@ internal class FileOperationCoordinator(
             targetPath = PhysicalStorageManager.trashPathForOperation(
                 context,
                 currentFile.path,
-                operationId(currentFile.id, MOVE_TO_TRASH)
+                fileOperationId(currentFile.id, MOVE_TO_TRASH)
             )
         )
         val physicalResult = if (operation.status == PHYSICAL_COMPLETED) {
@@ -48,8 +49,9 @@ internal class FileOperationCoordinator(
     }
 
     suspend fun restoreFromRecycleBin(file: FileItemEntity) {
-        val currentFile = dao.getFileById(file.id) ?: return
-        if (!currentFile.isRecycleBin) return
+        val currentFile = dao.getFileById(file.id)
+            ?.takeIf { it.isRecycleBin }
+            ?: return
         val targetPath = currentFile.originalPath.ifBlank { currentFile.path }
         val operation = prepare(RESTORE, currentFile.id, currentFile.path, targetPath)
         val physicalResult = if (operation.status == PHYSICAL_COMPLETED) {
@@ -168,8 +170,8 @@ internal class FileOperationCoordinator(
     ): FileOperationEntity {
         operationStore.findOpenOperation(fileId, type)?.let { return it }
         val now = System.currentTimeMillis()
-        return FileOperationEntity(
-            operationId = operationId(fileId, type),
+        val operation = FileOperationEntity(
+            operationId = fileOperationId(fileId, type),
             operationType = type,
             fileId = fileId,
             sourcePath = sourcePath,
@@ -177,7 +179,9 @@ internal class FileOperationCoordinator(
             status = PREPARED,
             createdAtMs = now,
             updatedAtMs = now
-        ).also(operationStore::insert)
+        )
+        operationStore.insert(operation)
+        return operation
     }
 
     private suspend fun complete(operation: FileOperationEntity, targetPath: String) {
@@ -189,35 +193,33 @@ internal class FileOperationCoordinator(
         operationStore.delete(operation.operationId)
     }
 
-    private fun FileOperationEntity.physicalCompleted(targetPath: String): FileOperationEntity = copy(
-        status = PHYSICAL_COMPLETED,
-        targetPath = targetPath,
-        updatedAtMs = System.currentTimeMillis(),
-        lastErrorCode = null
-    )
-
-    private fun FileOperationEntity.committed(targetPath: String): FileOperationEntity = copy(
-        status = COMMITTED,
-        targetPath = targetPath,
-        updatedAtMs = System.currentTimeMillis(),
-        lastErrorCode = null
-    )
-
-    private fun FileOperationEntity.failed(errorCode: String): FileOperationEntity = copy(
-        status = FAILED,
-        updatedAtMs = System.currentTimeMillis(),
-        lastErrorCode = errorCode
-    )
-
-    private fun operationId(fileId: Long, type: String): String = "file-$type-$fileId"
-
     private companion object {
         const val PREPARED = FileOperationStatus.PREPARED
         const val PHYSICAL_COMPLETED = FileOperationStatus.PHYSICAL_COMPLETED
-        const val COMMITTED = FileOperationStatus.COMMITTED
-        const val FAILED = FileOperationStatus.FAILED
         const val MOVE_TO_TRASH = "MOVE_TO_TRASH"
         const val RESTORE = "RESTORE"
         const val DELETE = "DELETE"
     }
 }
+
+private fun FileOperationEntity.physicalCompleted(targetPath: String): FileOperationEntity = copy(
+    status = FileOperationStatus.PHYSICAL_COMPLETED,
+    targetPath = targetPath,
+    updatedAtMs = System.currentTimeMillis(),
+    lastErrorCode = null
+)
+
+private fun FileOperationEntity.committed(targetPath: String): FileOperationEntity = copy(
+    status = FileOperationStatus.COMMITTED,
+    targetPath = targetPath,
+    updatedAtMs = System.currentTimeMillis(),
+    lastErrorCode = null
+)
+
+private fun FileOperationEntity.failed(errorCode: String): FileOperationEntity = copy(
+    status = FileOperationStatus.FAILED,
+    updatedAtMs = System.currentTimeMillis(),
+    lastErrorCode = errorCode
+)
+
+private fun fileOperationId(fileId: Long, type: String): String = "file-$type-$fileId"
