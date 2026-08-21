@@ -195,6 +195,11 @@ class TFLiteSemanticEmbeddingProvider(
                 val buffer = fileChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, modelFile.length())
                 loadModelFromBuffer(buffer)
             }
+        } catch (e: LinkageError) {
+            Log.w("TFLiteSemantic", "TFLite native runtime is unavailable while loading an optional model.")
+            interpreter = null
+            vocabMap = null
+            false
         } catch (e: Exception) {
             Log.w("TFLiteSemantic", "Failed to load TFLite model from file: ${e.message}")
             interpreter = null
@@ -286,6 +291,11 @@ class TFLiteSemanticEmbeddingProvider(
             interpreter = Interpreter(buffer, options)
             Log.i("TFLiteSemantic", "TFLite Model loaded successfully from buffer")
             true
+        } catch (e: LinkageError) {
+            Log.w("TFLiteSemantic", "TFLite native runtime is unavailable while loading an optional model.")
+            interpreter = null
+            vocabMap = null
+            false
         } catch (e: Exception) {
             Log.w("TFLiteSemantic", "Failed to load TFLite model from buffer: ${e.message}")
             interpreter = null

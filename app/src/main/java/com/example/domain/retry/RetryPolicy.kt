@@ -38,7 +38,8 @@ object RetryPolicy {
         val reasonCode = when {
             rootCause is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
             rootCause is SocketTimeoutException || rootCause is TimeoutException -> "TIMEOUT"
-            rootCause is UnknownHostException || rootCause is ConnectException -> "NETWORK_UNAVAILABLE"
+            rootCause is UnknownHostException || rootCause is ConnectException ||
+                rootCause.message?.contains("unable to resolve host", ignoreCase = true) == true -> "NETWORK_UNAVAILABLE"
             rootCause is FileNotFoundException -> "SOURCE_UNAVAILABLE"
             rootCause is SecurityException -> "PERMISSION_DENIED"
             rootCause is IllegalArgumentException -> "INVALID_INPUT"
