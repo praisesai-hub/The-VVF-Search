@@ -184,7 +184,7 @@ class KeystoreVaultManagerJvmTest {
 
         override fun containsAlias(alias: String): Boolean {
             if (throwOnBiometricAliasLookup && alias == "VVF_VAULT_BIOMETRIC_WRAP_KEY_V2") {
-                throw IllegalStateException("test biometric lookup failure")
+                error("test biometric lookup failure")
             }
             return aliases.contains(alias)
         }
@@ -192,14 +192,14 @@ class KeystoreVaultManagerJvmTest {
         override fun getSecretKey(alias: String): javax.crypto.SecretKey? = secretKeys[alias]
 
         override fun createVaultKey(alias: String) {
-            if (failVaultCreation) throw IllegalStateException("test key provisioning failed")
+            if (failVaultCreation) error("test key provisioning failed")
             aliases += alias
             secretKeys[alias] = SecretKeySpec(ByteArray(32) { 4 }, "AES")
             createdVaultAliases += alias
         }
 
         override fun createBiometricWrapKey(alias: String) {
-            if (failBiometricCreation) throw IllegalStateException("test biometric provisioning failure")
+            if (failBiometricCreation) error("test biometric provisioning failure")
             aliases += alias
             secretKeys[alias] = SecretKeySpec(ByteArray(32) { 5 }, "AES")
             createdBiometricAliases += alias
