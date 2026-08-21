@@ -49,23 +49,35 @@ val MainViewModel.filteredFiles: StateFlow<List<FileItemEntity>> get() = files
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.categoryStats: StateFlow<List<CategoryStat>> get() = dashboardStats
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.recentFiles: StateFlow<List<FileItemEntity>> get() = repository.recentFiles.stateInCompat(this, emptyList())
+val MainViewModel.recentFiles: StateFlow<List<FileItemEntity>>
+    get() = repository.recentFiles.stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.recycleBinFiles: StateFlow<List<FileItemEntity>> get() = repository.recycleBinFiles.stateInCompat(this, emptyList())
+val MainViewModel.recycleBinFiles: StateFlow<List<FileItemEntity>>
+    get() = repository.recycleBinFiles.stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.ocrScannedFiles: StateFlow<List<FileItemEntity>> get() = repository.ocrScannedFiles.stateInCompat(this, emptyList())
+val MainViewModel.ocrScannedFiles: StateFlow<List<FileItemEntity>>
+    get() = repository.ocrScannedFiles.stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.level1ExactDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.exactDuplicates.stateInCompat(this, emptyList())
+val MainViewModel.level1ExactDuplicates: StateFlow<List<DuplicateGroup>>
+    get() = repository.exactDuplicates.stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.level3VisualDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getVisualDuplicates(similarityThreshold).stateInCompat(this, emptyList())
+val MainViewModel.level3VisualDuplicates: StateFlow<List<DuplicateGroup>>
+    get() = repository.getVisualDuplicates(similarityThreshold)
+        .stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.videoDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getVideoDuplicates(similarityThreshold).stateInCompat(this, emptyList())
+val MainViewModel.videoDuplicates: StateFlow<List<DuplicateGroup>>
+    get() = repository.getVideoDuplicates(similarityThreshold)
+        .stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.semanticDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getSemanticDuplicates(similarityThreshold).stateInCompat(this, emptyList())
+val MainViewModel.semanticDuplicates: StateFlow<List<DuplicateGroup>>
+    get() = repository.getSemanticDuplicates(similarityThreshold)
+        .stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.documentDuplicates: StateFlow<List<DuplicateGroup>> get() = repository.getDocumentDuplicates().stateInCompat(this, emptyList())
+val MainViewModel.documentDuplicates: StateFlow<List<DuplicateGroup>>
+    get() = repository.getDocumentDuplicates().stateInCompat(this, emptyList())
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-val MainViewModel.documentStats: StateFlow<Triple<Int, Int, Float>> get() = repository.documentStats.stateInCompat(this, Triple(0, 0, 1f))
+val MainViewModel.documentStats: StateFlow<Triple<Int, Int, Float>>
+    get() = repository.documentStats.stateInCompat(this, Triple(0, 0, 1f))
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 val MainViewModel.selectedDuplicateIds: StateFlow<Set<Long>> get() = compatState().selectedIds
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
@@ -178,9 +190,13 @@ fun MainViewModel.cleanSelectedDuplicates() {
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.moveToRecycleBin(file: FileItemEntity) { viewModelScope.launch { repository.moveToRecycleBin(file) } }
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-fun MainViewModel.restoreFromRecycleBin(file: FileItemEntity) { viewModelScope.launch { repository.restoreFromRecycleBin(file) } }
+fun MainViewModel.restoreFromRecycleBin(file: FileItemEntity) {
+    viewModelScope.launch { repository.restoreFromRecycleBin(file) }
+}
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
-fun MainViewModel.deletePermanently(file: FileItemEntity) { viewModelScope.launch { repository.deletePermanently(file) } }
+fun MainViewModel.deletePermanently(file: FileItemEntity) {
+    viewModelScope.launch { repository.deletePermanently(file) }
+}
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
 fun MainViewModel.emptyRecycleBin() { viewModelScope.launch { repository.emptyRecycleBin() } }
 @Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases")
@@ -348,7 +364,10 @@ fun MainViewModel.onBiometricEnrollmentSuccess(result: BiometricPrompt.Authentic
 }
 
 /** Callback-only unlock is intentionally fail-closed and cannot change vault state. */
-@Deprecated("Compatibility presentation surface; migrate UI behavior to explicit domain use cases; use onBiometricSuccess(AuthenticationResult)")
+@Deprecated(
+    "Compatibility presentation surface; migrate UI behavior to explicit domain use cases; " +
+        "use onBiometricSuccess(AuthenticationResult)"
+)
 fun MainViewModel.onBiometricSuccess() {
     onBiometricError(compatMessage(R.string.pin_error_biometric_crypto_required))
 }
