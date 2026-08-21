@@ -15,6 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -125,6 +126,33 @@ class SmartManagerRepositoryJvmCoverageTest {
     }
 
     @Test
+    fun recycleMovePersistsOriginalPathAfterPhysicalMoveAndClearsOpenOperation() = runBlocking {
+        val source = File(context.cacheDir, "recycle-${System.nanoTime()}.txt").apply {
+            writeText("recycle fixture")
+        }
+        val fileId = dao.insertFile(
+            FileItemEntity(
+                name = source.name,
+                path = source.absolutePath,
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = source.length()
+            )
+        )
+        val current = dao.getFileById(fileId) ?: error("recycle fixture missing")
+
+        repository { false }.moveToRecycleBin(current)
+
+        val recycled = dao.getFileById(fileId) ?: error("recycled fixture missing")
+        assertTrue(recycled.isRecycleBin)
+        assertEquals(source.absolutePath, recycled.originalPath)
+        assertFalse(source.exists())
+        assertTrue(File(recycled.path).exists())
+        assertTrue(database.fileOperationStore().getOpenOperations().isEmpty())
+        File(recycled.path).delete()
+        Unit
+    }
+
+    @Test
     fun databaseLockRetriesOnceAndThenReturnsSuccessfulResult() = runBlocking {
         val repository = repository { false }
         var attempts = 0
@@ -147,7 +175,8 @@ class SmartManagerRepositoryJvmCoverageTest {
     private fun repository(transferAllowed: (Context) -> Boolean) = SmartManagerRepository(
         context = context,
         dao = dao,
-        cloudTransferAllowed = transferAllowed
+        cloudTransferAllowed = transferAllowed,
+        fileOperationStoreOverride = database.fileOperationStore()
     )
 
     private fun cloudItem(status: String) = CloudSyncItemEntity(
