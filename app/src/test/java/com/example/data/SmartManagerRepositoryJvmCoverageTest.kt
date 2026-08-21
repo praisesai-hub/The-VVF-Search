@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabaseLockedException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -224,6 +225,88 @@ class SmartManagerRepositoryJvmCoverageTest {
 
         assertEquals("written", result)
         assertEquals(2, attempts)
+    }
+
+    @Test
+    fun retryRetriesOnlyTemporaryFileIoAndCloudTimeouts() = runBlocking {
+        val repository = repository { false }
+        var temporaryIoAttempts = 0
+        var timeoutAttempts = 0
+
+        val fileResult = repository.withRetry(
+            operation = com.example.domain.retry.RetryOperation.FILE_STORAGE,
+            maxAttempts = 2,
+            initialDelayMs = 0L,
+            factor = 1.0
+        ) {
+            temporaryIoAttempts += 1
+            if (temporaryIoAttempts == 1) throw java.io.IOException("temporarily unavailable")
+            "stored"
+        }
+        val cloudResult = repository.withRetry(
+            operation = com.example.domain.retry.RetryOperation.CLOUD_TRANSFER,
+            maxAttempts = 2,
+            initialDelayMs = 0L,
+            factor = 1.0
+        ) {
+            timeoutAttempts += 1
+            if (timeoutAttempts == 1) throw java.util.concurrent.TimeoutException("fixture timeout")
+            "uploaded"
+        }
+
+        assertEquals("stored", fileResult)
+        assertEquals(2, temporaryIoAttempts)
+        assertEquals("uploaded", cloudResult)
+        assertEquals(2, timeoutAttempts)
+    }
+
+    @Test
+    fun retryDoesNotRepeatPermissionInvalidInputOrCancellationFailures() = runBlocking {
+        val repository = repository { false }
+        var permissionAttempts = 0
+        var invalidInputAttempts = 0
+        var cancellationAttempts = 0
+
+        val permissionFailure = runCatching {
+            repository.withRetry(
+                com.example.domain.retry.RetryOperation.FILE_STORAGE,
+                maxAttempts = 3,
+                initialDelayMs = 0L,
+                factor = 1.0
+            ) {
+                permissionAttempts += 1
+                throw SecurityException("permission denied")
+            }
+        }.exceptionOrNull()
+        val invalidInputFailure = runCatching {
+            repository.withRetry(
+                com.example.domain.retry.RetryOperation.FILE_STORAGE,
+                maxAttempts = 3,
+                initialDelayMs = 0L,
+                factor = 1.0
+            ) {
+                invalidInputAttempts += 1
+                throw IllegalArgumentException("invalid request")
+            }
+        }.exceptionOrNull()
+        val cancellationFailure = runCatching {
+            repository.withRetry(
+                com.example.domain.retry.RetryOperation.CLOUD_TRANSFER,
+                maxAttempts = 3,
+                initialDelayMs = 0L,
+                factor = 1.0
+            ) {
+                cancellationAttempts += 1
+                throw CancellationException("caller cancelled")
+            }
+        }.exceptionOrNull()
+
+        assertTrue(permissionFailure is SecurityException)
+        assertTrue(invalidInputFailure is IllegalArgumentException)
+        assertTrue(cancellationFailure is CancellationException)
+        assertEquals(1, permissionAttempts)
+        assertEquals(1, invalidInputAttempts)
+        assertEquals(1, cancellationAttempts)
     }
 
     private fun repository(transferAllowed: (Context) -> Boolean) = SmartManagerRepository(
