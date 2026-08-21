@@ -283,13 +283,15 @@ class CloudSyncWorkerTest {
                 return CloudSyncWorker(
                     appContext,
                     workerParameters,
-                    daoOverride = fakeDao,
-                    operationStoreOverride = fakeOperationStore,
-                    providerAdapterOverride = fakeAdapter,
-                    authManagerOverride = GoogleAuthManager(
-                        appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)
-                    ),
-                    transferAllowed = transferAllowed
+                    CloudSyncWorkerDependencies(
+                        dao = fakeDao,
+                        operationStore = fakeOperationStore,
+                        providerAdapter = fakeAdapter,
+                        driveAuthorization = GoogleAuthManager(
+                            appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)
+                        ),
+                        transferAllowed = transferAllowed
+                    )
                 )
             }
         }

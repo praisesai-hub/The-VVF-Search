@@ -29,15 +29,28 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
-class CloudSyncWorker @JvmOverloads constructor(
+internal data class CloudSyncWorkerDependencies(
+    val dao: FileDao? = null,
+    val operationStore: CloudSyncOperationStore? = null,
+    val providerAdapter: CloudProviderAdapter? = null,
+    val driveAuthorization: DriveAuthorizationPort? = null,
+    val transferAllowed: (() -> Boolean)? = null
+)
+
+class CloudSyncWorker(
     appContext: Context,
-    workerParams: WorkerParameters,
-    private val daoOverride: FileDao? = null,
-    private val operationStoreOverride: CloudSyncOperationStore? = null,
-    private val providerAdapterOverride: CloudProviderAdapter? = null,
-    private val authManagerOverride: DriveAuthorizationPort? = null,
-    private val transferAllowed: (() -> Boolean)? = null
+    workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
+    private var dependencies = CloudSyncWorkerDependencies()
+
+    internal constructor(
+        appContext: Context,
+        workerParams: WorkerParameters,
+        dependencies: CloudSyncWorkerDependencies
+    ) : this(appContext, workerParams) {
+        this.dependencies = dependencies
+    }
+
     override suspend fun doWork(): Result = executeWithDurableLease(
         context = applicationContext,
         worker = this,
@@ -47,17 +60,17 @@ class CloudSyncWorker @JvmOverloads constructor(
     )
 
     private suspend fun runWork(): DurableWorkResult = coroutineScope {
-        if (!(transferAllowed?.invoke() ?: CloudSyncPolicy.canTransfer(applicationContext))) {
+        if (!(dependencies.transferAllowed?.invoke() ?: CloudSyncPolicy.canTransfer(applicationContext))) {
             Log.i(TAG, "Cloud transfer blocked: explicit opt-in or build provisioning is missing.")
             return@coroutineScope DurableWorkResult.success()
         }
 
         val leaseOwner = id.toString()
-        val leaseStore = operationStoreOverride
+        val leaseStore = dependencies.operationStore
             ?: AppDatabase.getDatabase(applicationContext).cloudSyncOperationStore()
         return@coroutineScope try {
             Log.i(TAG, "Starting background CloudSyncWorker with provider adapter contract...")
-            val dao = daoOverride ?: AppDatabase.getDatabase(applicationContext).fileDao()
+            val dao = dependencies.dao ?: AppDatabase.getDatabase(applicationContext).fileDao()
             val nowMs = System.currentTimeMillis()
             leaseStore.releaseExpiredLeases(nowMs)
 
@@ -68,13 +81,13 @@ class CloudSyncWorker @JvmOverloads constructor(
                 return@coroutineScope DurableWorkResult.success()
             }
 
-            val driveAuthorization = authManagerOverride
+            val driveAuthorization = dependencies.driveAuthorization
                 ?: DriveAuthorizationFactory.getInstance(applicationContext)
             val syncEngine = com.example.data.CloudSyncEngine(
                 context = applicationContext,
                 dao = dao,
                 authManager = driveAuthorization,
-                providerAdapterOverride = providerAdapterOverride,
+                providerAdapterOverride = dependencies.providerAdapter,
                 operationStore = leaseStore
             )
 
