@@ -53,7 +53,19 @@ interface FileDao {
     @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (name LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%' OR ocrText LIKE '%' || :query || '%')")
     fun searchFiles(query: String): Flow<List<FileItemEntity>>
 
-    @Query("SELECT * FROM files WHERE isVault = 0 AND isRecycleBin = 0 AND (md5Hash IS NULL OR md5Hash = '' OR (category = 'IMAGES' AND (visualSimilarityHash IS NULL OR visualSimilarityHash = '')) OR (category = 'VIDEO' AND (videoSampleHashes IS NULL OR videoSampleHashes = '')) OR (category = 'DOCUMENTS' AND (documentCandidateFingerprint IS NULL OR documentCandidateFingerprint = '')) OR semanticIndexed = 0)")
+    @Query(
+        """
+        SELECT * FROM files
+        WHERE isVault = 0 AND isRecycleBin = 0
+            AND (
+                md5Hash IS NULL OR md5Hash = ''
+                OR (category = 'IMAGES' AND (visualSimilarityHash IS NULL OR visualSimilarityHash = ''))
+                OR (category = 'VIDEO' AND (videoSampleHashes IS NULL OR videoSampleHashes = ''))
+                OR (category = 'DOCUMENTS' AND (documentCandidateFingerprint IS NULL OR documentCandidateFingerprint = ''))
+                OR semanticIndexed = 0
+            )
+        """
+    )
     suspend fun getUnhashedFiles(): List<FileItemEntity>
 
     @Update
