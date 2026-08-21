@@ -214,6 +214,28 @@ class SecureKeyValueStoreTest {
     }
 
     @Test
+    fun `atomic replacement fails closed when the destination path is a directory`() {
+        val fileName = "destination-directory"
+        val destination = File(directory, fileName)
+        assertTrue(destination.mkdir())
+        val store = SecureKeyValueStore(
+            context = context,
+            fileName = fileName,
+            keyAlias = "unused",
+            directory = directory,
+            crypto = crypto
+        )
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            store.commit(mapOf("token" to "secret"))
+        }
+
+        assertEquals("Unable to durably write secure preferences", error.message)
+        assertTrue(destination.isDirectory)
+        assertFalse(File(directory, "$fileName.tmp").exists())
+    }
+
+    @Test
     fun `crypto provider failures fail closed before any durable store is created`() {
         val failures = listOf<Throwable>(
             GeneralSecurityException("keystore unavailable"),
