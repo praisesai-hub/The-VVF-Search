@@ -200,6 +200,23 @@ class FirebaseAuthManagerTest {
     }
 
     @Test
+    fun signInWithGoogle_returnsFirebaseTaskFailureThroughResultBoundary() = runBlocking {
+        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        val failure = FirebaseAuthException("ERROR_GOOGLE_SIGN_IN", "Firebase Google sign-in failed")
+        coEvery {
+            credentialManager.getCredential(any(), any<GetCredentialRequest>())
+        } returns GetCredentialResponse(googleCredential())
+        every { auth.signInWithCredential(any()) } returns Tasks.forException(failure)
+        val manager = FirebaseAuthManager(context, auth, credentialManager)
+
+        val result = manager.signInWithGoogle()
+
+        assertTrue(result.isFailure)
+        assertSame(failure, result.exceptionOrNull())
+        assertEquals(null, manager.user.value)
+    }
+
+    @Test
     fun signInWithMicrosoft_returnsTheAuthenticatedUserOnSuccess() {
         val expectedUser = mockk<FirebaseUser>()
         val authResult = mockk<AuthResult> {
