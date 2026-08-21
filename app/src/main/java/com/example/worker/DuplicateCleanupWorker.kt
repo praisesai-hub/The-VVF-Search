@@ -9,6 +9,8 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
+import com.example.data.FileDao
+import com.example.data.FileItemEntity
 import com.example.domain.error.DiagnosticContext
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainError
@@ -40,74 +42,12 @@ class DuplicateCleanupWorker(
             val isAutoCleanEnabled = prefs.getBoolean("auto_clean_duplicates_bg", false)
             if (!isAutoCleanEnabled) {
                 Log.i(TAG, "Auto-clean duplicates in background is disabled in settings. Skipping cleanup execution.")
-                return DurableWorkResult.success()
-            }
-
-            val db = AppDatabase.getDatabase(applicationContext)
-            val dao = db.fileDao()
-
-            val activeFiles = dao.getAllActiveFiles().first()
-            var duplicatesFound = 0
-            var bytesCleaned = 0L
-
-            // Group by MD5 hash for exact duplicates
-            val exactDuplicateGroups = activeFiles
-                .filter { it.md5Hash.isNotBlank() }
-                .groupBy { it.md5Hash }
-                .filter { it.value.size > 1 }
-
-            for ((_, duplicateList) in exactDuplicateGroups) {
-                // Keep the oldest/first file, mark redundant ones for cleanup/recycle bin
-                val sorted = duplicateList.sortedBy { it.dateModifiedMs }
-                val redundant = sorted.drop(1)
-                for (file in redundant) {
-                    // Idempotency guard: a previous attempt may already have persisted this content in the recycle bin.
-                    if (file.md5Hash.isNotBlank() && dao.findInRecycleBinByHash(file.md5Hash) != null) {
-                        continue
-                    }
-
-                    val trashResult = PhysicalStorageManager.moveToTrash(applicationContext, file.path)
-                    if (trashResult.isSuccess) {
-                        val newPath = trashResult.getOrThrow()
-                        val originalPathToKeep = if (file.originalPath.isNotBlank()) file.originalPath else file.path
-                        val recycledFile = file.copy(
-                            path = newPath,
-                            originalPath = originalPathToKeep,
-                            isRecycleBin = true,
-                            deletedTimestampMs = System.currentTimeMillis()
-                        )
-
-                        // Persist immediately after each physical move instead of waiting for the entire batch.
-                        // This narrows the crash window and makes retries idempotent.
-                        dao.moveFilesToRecycleBinAtomic(listOf(recycledFile))
-                        duplicatesFound++
-                        bytesCleaned += file.sizeBytes
-                    } else {
-                        val diagnostic = DomainError.OperationFailed(
-                            userMessage = UserMessage("The duplicate file could not be moved."),
-                            diagnostics = DiagnosticContext(
-                                operation = "DUPLICATE_MOVE_TO_TRASH",
-                                fileId = file.id,
-                                reasonCode = "PHYSICAL_MOVE_FAILED"
-                            ),
-                            internalCause = trashResult.exceptionOrNull()
-                        )
-                        DiagnosticLogger.log(TAG, diagnostic, DiagnosticLogger.Level.WARN)
-                    }
-                }
-            }
-
-            if (duplicatesFound > 0) {
-                Log.i(
-                    TAG,
-                    "DuplicateCleanupWorker moved $duplicatesFound duplicate files (${bytesCleaned / 1024} KB) to Recycle Bin."
-                )
-                sendNotification(applicationContext, duplicatesFound, bytesCleaned)
+                DurableWorkResult.success()
             } else {
-                Log.i(TAG, "DuplicateCleanupWorker completed. No exact duplicate clutter found.")
+                val totals = cleanExactDuplicates(AppDatabase.getDatabase(applicationContext).fileDao())
+                reportCleanupTotals(totals)
+                DurableWorkResult.success()
             }
-
-            DurableWorkResult.success()
         } catch (e: Exception) {
             val diagnostic = DomainError.OperationFailed(
                 userMessage = UserMessage("Duplicate cleanup could not be completed."),
@@ -123,6 +63,74 @@ class DuplicateCleanupWorker(
             } else {
                 DurableWorkResult.failure()
             }
+        }
+    }
+
+    private suspend fun cleanExactDuplicates(dao: FileDao): CleanupTotals =
+        dao.getAllActiveFiles().first()
+            .filter { it.md5Hash.isNotBlank() }
+            .groupBy { it.md5Hash }
+            .filterValues { it.size > 1 }
+            .values
+            .fold(CleanupTotals()) { totals, duplicateList ->
+                totals + recycleRedundantFiles(dao, duplicateList)
+            }
+
+    private suspend fun recycleRedundantFiles(
+        dao: FileDao,
+        duplicateList: List<FileItemEntity>
+    ): CleanupTotals = duplicateList.sortedBy { it.dateModifiedMs }
+        .drop(1)
+        .fold(CleanupTotals()) { totals, file -> totals + recycleIfEligible(dao, file) }
+
+    private suspend fun recycleIfEligible(dao: FileDao, file: FileItemEntity): CleanupTotals =
+        if (file.md5Hash.isNotBlank() && dao.findInRecycleBinByHash(file.md5Hash) != null) {
+            CleanupTotals()
+        } else {
+            moveDuplicateToRecycleBin(dao, file)
+        }
+
+    private suspend fun moveDuplicateToRecycleBin(dao: FileDao, file: FileItemEntity): CleanupTotals =
+        PhysicalStorageManager.moveToTrash(applicationContext, file.path).fold(
+            onSuccess = { newPath ->
+                val originalPathToKeep = file.originalPath.ifBlank { file.path }
+                val recycledFile = file.copy(
+                    path = newPath,
+                    originalPath = originalPathToKeep,
+                    isRecycleBin = true,
+                    deletedTimestampMs = System.currentTimeMillis()
+                )
+                dao.moveFilesToRecycleBinAtomic(listOf(recycledFile))
+                CleanupTotals(duplicatesFound = 1, bytesCleaned = file.sizeBytes)
+            },
+            onFailure = { cause ->
+                logMoveFailure(file, cause)
+                CleanupTotals()
+            }
+        )
+
+    private fun logMoveFailure(file: FileItemEntity, cause: Throwable?) {
+        val diagnostic = DomainError.OperationFailed(
+            userMessage = UserMessage("The duplicate file could not be moved."),
+            diagnostics = DiagnosticContext(
+                operation = "DUPLICATE_MOVE_TO_TRASH",
+                fileId = file.id,
+                reasonCode = "PHYSICAL_MOVE_FAILED"
+            ),
+            internalCause = cause
+        )
+        DiagnosticLogger.log(TAG, diagnostic, DiagnosticLogger.Level.WARN)
+    }
+
+    private fun reportCleanupTotals(totals: CleanupTotals) {
+        if (totals.duplicatesFound > 0) {
+            Log.i(
+                TAG,
+                "DuplicateCleanupWorker moved ${totals.duplicatesFound} duplicate files (${totals.bytesCleaned / 1024} KB) to Recycle Bin."
+            )
+            sendNotification(applicationContext, totals.duplicatesFound, totals.bytesCleaned)
+        } else {
+            Log.i(TAG, "DuplicateCleanupWorker completed. No exact duplicate clutter found.")
         }
     }
 
@@ -154,6 +162,16 @@ class DuplicateCleanupWorker(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to post notification: ${e.message}")
         }
+    }
+
+    private data class CleanupTotals(
+        val duplicatesFound: Int = 0,
+        val bytesCleaned: Long = 0L
+    ) {
+        operator fun plus(other: CleanupTotals): CleanupTotals = CleanupTotals(
+            duplicatesFound = duplicatesFound + other.duplicatesFound,
+            bytesCleaned = bytesCleaned + other.bytesCleaned
+        )
     }
 
     companion object {
