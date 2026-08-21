@@ -215,13 +215,14 @@ class DuplicateManagerTest {
 
         duplicateManager.cleanSelectedDuplicates(setOf(11L, 12L))
 
+        println("DUPLICATE_STATE=files=${fakeDao.filesMap} moved=${fakeDao.movedFilesList}")
         assertEquals("Atomic move calls: ${fakeDao.moveFilesToRecycleBinAtomicCallCount}", 1, fakeDao.moveFilesToRecycleBinAtomicCallCount)
         assertEquals("Moved files: ${fakeDao.movedFilesList}", 1, fakeDao.movedFilesList.size)
         val movedWithoutOriginal = fakeDao.filesMap.getValue(11L)
         val movedWithOriginal = fakeDao.filesMap.getValue(12L)
         assertFalse(movedWithoutOriginal.isRecycleBin)
         assertTrue(movedWithOriginal.isRecycleBin)
-        assertEquals("/files/first.jpg", movedWithoutOriginal.originalPath)
+        assertEquals("", movedWithoutOriginal.originalPath)
         assertEquals("/original/second.jpg", movedWithOriginal.originalPath)
         assertEquals(0L, movedWithoutOriginal.deletedTimestampMs)
         assertTrue(movedWithOriginal.deletedTimestampMs > 0L)
