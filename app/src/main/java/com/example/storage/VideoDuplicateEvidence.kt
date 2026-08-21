@@ -20,7 +20,7 @@ object VideoDuplicateEvidence {
         val stored = file.videoSampleHashes
             .split(';')
             .map(String::trim)
-            .filter { it.length == 16 }
+            .filter { it.length == DHASH_HEX_LENGTH }
         return if (stored.size >= MIN_TEMPORAL_SAMPLES) stored else emptyList()
     }
 
