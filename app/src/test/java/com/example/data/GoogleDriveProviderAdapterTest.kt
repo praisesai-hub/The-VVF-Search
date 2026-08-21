@@ -467,6 +467,91 @@ class GoogleDriveProviderAdapterTest {
         assertEquals(10L, progress.last().bytesCommitted)
     }
 
+    @Test
+    fun uploadFile_returnsExistingCompletionForPersistedSession() {
+        val file = File.createTempFile("upload_completed_session", ".txt").apply {
+            writeText("0123456789")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        fakeInterceptor.responseProvider = { request ->
+            assertEquals("bytes */10", request.header("Content-Range"))
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("{\"id\":\"remote-completed\"}".toResponseBody("application/json".toMediaTypeOrNull()))
+                .build()
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(
+                file,
+                "remote.txt",
+                "",
+                CloudTransferState("", "https://upload.googleapis.com/session-completed", 0L)
+            ) {}
+        }
+
+        assertEquals("remote-completed", (result as CloudSyncResult.Success).remoteFileId)
+        assertEquals(file.length(), result.bytesCommitted)
+    }
+
+    @Test
+    fun uploadFile_resumesAfterIncompleteChunkAcknowledgement() {
+        val file = File.createTempFile("upload_incomplete_chunk", ".txt").apply {
+            writeText("0123456789")
+            deleteOnExit()
+        }
+        authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
+        val progress = mutableListOf<CloudTransferProgress>()
+        fakeInterceptor.responseProvider = { request ->
+            when {
+                request.method == "POST" -> resumableSessionResponse(request, "chunk-resume")
+                request.header("Content-Range") == "bytes 0-9/10" -> incompleteChunkResponse(request)
+                else -> completedUploadResponse(request, "remote-chunk-resumed")
+            }
+        }
+
+        val result = kotlinx.coroutines.runBlocking {
+            adapter.uploadFile(file, "remote.txt", "", CloudTransferState()) { progress += it }
+        }
+
+        assertEquals("remote-chunk-resumed", (result as CloudSyncResult.Success).remoteFileId)
+        assertTrue(progress.any { it.bytesCommitted == 3L })
+        assertEquals(file.length(), progress.last().bytesCommitted)
+    }
+
+    private fun resumableSessionResponse(request: Request, sessionId: String): Response =
+        Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .header("Location", "https://upload.googleapis.com/resumable/$sessionId")
+            .body("".toResponseBody("application/json".toMediaTypeOrNull()))
+            .build()
+
+    private fun incompleteChunkResponse(request: Request): Response =
+        Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(308)
+            .message("Resume Incomplete")
+            .header("Range", "bytes=0-2")
+            .body("".toResponseBody(null))
+            .build()
+
+    private fun completedUploadResponse(request: Request, remoteId: String): Response =
+        Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body("{\"id\":\"$remoteId\"}".toResponseBody("application/json".toMediaTypeOrNull()))
+            .build()
+
     private class FakeInterceptor : Interceptor {
         lateinit var responseProvider: (Request) -> Response
 
