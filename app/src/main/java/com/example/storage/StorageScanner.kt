@@ -557,28 +557,32 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         }
     }
 
-    private fun computeVideoChunkHash(file: File): String {
-        return try {
+    private fun computeVideoChunkHash(file: File): String =
+        runCatching {
             val length = file.length()
-            if (length <= 0L) return ""
+            if (length <= 0L) return@runCatching ""
             val digest = MessageDigest.getInstance("SHA-256")
             digest.update("VIDEO_CHUNKS:$length".toByteArray())
-            java.io.RandomAccessFile(file, "r").use { raf ->
-                val chunkSize = FINGERPRINT_CHUNK_BYTES
-                val midpoint = (length / MIDPOINT_DIVISOR - chunkSize / MIDPOINT_DIVISOR)
-                    .coerceAtLeast(0L)
-                val offsets = listOf(0L, midpoint, (length - chunkSize).coerceAtLeast(0L)).distinct()
-                offsets.forEach { offset ->
-                    raf.seek(offset)
-                    val buffer = ByteArray(chunkSize)
-                    val read = raf.read(buffer)
-                    if (read > 0) digest.update(buffer, 0, read)
-                }
+            java.io.RandomAccessFile(file, "r").use { reader ->
+                updateDigestFromVideoChunks(reader, digest, length)
             }
             digest.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            Log.w(TAG, "Video chunk fingerprint failed for ${file.name}: ${e.message}")
-            ""
+        }.onFailure { error ->
+            Log.w(TAG, "Video chunk fingerprint failed for ${file.name}: ${error.message}")
+        }.getOrDefault("")
+
+    private fun updateDigestFromVideoChunks(
+        reader: java.io.RandomAccessFile,
+        digest: MessageDigest,
+        length: Long
+    ) {
+        val chunkSize = FINGERPRINT_CHUNK_BYTES
+        val midpoint = (length / MIDPOINT_DIVISOR - chunkSize / MIDPOINT_DIVISOR).coerceAtLeast(0L)
+        listOf(0L, midpoint, (length - chunkSize).coerceAtLeast(0L)).distinct().forEach { offset ->
+            reader.seek(offset)
+            val buffer = ByteArray(chunkSize)
+            val read = reader.read(buffer)
+            if (read > 0) digest.update(buffer, 0, read)
         }
     }
 
