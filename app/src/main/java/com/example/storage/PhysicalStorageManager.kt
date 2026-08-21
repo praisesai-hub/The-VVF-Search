@@ -754,7 +754,9 @@ object PhysicalStorageManager {
         if (newPath.startsWith("content://")) return
         try {
             val file = File(newPath)
-            if (file.exists()) android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null) { path, uri -> Log.d(TAG, "Media scan completed; uriType=${uri.scheme}") }
+            if (file.exists()) android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null) { _, uri ->
+                Log.d(TAG, "Media scan completed; uriType=${uri?.scheme ?: "unknown"}")
+            }
         } catch (e: Exception) { Log.w(TAG, "Failed to notify media scanner: ${e.message}") }
     }
 

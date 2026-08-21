@@ -27,6 +27,8 @@ class GoogleDriveProviderAdapterTest {
         authManager = GoogleAuthManager(sharedPrefs)
         fakeInterceptor = FakeInterceptor()
         httpClient = OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
             .addInterceptor(fakeInterceptor)
             .build()
         adapter = GoogleDriveProviderAdapter(authManager, httpClient)
@@ -457,7 +459,6 @@ class GoogleDriveProviderAdapterTest {
             ) { progress += it }
         }
 
-        println("RESUME_RESULT=$result RANGES=$ranges PROGRESS=$progress")
         assertEquals("remote-resumed", (result as CloudSyncResult.Success).remoteFileId)
         assertEquals("Unexpected resumable request ranges: $ranges", listOf("bytes */10", "bytes 3-9/10"), ranges)
         assertEquals(10L, progress.last().bytesCommitted)
