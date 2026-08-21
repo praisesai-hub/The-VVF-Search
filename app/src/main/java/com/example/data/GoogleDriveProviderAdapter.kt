@@ -77,12 +77,14 @@ class GoogleDriveProviderAdapter(
             }
 
             uploadRemainingChunks(
-                authorization,
-                file,
-                sessionUri,
+                UploadRequestContext(
+                    authorization = authorization,
+                    file = file,
+                    sessionUri = sessionUri,
+                    mimeType = determineMimeType(file).toMediaTypeOrNull(),
+                    onProgress = onProgress
+                ),
                 offset,
-                determineMimeType(file).toMediaTypeOrNull(),
-                onProgress
             )
         } catch (e: DriveHttpException) {
             classifyHttpError(
@@ -131,76 +133,101 @@ class GoogleDriveProviderAdapter(
     }
 
     private suspend fun uploadRemainingChunks(
-        authorization: String,
-        file: File,
-        sessionUri: String,
-        initialOffset: Long,
-        mimeType: MediaType?,
-        onProgress: suspend (CloudTransferProgress) -> Unit
+        context: UploadRequestContext,
+        initialOffset: Long
     ): CloudSyncResult {
         var offset = initialOffset
-        while (offset < file.length()) {
-            val endExclusive = minOf(offset + UPLOAD_CHUNK_BYTES, file.length())
-            val request = Request.Builder()
-                .url(sessionUri)
-                .header("Authorization", authorization)
-                .header("Content-Length", (endExclusive - offset).toString())
-                .header("Content-Range", "bytes $offset-${endExclusive - 1}/${file.length()}")
-                .put(FileSliceRequestBody(file, offset, endExclusive - offset, mimeType))
-                .build()
-            httpClient.newCall(request).execute().use { response ->
-                when {
-                    response.code == HTTP_RESUME_INCOMPLETE -> {
-                        offset = parseCommittedOffset(
-                            response.header("Content-Range") ?: response.header("Range"),
-                            offset,
-                            endExclusive
+        var terminalResult: CloudSyncResult? = null
+        while (offset < context.file.length() && terminalResult == null) {
+            when (val outcome = uploadChunk(context, offset)) {
+                is UploadChunkOutcome.Continue -> {
+                    offset = outcome.nextOffset
+                    context.onProgress(
+                        CloudTransferProgress(
+                            resumableSessionUri = context.sessionUri,
+                            bytesCommitted = offset
                         )
-                        onProgress(
-                            CloudTransferProgress(
-                                resumableSessionUri = sessionUri,
-                                bytesCommitted = offset
-                            )
-                        )
-                    }
-                    response.isSuccessful -> {
-                        val remoteId = extractFileIdFromJson(response.body?.string().orEmpty())
-                            ?: return CloudSyncResult.Error(
-                                "Failed to parse remote file ID from response",
-                                false,
-                                resumableSessionUri = sessionUri,
-                                bytesCommitted = endExclusive
-                            )
-                        val completedBytes = file.length()
-                        onProgress(
-                            CloudTransferProgress(
-                                remoteFileId = remoteId,
-                                resumableSessionUri = sessionUri,
-                                bytesCommitted = completedBytes
-                            )
-                        )
-                        return CloudSyncResult.Success(
-                            bytesTransferred = completedBytes,
-                            remoteFileId = remoteId,
-                            resumableSessionUri = sessionUri,
-                            bytesCommitted = completedBytes
-                        )
-                    }
-                    else -> return classifyHttpError(
-                        "File upload failed",
-                        response.code,
-                        sessionUri,
-                        offset
                     )
                 }
+                is UploadChunkOutcome.Completed -> {
+                    val completedBytes = context.file.length()
+                    context.onProgress(
+                        CloudTransferProgress(
+                            remoteFileId = outcome.remoteFileId,
+                            resumableSessionUri = context.sessionUri,
+                            bytesCommitted = completedBytes
+                        )
+                    )
+                    terminalResult = CloudSyncResult.Success(
+                        bytesTransferred = completedBytes,
+                        remoteFileId = outcome.remoteFileId,
+                        resumableSessionUri = context.sessionUri,
+                        bytesCommitted = completedBytes
+                    )
+                }
+                is UploadChunkOutcome.Error -> terminalResult = outcome.error
             }
         }
-        return CloudSyncResult.Error(
+        return terminalResult ?: CloudSyncResult.Error(
             "Cloud upload ended without a completion response.",
             true,
-            resumableSessionUri = sessionUri,
+            resumableSessionUri = context.sessionUri,
             bytesCommitted = offset
         )
+    }
+
+    private fun uploadChunk(context: UploadRequestContext, offset: Long): UploadChunkOutcome {
+        val endExclusive = minOf(offset + UPLOAD_CHUNK_BYTES, context.file.length())
+        val request = Request.Builder()
+            .url(context.sessionUri)
+            .header("Authorization", context.authorization)
+            .header("Content-Length", (endExclusive - offset).toString())
+            .header("Content-Range", "bytes $offset-${endExclusive - 1}/${context.file.length()}")
+            .put(FileSliceRequestBody(context.file, offset, endExclusive - offset, context.mimeType))
+            .build()
+        return httpClient.newCall(request).execute().use { response ->
+            when {
+                response.code == HTTP_RESUME_INCOMPLETE -> UploadChunkOutcome.Continue(
+                    parseCommittedOffset(
+                        response.header("Content-Range") ?: response.header("Range"),
+                        offset,
+                        endExclusive
+                    )
+                )
+                response.isSuccessful -> {
+                    val remoteId = extractFileIdFromJson(response.body?.string().orEmpty())
+                    if (remoteId == null) {
+                        UploadChunkOutcome.Error(
+                            CloudSyncResult.Error(
+                                "Failed to parse remote file ID from response",
+                                false,
+                                resumableSessionUri = context.sessionUri,
+                                bytesCommitted = endExclusive
+                            )
+                        )
+                    } else {
+                        UploadChunkOutcome.Completed(remoteId)
+                    }
+                }
+                else -> UploadChunkOutcome.Error(
+                    classifyHttpError("File upload failed", response.code, context.sessionUri, offset)
+                )
+            }
+        }
+    }
+
+    private data class UploadRequestContext(
+        val authorization: String,
+        val file: File,
+        val sessionUri: String,
+        val mimeType: MediaType?,
+        val onProgress: suspend (CloudTransferProgress) -> Unit
+    )
+
+    private sealed class UploadChunkOutcome {
+        data class Continue(val nextOffset: Long) : UploadChunkOutcome()
+        data class Completed(val remoteFileId: String) : UploadChunkOutcome()
+        data class Error(val error: CloudSyncResult.Error) : UploadChunkOutcome()
     }
 
     @Suppress("NestedBlockDepth", "ReturnCount")
