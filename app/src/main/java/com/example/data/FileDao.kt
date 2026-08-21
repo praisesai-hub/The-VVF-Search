@@ -83,32 +83,7 @@ interface FileDao {
             if (existing == null) {
                 insertFileDirect(file)
             } else {
-                val updated = existing.copy(
-                    name = file.name,
-                    category = file.category,
-                    sizeBytes = file.sizeBytes,
-                    dateModifiedMs = file.dateModifiedMs,
-                    md5Hash = if (file.md5Hash.isNotBlank()) file.md5Hash else existing.md5Hash,
-                    ocrText = if (file.ocrText.isNotBlank()) file.ocrText else existing.ocrText,
-                    tags = if (file.tags.isNotBlank()) file.tags else existing.tags,
-                    originalPath = if (file.originalPath.isNotBlank()) file.originalPath else existing.originalPath,
-                    visualSimilarityHash = if (file.visualSimilarityHash.isNotBlank()) file.visualSimilarityHash else existing.visualSimilarityHash,
-                    semanticEmbeddingVersion = if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
-                    semanticIndexed = file.semanticIndexed || existing.semanticIndexed,
-                    semanticEmbeddingString = if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
-                    videoFingerprintVersion = if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
-                    videoSampleHashes = if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
-                    videoDurationMs = if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
-                    videoWidth = if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
-                    videoHeight = if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
-                    videoAudioSignature = if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
-                    videoChunkHash = if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
-                    documentCandidateFingerprint = if (file.documentCandidateFingerprint.isNotBlank()) file.documentCandidateFingerprint else existing.documentCandidateFingerprint,
-                    isVault = existing.isVault,
-                    isRecycleBin = existing.isRecycleBin,
-                    deletedTimestampMs = existing.deletedTimestampMs
-                )
-                updateFile(updated)
+                updateFile(existing.mergeRescanMetadata(file))
             }
         }
     }
@@ -119,32 +94,7 @@ interface FileDao {
         return if (existing == null) {
             insertFileDirect(file)
         } else {
-            val updated = existing.copy(
-                name = file.name,
-                category = file.category,
-                sizeBytes = file.sizeBytes,
-                dateModifiedMs = file.dateModifiedMs,
-                md5Hash = if (file.md5Hash.isNotBlank()) file.md5Hash else existing.md5Hash,
-                ocrText = if (file.ocrText.isNotBlank()) file.ocrText else existing.ocrText,
-                tags = if (file.tags.isNotBlank()) file.tags else existing.tags,
-                originalPath = if (file.originalPath.isNotBlank()) file.originalPath else existing.originalPath,
-                visualSimilarityHash = if (file.visualSimilarityHash.isNotBlank()) file.visualSimilarityHash else existing.visualSimilarityHash,
-                semanticEmbeddingVersion = if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
-                semanticIndexed = file.semanticIndexed || existing.semanticIndexed,
-                semanticEmbeddingString = if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
-                videoFingerprintVersion = if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
-                videoSampleHashes = if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
-                videoDurationMs = if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
-                videoWidth = if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
-                videoHeight = if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
-                videoAudioSignature = if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
-                videoChunkHash = if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
-                documentCandidateFingerprint = if (file.documentCandidateFingerprint.isNotBlank()) file.documentCandidateFingerprint else existing.documentCandidateFingerprint,
-                isVault = existing.isVault,
-                isRecycleBin = existing.isRecycleBin,
-                deletedTimestampMs = existing.deletedTimestampMs
-            )
-            updateFile(updated)
+            updateFile(existing.mergeRescanMetadata(file))
             existing.id
         }
     }
@@ -213,3 +163,29 @@ interface FileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlugins(plugins: List<PluginEntity>)
 }
+
+private fun FileItemEntity.mergeRescanMetadata(scanned: FileItemEntity): FileItemEntity = copy(
+    name = scanned.name,
+    category = scanned.category,
+    sizeBytes = scanned.sizeBytes,
+    dateModifiedMs = scanned.dateModifiedMs,
+    md5Hash = scanned.md5Hash.ifBlank { md5Hash },
+    ocrText = scanned.ocrText.ifBlank { ocrText },
+    tags = scanned.tags.ifBlank { tags },
+    originalPath = scanned.originalPath.ifBlank { originalPath },
+    visualSimilarityHash = scanned.visualSimilarityHash.ifBlank { visualSimilarityHash },
+    semanticEmbeddingVersion = scanned.semanticEmbeddingVersion.takeIf { it > 0 } ?: semanticEmbeddingVersion,
+    semanticIndexed = scanned.semanticIndexed || semanticIndexed,
+    semanticEmbeddingString = scanned.semanticEmbeddingString.ifBlank { semanticEmbeddingString },
+    videoFingerprintVersion = scanned.videoFingerprintVersion.takeIf { it > 0 } ?: videoFingerprintVersion,
+    videoSampleHashes = scanned.videoSampleHashes.ifBlank { videoSampleHashes },
+    videoDurationMs = scanned.videoDurationMs.takeIf { it > 0 } ?: videoDurationMs,
+    videoWidth = scanned.videoWidth.takeIf { it > 0 } ?: videoWidth,
+    videoHeight = scanned.videoHeight.takeIf { it > 0 } ?: videoHeight,
+    videoAudioSignature = scanned.videoAudioSignature.ifBlank { videoAudioSignature },
+    videoChunkHash = scanned.videoChunkHash.ifBlank { videoChunkHash },
+    documentCandidateFingerprint = scanned.documentCandidateFingerprint.ifBlank { documentCandidateFingerprint },
+    isVault = isVault,
+    isRecycleBin = isRecycleBin,
+    deletedTimestampMs = deletedTimestampMs
+)
