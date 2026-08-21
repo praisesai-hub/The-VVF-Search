@@ -38,6 +38,7 @@ GitHub run `32421178517` (Android CI/CD #355) remained in progress at the time o
 | `32442620986` | `befe6d8` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.93%, security 80.22%, data 70.60%, vault 90.62%, cloud 90.44% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 | `32443202510` | `809c9c4` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 51.54%, security 80.22%, data 72.26%, vault 90.62%, cloud 90.49% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 | `32444584455` | `550a689` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 51.58%, security 80.73%, data 73.14%, vault 91.08%, cloud 90.49% (cloud floor passed); Detekt 116 weighted issues. | Skipped by the successful-build dependency; no emulator was provisioned. |
+| `32445177140` | `39a22e6` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 52.34%, security 80.90%, data 75.21%, vault 91.08%, cloud 90.49% (cloud floor passed); Detekt 116 weighted issues. | Skipped by the successful-build dependency; no emulator was provisioned. |
 
 The `Run Instrumented Android Tests` job now declares a successful `Build & Test Android App` dependency. This changes the prior failure mode: a JVM coverage failure prevents emulator allocation rather than requiring a later cancellation. The earlier cancellation used the workflow-run operation because GitHub documents cancellation at run scope rather than as a per-job REST operation.[1]
 
@@ -58,6 +59,8 @@ Run `32442620986` included duplicate-cleanup and physical-storage source refacto
 Run `32443202510` produced the largest data-layer gain so far: repository/data coverage rose from **70.60%** to **72.26%**, aggregate coverage rose to **51.54%**, and SmartManagerRepository moved from 36.75% to 43.40%. The physical recycle-move test exercised 137 additional SmartManagerRepository instructions, while CloudSyncEngine coverage reached 96.22%. Security and Vault were unchanged, all non-cloud JVM floors remain failed, and the branch remains ineligible for merge.
 
 Run `32444584455` independently verified the locally focused FileDao/StorageScanner refactors plus the SecureKeyValueStore and VaultManagerEngine coverage batch. It raised aggregate coverage to **51.58%**, Security to **80.73%**, data to **73.14%**, and Vault to **91.08%**; Cloud remained passing at **90.49%**. Detekt fell to **116 weighted issues**. The later commits containing recycle restore/permanent-delete/retry coverage and the secure-store atomic-replacement regression were not part of this run, so its evidence is not attributed to those changes. All non-cloud JVM floors remain failed and `main` remains untouched.
+
+Run `32445177140` independently verified the recycle restore/permanent-delete/retry tests and secure-store atomic-replacement regression on head `39a22e6`. Aggregate coverage rose to **52.34%**, Security to **80.90%**, and repository/data to **75.21%**; Vault stayed at **91.08%**, and Cloud remained passing at **90.49%**. Detekt remained **116 weighted issues** because the FileOperationStore typed-update refactor was committed after this run began. All non-cloud JVM floors remain failed, instrumented tests remain correctly gated, and `main` remains untouched.
 
 ## References
 
