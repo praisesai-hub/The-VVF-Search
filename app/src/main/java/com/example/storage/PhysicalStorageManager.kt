@@ -134,34 +134,38 @@ object PhysicalStorageManager {
         if (sanitizedName.isBlank() || sanitizedName != newName) {
             return Result.failure(IllegalArgumentException("Invalid file name. Path traversal or directory changes are not allowed."))
         }
-        if (oldPath.startsWith("content://")) {
-            return try {
-                val uri = oldPath.toUri()
-                val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
-                val renamedByDocument = try { doc?.exists() == true && doc.renameTo(newName) } catch (e: Exception) {
-                    Log.w(TAG, "SAF DocumentFile rename failed for $oldPath: ${e.message}")
-                    false
-                }
-                if (renamedByDocument) {
-                    Result.success(uri.toString())
-                } else {
-                    val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, newName) }
-                    if (context.contentResolver.update(uri, values, null, null) > 0) {
-                        Result.success(uri.toString())
-                    } else if (doc == null || !doc.exists()) {
-                        sanitizedFailure(
-                            "PHYSICAL_STORAGE_RENAME",
-                            java.io.FileNotFoundException("document unavailable")
-                        )
-                    } else {
-                        sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.IOException("rename failed"))
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error renaming content URI $oldPath: ${e.message}", e)
-                sanitizedFailure("PHYSICAL_STORAGE", e)
+        if (oldPath.startsWith("content://")) return renameContentUri(context, oldPath, newName)
+        return renameLocalFile(context, oldPath, newName)
+    }
+
+    private fun renameContentUri(context: Context, oldPath: String, newName: String): Result<String> = try {
+        val uri = oldPath.toUri()
+        val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
+        val renamedByDocument = try {
+            doc?.exists() == true && doc.renameTo(newName)
+        } catch (e: Exception) {
+            Log.w(TAG, "SAF DocumentFile rename failed for $oldPath: ${e.message}")
+            false
+        }
+        if (renamedByDocument) {
+            Result.success(uri.toString())
+        } else {
+            val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, newName) }
+            when {
+                context.contentResolver.update(uri, values, null, null) > 0 -> Result.success(uri.toString())
+                doc == null || !doc.exists() -> sanitizedFailure(
+                    "PHYSICAL_STORAGE_RENAME",
+                    java.io.FileNotFoundException("document unavailable")
+                )
+                else -> sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.IOException("rename failed"))
             }
         }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error renaming content URI $oldPath: ${e.message}", e)
+        sanitizedFailure("PHYSICAL_STORAGE", e)
+    }
+
+    private fun renameLocalFile(context: Context, oldPath: String, newName: String): Result<String> {
         return try {
             val oldFile = File(oldPath)
             val parentDir = oldFile.parentFile
