@@ -401,6 +401,15 @@ object PhysicalStorageManager {
                 sanitizedFailure("PHYSICAL_STORAGE", e)
             }
         }
+        return decryptAndRestoreLocal(context, vaultFilePath, originalPath, decryptAction)
+    }
+
+    private fun decryptAndRestoreLocal(
+        context: Context,
+        vaultFilePath: String,
+        originalPath: String,
+        decryptAction: (ByteArray) -> ByteArray
+    ): Result<String> {
         return try {
             val vaultFile = File(vaultFilePath)
             if (!vaultFile.exists()) {
