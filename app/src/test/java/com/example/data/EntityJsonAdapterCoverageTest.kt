@@ -174,7 +174,7 @@ class EntityJsonAdapterCoverageTest {
     @Test
     fun generatedVaultAdapter_rejectsNullForEveryNonNullableVaultField() {
         val adapter = directVaultAdapter()
-        val validJson = fullVaultJson()
+        val validJson = FULL_VAULT_JSON
         val nullPayloads = listOf(
             validJson.replace("\"originalName\":\"source.txt\"", "\"originalName\":null"),
             validJson.replace("\"encryptedName\":\"source.vvf\"", "\"encryptedName\":null"),
@@ -244,7 +244,7 @@ class EntityJsonAdapterCoverageTest {
     @Test
     fun generatedCloudAdapter_rejectsNullForEveryNonNullableCloudField() {
         val adapter = moshi.adapter(CloudSyncItemEntity::class.java)
-        val validJson = fullCloudJson()
+        val validJson = FULL_CLOUD_JSON
         val nullPayloads = listOf(
             validJson.replace("\"provider\":\"GOOGLE_DRIVE\"", "\"provider\":null"),
             validJson.replace("\"fileName\":\"source.txt\"", "\"fileName\":null"),
@@ -314,38 +314,40 @@ class EntityJsonAdapterCoverageTest {
         return adapter as JsonAdapter<CloudSyncItemEntity>
     }
 
-    private fun fullVaultJson(): String = """{
-        "id":1,
-        "originalName":"source.txt",
-        "encryptedName":"source.vvf",
-        "encryptedFilePath":"/vault/source.vvf",
-        "ivBase64":"iv",
-        "category":"DOCUMENTS",
-        "sizeBytes":1,
-        "encryptedAtMs":2,
-        "isBiometricProtected":true,
-        "vaultFormatVersion":3
-    }"""
+    private companion object {
+        const val FULL_VAULT_JSON = """{
+            "id":1,
+            "originalName":"source.txt",
+            "encryptedName":"source.vvf",
+            "encryptedFilePath":"/vault/source.vvf",
+            "ivBase64":"iv",
+            "category":"DOCUMENTS",
+            "sizeBytes":1,
+            "encryptedAtMs":2,
+            "isBiometricProtected":true,
+            "vaultFormatVersion":3
+        }"""
 
-    private fun fullCloudJson(): String = """{
-        "id":1,
-        "provider":"GOOGLE_DRIVE",
-        "fileName":"source.txt",
-        "filePath":"/source.txt",
-        "fileSize":1,
-        "status":"QUEUED",
-        "lastSyncedMs":2,
-        "isCore":false,
-        "operationId":"operation-1",
-        "leaseOwner":"worker-1",
-        "leaseExpiresAtMs":3,
-        "attemptCount":4,
-        "startedAtMs":5,
-        "heartbeatAtMs":6,
-        "completedAtMs":7,
-        "lastErrorCode":"none",
-        "remoteFileId":"remote-1",
-        "resumableSessionUri":"session-1",
-        "resumableBytesCommitted":8
-    }"""
+        const val FULL_CLOUD_JSON = """{
+            "id":1,
+            "provider":"GOOGLE_DRIVE",
+            "fileName":"source.txt",
+            "filePath":"/source.txt",
+            "fileSize":1,
+            "status":"QUEUED",
+            "lastSyncedMs":2,
+            "isCore":false,
+            "operationId":"operation-1",
+            "leaseOwner":"worker-1",
+            "leaseExpiresAtMs":3,
+            "attemptCount":4,
+            "startedAtMs":5,
+            "heartbeatAtMs":6,
+            "completedAtMs":7,
+            "lastErrorCode":"none",
+            "remoteFileId":"remote-1",
+            "resumableSessionUri":"session-1",
+            "resumableBytesCommitted":8
+        }"""
+    }
 }
