@@ -108,41 +108,42 @@ class VaultManagerEngine(
         val now = nowMs()
         val currentState = getVaultLockoutState()
         if (currentState.lockedUntilMs > now || !isValidVaultPin(newPin)) return false
-        if (!verifyVaultPin(oldPin)) {
+        return if (!verifyVaultPin(oldPin)) {
             recordFailedAuthentication(currentState.failedAttempts, now)
-            return false
-        }
-        val currentDek = try {
-            if (hasPinEnvelope(vaultStore)) {
-                unwrapPinDek(vaultStore, oldPin)
-            } else {
-                migrateLegacyPinToEnvelope(vaultStore, keystoreVaultManager, oldPin)
+            false
+        } else {
+            val currentDek = try {
+                if (hasPinEnvelope(vaultStore)) {
+                    unwrapPinDek(vaultStore, oldPin)
+                } else {
+                    migrateLegacyPinToEnvelope(vaultStore, keystoreVaultManager, oldPin)
+                }
+            } catch (_: IllegalArgumentException) {
+                null
+            } catch (_: java.security.GeneralSecurityException) {
+                null
+            } catch (_: IllegalStateException) {
+                null
             }
-        } catch (_: IllegalArgumentException) {
-            null
-        } catch (_: java.security.GeneralSecurityException) {
-            null
-        } catch (_: IllegalStateException) {
-            null
-        }
-        return currentDek?.let { dek ->
-            try {
-                val pinWrap = VaultKeyEnvelope.wrapWithPin(dek, newPin)
-                vaultStore.commit(
-                    mapOf(
-                        VAULT_PIN_HASH_KEY to keystoreVaultManager.hashPin(newPin),
-                        PIN_WRAP_SALT_KEY to encode(pinWrap.salt),
-                        PIN_WRAP_IV_KEY to encode(pinWrap.iv),
-                        PIN_WRAP_CIPHERTEXT_KEY to encode(pinWrap.ciphertext),
-                        ENVELOPE_VERSION_KEY to VaultKeyEnvelope.VERSION.toString(),
-                        FAILED_ATTEMPTS_KEY to "0",
-                        LOCKED_UNTIL_MS_KEY to "0"
+            currentDek?.let { dek ->
+                try {
+                    val pinWrap = VaultKeyEnvelope.wrapWithPin(dek, newPin)
+                    vaultStore.commit(
+                        mapOf(
+                            VAULT_PIN_HASH_KEY to keystoreVaultManager.hashPin(newPin),
+                            PIN_WRAP_SALT_KEY to encode(pinWrap.salt),
+                            PIN_WRAP_IV_KEY to encode(pinWrap.iv),
+                            PIN_WRAP_CIPHERTEXT_KEY to encode(pinWrap.ciphertext),
+                            ENVELOPE_VERSION_KEY to VaultKeyEnvelope.VERSION.toString(),
+                            FAILED_ATTEMPTS_KEY to "0",
+                            LOCKED_UNTIL_MS_KEY to "0"
+                        )
                     )
-                )
-            } finally {
-                dek.fill(0)
-            }
-        } ?: false
+                } finally {
+                    dek.fill(0)
+                }
+            } ?: false
+        }
     }
 
     val hasBiometricEnrollment: Boolean
