@@ -274,6 +274,36 @@ class SecureKeyValueStoreTest {
     }
 
     @Test
+    fun `impossible secure storage directory fails closed during construction`() {
+        val regularFileParent = File(directory, "not-a-directory").apply { writeText("fixture") }
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            SecureKeyValueStore(
+                context = context,
+                fileName = "unwritable.secure",
+                keyAlias = "unused",
+                directory = File(regularFileParent, "nested"),
+                crypto = crypto
+            )
+        }
+
+        assertEquals("Unable to create secure storage directory", error.message)
+    }
+
+    @Test
+    fun `overlong decrypted entry fails closed instead of being returned`() {
+        val store = store()
+        writeEncryptedEnvelope(
+            plaintextBytes(magic = PLAINTEXT_MAGIC, version = 1, count = 1) {
+                writeUTF("key")
+                writeUTF("x".repeat(16_385))
+            }
+        )
+
+        assertThrows(IllegalStateException::class.java) { store.getString("key") }
+    }
+
+    @Test
     fun `contains store file reflects durable state and oversized values are rejected`() {
         val store = store()
 
