@@ -13,6 +13,7 @@ import com.example.R
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.AuthResult
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import io.mockk.Runs
 import io.mockk.coEvery

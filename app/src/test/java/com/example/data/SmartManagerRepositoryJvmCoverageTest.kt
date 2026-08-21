@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabaseLockedException
 import android.graphics.Bitmap
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.example.storage.PhysicalStorageManager
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -217,108 +218,32 @@ class SmartManagerRepositoryJvmCoverageTest {
         val operationStore = database.fileOperationStore()
         val repository = repository { false }
 
-        val moveSource = File(context.cacheDir, "recover-move-${System.nanoTime()}.txt").apply {
-            writeText("move recovery fixture")
-        }
-        val moveId = dao.insertFile(
-            FileItemEntity(
-                name = moveSource.name,
-                path = moveSource.absolutePath,
-                category = FileCategory.DOCUMENTS.name,
-                sizeBytes = moveSource.length()
-            )
-        )
-        val moveTarget = PhysicalStorageManager.trashPathForOperation(
-            context,
-            moveSource.absolutePath,
-            "recovery-move-$moveId"
-        )
-        operationStore.insert(
-            FileOperationEntity(
-                operationId = "recovery-move-$moveId",
-                operationType = "MOVE_TO_TRASH",
-                fileId = moveId,
-                sourcePath = moveSource.absolutePath,
-                targetPath = moveTarget,
-                status = FileOperationStatus.PREPARED,
-                createdAtMs = 1L,
-                updatedAtMs = 1L
-            )
-        )
-
-        val restoreSource = File(context.cacheDir, "recover-restore-trash-${System.nanoTime()}.txt").apply {
-            writeText("restore recovery fixture")
-        }
-        val restoreTarget = File(context.cacheDir, "recover-restore-target-${System.nanoTime()}.txt")
-        val restoreId = dao.insertFile(
-            FileItemEntity(
-                name = restoreSource.name,
-                path = restoreSource.absolutePath,
-                originalPath = restoreTarget.absolutePath,
-                category = FileCategory.DOCUMENTS.name,
-                sizeBytes = restoreSource.length(),
-                isRecycleBin = true
-            )
-        )
-        operationStore.insert(
-            FileOperationEntity(
-                operationId = "recovery-restore-$restoreId",
-                operationType = "RESTORE",
-                fileId = restoreId,
-                sourcePath = restoreSource.absolutePath,
-                targetPath = restoreTarget.absolutePath,
-                status = FileOperationStatus.PREPARED,
-                createdAtMs = 2L,
-                updatedAtMs = 2L
-            )
-        )
-
-        val deleteSource = File(context.cacheDir, "recover-delete-${System.nanoTime()}.txt").apply {
-            writeText("delete recovery fixture")
-        }
-        val deleteId = dao.insertFile(
-            FileItemEntity(
-                name = deleteSource.name,
-                path = deleteSource.absolutePath,
-                category = FileCategory.DOCUMENTS.name,
-                sizeBytes = deleteSource.length()
-            )
-        )
-        operationStore.insert(
-            FileOperationEntity(
-                operationId = "recovery-delete-$deleteId",
-                operationType = "DELETE",
-                fileId = deleteId,
-                sourcePath = deleteSource.absolutePath,
-                targetPath = "",
-                status = FileOperationStatus.PREPARED,
-                createdAtMs = 3L,
-                updatedAtMs = 3L
-            )
-        )
+        val move = seedPreparedMoveRecovery(operationStore)
+        val restore = seedPreparedRestoreRecovery(operationStore)
+        val delete = seedPreparedDeleteRecovery(operationStore)
 
         repository.recoverPendingFileOperations()
 
-        val moved = dao.getFileById(moveId) ?: error("recovered move row missing")
+        val moved = dao.getFileById(move.fileId) ?: error("recovered move row missing")
         assertTrue(moved.isRecycleBin)
-        assertEquals(moveSource.absolutePath, moved.originalPath)
-        assertEquals(moveTarget, moved.path)
-        assertFalse(moveSource.exists())
-        assertTrue(File(moveTarget).exists())
+        assertEquals(move.source.absolutePath, moved.originalPath)
+        assertEquals(move.target.absolutePath, moved.path)
+        assertFalse(move.source.exists())
+        assertTrue(move.target.exists())
 
-        val restored = dao.getFileById(restoreId) ?: error("recovered restore row missing")
+        val restored = dao.getFileById(restore.fileId) ?: error("recovered restore row missing")
         assertFalse(restored.isRecycleBin)
-        assertEquals(restoreTarget.absolutePath, restored.path)
+        assertEquals(restore.target.absolutePath, restored.path)
         assertEquals("", restored.originalPath)
-        assertFalse(restoreSource.exists())
-        assertTrue(restoreTarget.exists())
+        assertFalse(restore.source.exists())
+        assertTrue(restore.target.exists())
 
-        assertFalse(deleteSource.exists())
-        assertNull(dao.getFileById(deleteId))
+        assertFalse(delete.source.exists())
+        assertNull(dao.getFileById(delete.fileId))
         assertTrue(operationStore.getOpenOperations().isEmpty())
 
-        assertTrue(File(moveTarget).delete())
-        assertTrue(restoreTarget.delete())
+        assertTrue(move.target.delete())
+        assertTrue(restore.target.delete())
     }
 
     @Test
@@ -478,6 +403,89 @@ class SmartManagerRepositoryJvmCoverageTest {
         assertEquals(1, invalidInputAttempts)
         assertEquals(1, cancellationAttempts)
     }
+
+    private suspend fun seedPreparedMoveRecovery(
+        operationStore: FileOperationStore
+    ): PendingRecoveryFixture {
+        val source = File(context.cacheDir, "recover-move-${System.nanoTime()}.txt").apply {
+            writeText("move recovery fixture")
+        }
+        val fileId = dao.insertFile(fileEntity(source))
+        val target = File(
+            PhysicalStorageManager.trashPathForOperation(context, source.absolutePath, "recovery-move-$fileId")
+        )
+        operationStore.insert(
+            FileOperationEntity(
+                operationId = "recovery-move-$fileId",
+                operationType = "MOVE_TO_TRASH",
+                fileId = fileId,
+                sourcePath = source.absolutePath,
+                targetPath = target.absolutePath,
+                status = FileOperationStatus.PREPARED,
+                createdAtMs = 1L,
+                updatedAtMs = 1L
+            )
+        )
+        return PendingRecoveryFixture(fileId, source, target)
+    }
+
+    private suspend fun seedPreparedRestoreRecovery(
+        operationStore: FileOperationStore
+    ): PendingRecoveryFixture {
+        val source = File(context.cacheDir, "recover-restore-trash-${System.nanoTime()}.txt").apply {
+            writeText("restore recovery fixture")
+        }
+        val target = File(context.cacheDir, "recover-restore-target-${System.nanoTime()}.txt")
+        val fileId = dao.insertFile(fileEntity(source).copy(originalPath = target.absolutePath, isRecycleBin = true))
+        operationStore.insert(
+            FileOperationEntity(
+                operationId = "recovery-restore-$fileId",
+                operationType = "RESTORE",
+                fileId = fileId,
+                sourcePath = source.absolutePath,
+                targetPath = target.absolutePath,
+                status = FileOperationStatus.PREPARED,
+                createdAtMs = 2L,
+                updatedAtMs = 2L
+            )
+        )
+        return PendingRecoveryFixture(fileId, source, target)
+    }
+
+    private suspend fun seedPreparedDeleteRecovery(
+        operationStore: FileOperationStore
+    ): PendingRecoveryFixture {
+        val source = File(context.cacheDir, "recover-delete-${System.nanoTime()}.txt").apply {
+            writeText("delete recovery fixture")
+        }
+        val fileId = dao.insertFile(fileEntity(source))
+        operationStore.insert(
+            FileOperationEntity(
+                operationId = "recovery-delete-$fileId",
+                operationType = "DELETE",
+                fileId = fileId,
+                sourcePath = source.absolutePath,
+                targetPath = "",
+                status = FileOperationStatus.PREPARED,
+                createdAtMs = 3L,
+                updatedAtMs = 3L
+            )
+        )
+        return PendingRecoveryFixture(fileId, source, File(context.cacheDir, "unused-$fileId"))
+    }
+
+    private fun fileEntity(source: File) = FileItemEntity(
+        name = source.name,
+        path = source.absolutePath,
+        category = FileCategory.DOCUMENTS.name,
+        sizeBytes = source.length()
+    )
+
+    private data class PendingRecoveryFixture(
+        val fileId: Long,
+        val source: File,
+        val target: File
+    )
 
     private fun repository(transferAllowed: (Context) -> Boolean) = SmartManagerRepository(
         context = context,
