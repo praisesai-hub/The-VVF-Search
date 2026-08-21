@@ -495,14 +495,24 @@ private fun localizedFileCategory(category: FileCategory): String = when (catego
 }
 
 private fun formatFileSize(bytes: Long, unknownLabel: String): String {
-    if (bytes <= 0L) return unknownLabel
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format(Locale.getDefault(), "%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format(Locale.getDefault(), "%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format(Locale.getDefault(), "%.2f GB", gb)
+    return when {
+        bytes <= 0L -> unknownLabel
+        bytes < 1024 -> "$bytes B"
+        else -> {
+            val kilobytes = bytes / 1024.0
+            when {
+                kilobytes < 1024 -> String.format(Locale.getDefault(), "%.1f KB", kilobytes)
+                else -> {
+                    val megabytes = kilobytes / 1024.0
+                    if (megabytes < 1024) {
+                        String.format(Locale.getDefault(), "%.1f MB", megabytes)
+                    } else {
+                        String.format(Locale.getDefault(), "%.2f GB", megabytes / 1024.0)
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun getAvailableDeviceLocalFiles(context: android.content.Context): List<PickableLocalFile> {

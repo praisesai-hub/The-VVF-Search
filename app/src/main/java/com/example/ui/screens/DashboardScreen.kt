@@ -626,11 +626,20 @@ fun DashboardFileCard(
     }
 }
 fun formatFileSize(bytes: Long, unknownLabel: String): String {
-    if (bytes <= 0L) return unknownLabel
-    if (bytes < 1024) return "$bytes B"
-    val exp = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt()
-    val pre = "KMGTPE"[exp - 1]
-    return String.format(Locale.getDefault(), "%.1f %cB", bytes / Math.pow(1024.0, exp.toDouble()), pre)
+    return when {
+        bytes <= 0L -> unknownLabel
+        bytes < 1024 -> "$bytes B"
+        else -> {
+            val exponent = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt()
+            val prefix = "KMGTPE"[exponent - 1]
+            String.format(
+                Locale.getDefault(),
+                "%.1f %cB",
+                bytes / Math.pow(1024.0, exponent.toDouble()),
+                prefix
+            )
+        }
+    }
 }
 fun formatDate(ms: Long): String {
     val formatter = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())

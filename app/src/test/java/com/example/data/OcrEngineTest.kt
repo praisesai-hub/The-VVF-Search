@@ -464,7 +464,7 @@ class OcrEngineTest {
         try {
             repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 2, initialDelayMs = 0) {
                 attempts++
-                throw IllegalStateException("permanent")
+                error("permanent")
             }
             throw AssertionError("withRetry should rethrow the final failure")
         } catch (exception: IllegalStateException) {
