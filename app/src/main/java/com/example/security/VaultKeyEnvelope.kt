@@ -42,7 +42,11 @@ object VaultKeyEnvelope {
     }
 
     private fun derivePinKey(pin: String, salt: ByteArray): SecretKeySpec {
-        require(pin.length in MIN_PIN_LENGTH..MAX_PIN_LENGTH && pin.none(Char::isWhitespace) && pin.any(Char::isDigit)) {
+        require(
+            pin.length in MIN_PIN_LENGTH..MAX_PIN_LENGTH &&
+                pin.none(Char::isWhitespace) &&
+                pin.any(Char::isDigit)
+        ) {
             "Vault credential must be 8 to 128 non-whitespace characters and contain a digit"
         }
         require(salt.size == SALT_BYTES) { "Invalid PIN-wrap salt" }
