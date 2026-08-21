@@ -28,6 +28,7 @@ const val MAX_VAULT_PIN_LENGTH = 128
 const val MAX_VAULT_FAILED_ATTEMPTS = 5
 const val VAULT_BASE_LOCKOUT_MS = 30_000L
 const val VAULT_MAX_LOCKOUT_MS = 24 * 60 * 60 * 1000L
+private const val MAX_VAULT_LOCKOUT_EXPONENT = 16
 
 class VaultAuthenticationLockedOutException(
     val lockedUntilMs: Long
@@ -208,7 +209,8 @@ class VaultManagerEngine(
 
     private fun recordFailedAuthentication(previousAttempts: Int, now: Long) {
         val nextAttempts = previousAttempts.coerceAtLeast(0) + 1
-        val lockoutExponent = ((nextAttempts - 1) / MAX_VAULT_FAILED_ATTEMPTS).coerceAtMost(16)
+        val lockoutExponent = ((nextAttempts - 1) / MAX_VAULT_FAILED_ATTEMPTS)
+            .coerceAtMost(MAX_VAULT_LOCKOUT_EXPONENT)
         val duration = (VAULT_BASE_LOCKOUT_MS * (1L shl lockoutExponent))
             .coerceAtMost(VAULT_MAX_LOCKOUT_MS)
         val lockedUntil = if (nextAttempts >= MAX_VAULT_FAILED_ATTEMPTS) now + duration else 0L
