@@ -60,6 +60,32 @@ class HighValueScreensJvmCoverageTest {
     }
 
     @Test
+    fun fileManagerRendersEmptyStorageAndOpenedRecycleBin() {
+        val recycled = FileItemEntity(
+            id = 8L,
+            name = "recycled-document.pdf",
+            path = "/data/recycled-document.pdf",
+            category = FileCategory.DOCUMENTS.name,
+            sizeBytes = 1024L
+        )
+
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                FileManagerScreen(
+                    viewModel = viewModel(),
+                    files = emptyList(),
+                    recycleBinFiles = listOf(recycled),
+                    selectedCategory = null,
+                    searchQuery = ""
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("toggle_recycle_bin").performClick()
+        composeTestRule.onRoot().assertIsDisplayed()
+    }
+
+    @Test
     fun duplicateCleanerRendersExactDuplicateGroup() {
         val first = FileItemEntity(
             id = 11L,

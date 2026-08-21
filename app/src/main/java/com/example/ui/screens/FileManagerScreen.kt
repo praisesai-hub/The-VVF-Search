@@ -222,7 +222,8 @@ fun FileManagerScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { showRecycleBin = !showRecycleBin },
+                .clickable { showRecycleBin = !showRecycleBin }
+                .testTag("toggle_recycle_bin"),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
