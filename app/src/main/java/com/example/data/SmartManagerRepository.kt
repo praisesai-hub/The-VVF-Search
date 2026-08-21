@@ -366,15 +366,29 @@ open class SmartManagerRepository(
                 PhysicalStorageManager.moveToTrash(context, operation.sourcePath, operationId)
             }
             if (trashResult.isFailure) {
-                fileOperationStore.transition(operationId, FILE_OPERATION_FAILED, operation.sourcePath, operation.targetPath, System.currentTimeMillis(), "PHYSICAL_MOVE_FAILED")
+                fileOperationStore.update(operation.copy(
+                    status = FILE_OPERATION_FAILED,
+                    updatedAtMs = System.currentTimeMillis(),
+                    lastErrorCode = "PHYSICAL_MOVE_FAILED"
+                ))
                 throw trashResult.exceptionOrNull() ?: java.io.IOException("Failed to move file to trash")
             }
             val newPath = trashResult.getOrThrow()
-            fileOperationStore.transition(operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, newPath, System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_PHYSICAL_COMPLETED,
+                targetPath = newPath,
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             val latest = dao.getFileById(currentFile.id) ?: return@withRetry
             val originalPathToKeep = if (latest.originalPath.isNotBlank()) latest.originalPath else operation.sourcePath
             dao.updateFile(latest.copy(path = newPath, originalPath = originalPathToKeep, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
-            fileOperationStore.transition(operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, newPath, System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_COMMITTED,
+                targetPath = newPath,
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             fileOperationStore.delete(operationId)
         }
     }
@@ -392,14 +406,28 @@ open class SmartManagerRepository(
                 PhysicalStorageManager.restoreFromTrash(context, operation.sourcePath, operation.targetPath)
             }
             if (restoreResult.isFailure) {
-                fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, operation.targetPath, System.currentTimeMillis(), "PHYSICAL_RESTORE_FAILED")
+                fileOperationStore.update(operation.copy(
+                    status = FILE_OPERATION_FAILED,
+                    updatedAtMs = System.currentTimeMillis(),
+                    lastErrorCode = "PHYSICAL_RESTORE_FAILED"
+                ))
                 throw restoreResult.exceptionOrNull() ?: java.io.IOException("Failed to restore file from trash")
             }
             val restoredPath = restoreResult.getOrThrow()
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, restoredPath, System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_PHYSICAL_COMPLETED,
+                targetPath = restoredPath,
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             val latest = dao.getFileById(currentFile.id) ?: return@withRetry
             dao.updateFile(latest.copy(path = restoredPath, originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, restoredPath, System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_COMMITTED,
+                targetPath = restoredPath,
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             fileOperationStore.delete(operation.operationId)
         }
     }
@@ -412,14 +440,29 @@ open class SmartManagerRepository(
             if (operation.status != FILE_OPERATION_PHYSICAL_COMPLETED) {
                 if (!PhysicalStorageManager.deleteFile(context, operation.sourcePath)) {
                     if (File(operation.sourcePath).exists()) {
-                        fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, "", System.currentTimeMillis(), "PHYSICAL_DELETE_FAILED")
+                        fileOperationStore.update(operation.copy(
+                            status = FILE_OPERATION_FAILED,
+                            targetPath = "",
+                            updatedAtMs = System.currentTimeMillis(),
+                            lastErrorCode = "PHYSICAL_DELETE_FAILED"
+                        ))
                         throw java.io.IOException("Failed to physically delete file")
                     }
                 }
-                fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
+                fileOperationStore.update(operation.copy(
+                    status = FILE_OPERATION_PHYSICAL_COMPLETED,
+                    targetPath = "",
+                    updatedAtMs = System.currentTimeMillis(),
+                    lastErrorCode = null
+                ))
             }
             dao.deleteFileById(currentFile.id)
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, "", System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_COMMITTED,
+                targetPath = "",
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             fileOperationStore.delete(operation.operationId)
         }
     }
@@ -458,7 +501,12 @@ open class SmartManagerRepository(
         }
         if (result.isSuccess) {
             val path = result.getOrThrow()
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, path, System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_PHYSICAL_COMPLETED,
+                targetPath = path,
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             dao.updateFile(current.copy(path = path, originalPath = operation.sourcePath, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
             fileOperationStore.delete(operation.operationId)
         }
@@ -480,7 +528,12 @@ open class SmartManagerRepository(
         }
         if (result.isSuccess) {
             val path = result.getOrThrow()
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, path, System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_PHYSICAL_COMPLETED,
+                targetPath = path,
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             dao.updateFile(current.copy(path = path, originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
             fileOperationStore.delete(operation.operationId)
         }
@@ -488,7 +541,12 @@ open class SmartManagerRepository(
 
     private suspend fun recoverDelete(operation: FileOperationEntity) {
         if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED || PhysicalStorageManager.deleteFile(context, operation.sourcePath) || !File(operation.sourcePath).exists()) {
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
+            fileOperationStore.update(operation.copy(
+                status = FILE_OPERATION_PHYSICAL_COMPLETED,
+                targetPath = "",
+                updatedAtMs = System.currentTimeMillis(),
+                lastErrorCode = null
+            ))
             dao.deleteFileById(operation.fileId)
             fileOperationStore.delete(operation.operationId)
         }

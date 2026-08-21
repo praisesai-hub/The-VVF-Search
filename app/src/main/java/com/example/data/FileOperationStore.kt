@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Update
 
 object FileOperationStatus {
     const val PREPARED = "PREPARED"
@@ -41,15 +42,8 @@ interface FileOperationStore {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(operation: FileOperationEntity)
 
-    @Query("UPDATE file_operations SET status = :status, sourcePath = :sourcePath, targetPath = :targetPath, updatedAtMs = :nowMs, lastErrorCode = :errorCode WHERE operationId = :operationId")
-    suspend fun transition(
-        operationId: String,
-        status: String,
-        sourcePath: String,
-        targetPath: String,
-        nowMs: Long,
-        errorCode: String?
-    ): Int
+    @Update
+    suspend fun update(operation: FileOperationEntity): Int
 
     @Query("DELETE FROM file_operations WHERE operationId = :operationId")
     suspend fun delete(operationId: String): Int

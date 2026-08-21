@@ -51,24 +51,29 @@ class FileOperationStoreJvmCoverageTest {
         assertEquals(prepared.operationId, store.findOpenOperation(1L, "MOVE")?.operationId)
         assertNull(store.findOpenOperation(3L, "MOVE"))
 
-        assertEquals(1, store.transition(
-            operationId = prepared.operationId,
-            status = FileOperationStatus.PHYSICAL_COMPLETED,
-            sourcePath = "/source/after",
-            targetPath = "/target/after",
-            nowMs = 40L,
-            errorCode = null
-        ))
+        assertEquals(
+            1,
+            store.update(
+                prepared.copy(
+                    status = FileOperationStatus.PHYSICAL_COMPLETED,
+                    targetPath = "/target/after",
+                    updatedAtMs = 40L,
+                    lastErrorCode = null
+                )
+            )
+        )
         assertEquals("/target/after", store.findOpenOperation(1L, "MOVE")?.targetPath)
 
-        assertEquals(1, store.transition(
-            operationId = completed.operationId,
-            status = FileOperationStatus.FAILED,
-            sourcePath = completed.sourcePath,
-            targetPath = completed.targetPath,
-            nowMs = 50L,
-            errorCode = "NO_SPACE"
-        ))
+        assertEquals(
+            1,
+            store.update(
+                completed.copy(
+                    status = FileOperationStatus.FAILED,
+                    updatedAtMs = 50L,
+                    lastErrorCode = "NO_SPACE"
+                )
+            )
+        )
         assertEquals(listOf(prepared.operationId), store.getOpenOperations().map { it.operationId })
 
         assertEquals(1, store.delete(prepared.operationId))
