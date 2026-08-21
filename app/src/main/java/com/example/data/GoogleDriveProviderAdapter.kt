@@ -276,20 +276,8 @@ class GoogleDriveProviderAdapter(
         return ids
     }
 
-    private fun determineMimeType(file: File): String = when (file.extension.lowercase()) {
-        "pdf" -> "application/pdf"
-        "png" -> "image/png"
-        "jpg", "jpeg" -> "image/jpeg"
-        "txt" -> "text/plain"
-        "json" -> "application/json"
-        else -> "application/octet-stream"
-    }
-
     private fun extractFileIdFromJson(json: String): String? =
         """"(?:id|fileId)"\s*:\s*"([^"]+)""".toRegex().find(json)?.groupValues?.get(FILE_ID_CAPTURE_GROUP)
-
-    private fun escapeDriveQueryValue(value: String): String =
-        value.replace("\\", "\\\\").replace("'", "\\'")
 
     private fun parseCommittedOffset(range: String?, currentOffset: Long, endExclusive: Long): Long {
         val end = range
@@ -393,3 +381,15 @@ class GoogleDriveProviderAdapter(
         private const val TRANSFER_COPY_BUFFER_BYTES = 64 * 1024
     }
 }
+
+private fun determineMimeType(file: File): String = when (file.extension.lowercase()) {
+    "pdf" -> "application/pdf"
+    "png" -> "image/png"
+    "jpg", "jpeg" -> "image/jpeg"
+    "txt" -> "text/plain"
+    "json" -> "application/json"
+    else -> "application/octet-stream"
+}
+
+private fun escapeDriveQueryValue(value: String): String =
+    value.replace("\\", "\\\\").replace("'", "\\'")
