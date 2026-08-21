@@ -585,30 +585,7 @@ fun DuplicateGroupCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = group.title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (group.level == 1) BhagwaOrange.copy(alpha = 0.2f) else SoftGold.copy(alpha = 0.2f)
-                ) {
-                    Text(
-                        text = stringResource(R.string.score_percent, group.similarityScore),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (group.level == 1) BhagwaOrange else SoftGold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
+            DuplicateGroupHeader(group)
             Spacer(modifier = Modifier.height(8.dp))
             if (!selectable) {
                 Text(
@@ -619,45 +596,84 @@ fun DuplicateGroupCard(
                 )
             }
             group.files.forEach { file ->
-                val isSelected = selectable && selectedIds.contains(file.id)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (selectable) Modifier.clickable { onToggleSelect(file.id) } else Modifier)
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (selectable) {
-                            Checkbox(
-                                checked = isSelected,
-                                onCheckedChange = { onToggleSelect(file.id) },
-                                colors = CheckboxDefaults.colors(checkedColor = BhagwaOrange)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Column {
-                            Text(text = file.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                text = stringResource(
-                                    R.string.format_file_size_category,
-                                    file.path,
-                                    formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size))
-                                ),
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
+                DuplicateFileRow(file, selectable, selectedIds.contains(file.id), onToggleSelect)
             }
         }
     }
 }
+
+@Composable
+private fun DuplicateGroupHeader(group: DuplicateGroup) {
+    val scoreColor = if (group.level == 1) BhagwaOrange else SoftGold
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = group.title,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = scoreColor.copy(alpha = 0.2f)
+        ) {
+            Text(
+                text = stringResource(R.string.score_percent, group.similarityScore),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = scoreColor,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DuplicateFileRow(
+    file: FileItemEntity,
+    selectable: Boolean,
+    isSelected: Boolean,
+    onToggleSelect: (Long) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (selectable) Modifier.clickable { onToggleSelect(file.id) } else Modifier)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (selectable) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggleSelect(file.id) },
+                    colors = CheckboxDefaults.colors(checkedColor = BhagwaOrange)
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Column {
+                Text(text = file.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = stringResource(
+                        R.string.format_file_size_category,
+                        file.path,
+                        formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size))
+                    ),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun OcrEngineSection(ocrScannedFiles: List<FileItemEntity>) {
     
