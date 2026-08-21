@@ -60,7 +60,7 @@ The effective-rules endpoint confirmed the same active rules. Classic branch pro
 
 ## Interpretation
 
-The pasted audit was correct that the historical `39d5635` Android failure was a real failing CI run, but it is not the latest repository state. Current evidence shows recent CodeQL and dependency-submission success, while Android CI has not yet been demonstrated green after the latest fixes. Branch protection remains absent. The appropriate release decision remains **NO-GO** because Android CI is not yet green and Room encryption and clean release evidence remain unresolved. The branch merge-gate finding is now **applied and API-verified** through repository ruleset `21172655`.
+The pasted audit was correct that the historical `39d5635` Android failure was a real failing CI run, but it is not the latest repository state. The classic branch-protection endpoint remains unavailable on this personal repository, but that is informational rather than an open merge-control failure because the active `main-release-gates` repository ruleset `21172655` is the effective mechanism, has no bypass actor, and was API-verified as enforced. The current PR #47 head `b2e2c9c` has CodeQL successful, while Android build/unit and instrumentation verification are not green. The appropriate release decision remains **NO-GO** because Android CI, Room encryption, and clean release evidence remain unresolved. Main merge protection is **CLOSED — VERIFIED VIA ACTIVE REPOSITORY RULESET**.
 
 ## Verification commands
 
