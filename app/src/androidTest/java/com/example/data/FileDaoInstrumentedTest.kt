@@ -57,6 +57,7 @@ class FileDaoInstrumentedTest {
         semanticVersion: Int = 0,
         semanticIndexed: Boolean = false,
         embedding: String = "",
+        videoSamples: String = "",
     ): FileItemEntity = FileItemEntity(
         name = name,
         path = path,
@@ -73,6 +74,7 @@ class FileDaoInstrumentedTest {
         semanticEmbeddingVersion = semanticVersion,
         semanticIndexed = semanticIndexed,
         semanticEmbeddingString = embedding,
+        videoSampleHashes = videoSamples,
     )
 
     @Test
@@ -245,7 +247,7 @@ class FileDaoInstrumentedTest {
             category = FileCategory.VIDEO.name,
             hash = "video-hash",
             visualHash = "video-visual",
-            videoSampleHashes = "0011223344556677;0011223344556677;0011223344556677",
+            videoSamples = "0011223344556677;0011223344556677;0011223344556677",
             semanticIndexed = true,
         )
         dao.insertFileDirect(keep)
