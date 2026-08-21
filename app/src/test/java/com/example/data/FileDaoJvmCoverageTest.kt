@@ -44,86 +44,83 @@ class FileDaoJvmCoverageTest {
 
     private fun file(
         name: String,
-        path: String = "/data/$name",
-        category: String = FileCategory.DOCUMENTS.name,
-        modified: Long = 100L,
-        hash: String = "",
-        ocr: String = "",
-        tags: String = "",
-        vault: Boolean = false,
-        recycleBin: Boolean = false,
-        deletedAt: Long = 0L,
-        visualHash: String = "",
-        semanticVersion: Int = 0,
-        semanticIndexed: Boolean = false,
-        embedding: String = "",
-    ) = FileItemEntity(
+        configure: FileItemEntity.() -> FileItemEntity = { this }
+    ): FileItemEntity = FileItemEntity(
         name = name,
-        path = path,
-        category = category,
+        path = "/data/$name",
+        category = FileCategory.DOCUMENTS.name,
         sizeBytes = name.length.toLong(),
-        dateModifiedMs = modified,
-        md5Hash = hash,
-        ocrText = ocr,
-        tags = tags,
-        isVault = vault,
-        isRecycleBin = recycleBin,
-        deletedTimestampMs = deletedAt,
-        visualSimilarityHash = visualHash,
-        semanticEmbeddingVersion = semanticVersion,
-        semanticIndexed = semanticIndexed,
-        semanticEmbeddingString = embedding,
+        dateModifiedMs = 100L
+    ).configure()
+
+    private data class QueryFixtures(
+        val document: FileItemEntity,
+        val image: FileItemEntity,
+        val video: FileItemEntity,
+        val vault: FileItemEntity,
+        val recycled: FileItemEntity
     )
 
-    @Test
-    fun queryFlows_filterActiveVaultRecycleSearchAndIntegrityRows() = runBlocking {
-        val document = file(
-            name = "${fixturePrefix}invoice.pdf",
-            modified = 500L,
-            hash = "invoice-hash",
-            ocr = "receipt text",
-            tags = "finance,work",
-            visualHash = "document-candidate",
-            semanticVersion = 1,
-            semanticIndexed = true,
-            embedding = "0.1,0.2",
-        )
-        val image = file(
-            name = "${fixturePrefix}photo.jpg",
-            category = FileCategory.IMAGES.name,
-            modified = 400L,
-            hash = "photo-hash",
-            ocr = "caption",
-            visualHash = "image-dhash",
-        )
-        val video = file(
-            name = "${fixturePrefix}clip.mp4",
-            category = FileCategory.VIDEO.name,
-            modified = 300L,
-            hash = "video-hash",
-            semanticIndexed = true,
-        ).copy(videoSampleHashes = "a;b;c")
-        val vault = file(
-            name = "${fixturePrefix}secret.txt",
-            path = "/vault/${fixturePrefix}secret.txt",
-            modified = 600L,
-            ocr = "secret receipt",
-            vault = true,
-        )
-        val recycled = file(
-            name = "${fixturePrefix}deleted.txt",
-            path = "/trash/${fixturePrefix}deleted.txt",
-            modified = 200L,
-            hash = "deleted-hash",
-            ocr = "deleted receipt",
-            recycleBin = true,
-            deletedAt = 700L,
-        )
+    private suspend fun insertQueryFixtures(): QueryFixtures {
+        val document = file("${fixturePrefix}invoice.pdf") {
+            copy(
+                dateModifiedMs = 500L,
+                md5Hash = "invoice-hash",
+                ocrText = "receipt text",
+                tags = "finance,work",
+                visualSimilarityHash = "document-candidate",
+                semanticEmbeddingVersion = 1,
+                semanticIndexed = true,
+                semanticEmbeddingString = "0.1,0.2"
+            )
+        }
+        val image = file("${fixturePrefix}photo.jpg") {
+            copy(
+                category = FileCategory.IMAGES.name,
+                dateModifiedMs = 400L,
+                md5Hash = "photo-hash",
+                ocrText = "caption",
+                visualSimilarityHash = "image-dhash"
+            )
+        }
+        val video = file("${fixturePrefix}clip.mp4") {
+            copy(
+                category = FileCategory.VIDEO.name,
+                dateModifiedMs = 300L,
+                md5Hash = "video-hash",
+                semanticIndexed = true,
+                videoSampleHashes = "a;b;c"
+            )
+        }
+        val vault = file("${fixturePrefix}secret.txt") {
+            copy(
+                path = "/vault/${fixturePrefix}secret.txt",
+                dateModifiedMs = 600L,
+                ocrText = "secret receipt",
+                isVault = true
+            )
+        }
+        val recycled = file("${fixturePrefix}deleted.txt") {
+            copy(
+                path = "/trash/${fixturePrefix}deleted.txt",
+                dateModifiedMs = 200L,
+                md5Hash = "deleted-hash",
+                ocrText = "deleted receipt",
+                isRecycleBin = true,
+                deletedTimestampMs = 700L
+            )
+        }
         dao.insertFileDirect(document)
         dao.insertFileDirect(image)
         dao.insertFileDirect(video)
         dao.insertFileDirect(vault)
         dao.insertFileDirect(recycled)
+        return QueryFixtures(document, image, video, vault, recycled)
+    }
+
+    @Test
+    fun queryFlows_filterActiveVaultRecycleSearchAndIntegrityRows() = runBlocking {
+        val (document, image, video, vault, recycled) = insertQueryFixtures()
 
         assertEquals(document.name, dao.getFileByName(document.name)?.name)
         assertNotNull(dao.getFileByPath(document.path))
@@ -154,17 +151,18 @@ class FileDaoJvmCoverageTest {
 
     @Test
     fun metadataTransactionsRecycleBinAndStaleReconciliationPreserveContract() = runBlocking {
-        val original = file(
-            name = "${fixturePrefix}original.txt",
-            path = "/data/${fixturePrefix}shared.txt",
-            hash = "original-hash",
-            ocr = "original-ocr",
-            tags = "original-tags",
-            visualHash = "original-visual",
-            semanticVersion = 2,
-            semanticIndexed = true,
-            embedding = "1.0,2.0",
-        )
+        val original = file("${fixturePrefix}original.txt") {
+            copy(
+                path = "/data/${fixturePrefix}shared.txt",
+                md5Hash = "original-hash",
+                ocrText = "original-ocr",
+                tags = "original-tags",
+                visualSimilarityHash = "original-visual",
+                semanticEmbeddingVersion = 2,
+                semanticIndexed = true,
+                semanticEmbeddingString = "1.0,2.0"
+            )
+        }
         val originalId = dao.insertFile(original)
         val partial = original.copy(
             name = "${fixturePrefix}updated.txt",
@@ -186,11 +184,12 @@ class FileDaoJvmCoverageTest {
         assertEquals("original-visual", merged.visualSimilarityHash)
         assertTrue(merged.semanticIndexed)
 
-        val additional = file(
-            name = "${fixturePrefix}additional.txt",
-            path = "/data/${fixturePrefix}additional.txt",
-            hash = "duplicate-hash",
-        )
+        val additional = file("${fixturePrefix}additional.txt") {
+            copy(
+                path = "/data/${fixturePrefix}additional.txt",
+                md5Hash = "duplicate-hash"
+            )
+        }
         val duplicate = additional.copy(id = 0L, name = "${fixturePrefix}duplicate.txt", path = "/data/${fixturePrefix}duplicate.txt")
         dao.upsertFilesPreservingMetadata(listOf(additional, duplicate))
         assertEquals(2, dao.getDuplicateFilesByHash().first().size)
