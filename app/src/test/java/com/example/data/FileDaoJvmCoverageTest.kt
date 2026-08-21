@@ -120,7 +120,12 @@ class FileDaoJvmCoverageTest {
 
     @Test
     fun queryFlows_filterActiveVaultRecycleSearchAndIntegrityRows() = runBlocking {
-        val (document, image, video, vault, recycled) = insertQueryFixtures()
+        val fixtures = insertQueryFixtures()
+        val document = fixtures.document
+        val image = fixtures.image
+        val video = fixtures.video
+        val vault = fixtures.vault
+        val recycled = fixtures.recycled
 
         assertEquals(document.name, dao.getFileByName(document.name)?.name)
         assertNotNull(dao.getFileByPath(document.path))
