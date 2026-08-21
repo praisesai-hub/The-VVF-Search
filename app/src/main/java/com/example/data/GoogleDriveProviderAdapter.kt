@@ -94,7 +94,7 @@ class GoogleDriveProviderAdapter(
                     .build()
                 httpClient.newCall(request).execute().use { response ->
                     when {
-                        response.code == 308 -> {
+                        response.code == HTTP_RESUME_INCOMPLETE -> {
                             offset = parseCommittedOffset(
                                 response.header("Content-Range") ?: response.header("Range"),
                                 offset,
@@ -221,7 +221,7 @@ class GoogleDriveProviderAdapter(
         return runCatching {
             httpClient.newCall(request).execute().use { response ->
                 when {
-                    response.code == 308 -> UploadProbe.Offset(
+                    response.code == HTTP_RESUME_INCOMPLETE -> UploadProbe.Offset(
                         parseCommittedOffset(
                             response.header("Content-Range") ?: response.header("Range"),
                             0L,
@@ -244,7 +244,7 @@ class GoogleDriveProviderAdapter(
                 .addQueryParameter("q", query)
                 .addQueryParameter("spaces", "drive")
                 .addQueryParameter("fields", "nextPageToken,incompleteSearch,files(id)")
-                .addQueryParameter("pageSize", "1000")
+                .addQueryParameter("pageSize", DRIVE_QUERY_PAGE_SIZE.toString())
             pageToken?.let { urlBuilder.addQueryParameter("pageToken", it) }
             val request = Request.Builder()
                 .url(urlBuilder.build())
@@ -276,7 +276,7 @@ class GoogleDriveProviderAdapter(
     }
 
     private fun extractFileIdFromJson(json: String): String? =
-        """"(?:id|fileId)"\s*:\s*"([^"]+)""".toRegex().find(json)?.groupValues?.get(1)
+        """"(?:id|fileId)"\s*:\s*"([^"]+)""".toRegex().find(json)?.groupValues?.get(FILE_ID_CAPTURE_GROUP)
 
     private fun escapeDriveQueryValue(value: String): String =
         value.replace("\\", "\\\\").replace("'", "\\'")
@@ -357,7 +357,7 @@ class GoogleDriveProviderAdapter(
         override fun writeTo(sink: BufferedSink) {
             RandomAccessFile(file, "r").use { input ->
                 input.seek(offset)
-                val buffer = ByteArray(64 * 1024)
+                val buffer = ByteArray(TRANSFER_COPY_BUFFER_BYTES)
                 var remaining = length
                 while (remaining > 0L) {
                     val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
@@ -371,5 +371,9 @@ class GoogleDriveProviderAdapter(
 
     companion object {
         private const val UPLOAD_CHUNK_BYTES = 256L * 1024L
+        private const val HTTP_RESUME_INCOMPLETE = 308
+        private const val DRIVE_QUERY_PAGE_SIZE = 1_000
+        private const val FILE_ID_CAPTURE_GROUP = 1
+        private const val TRANSFER_COPY_BUFFER_BYTES = 64 * 1024
     }
 }
