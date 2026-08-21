@@ -285,7 +285,7 @@ class CloudSyncWorkerTest {
                     workerParameters,
                     CloudSyncWorkerDependencies(
                         dao = fakeDao,
-                        operationStore = fakeOperationStore,
+                        operationStoreOverride = fakeOperationStore,
                         providerAdapter = fakeAdapter,
                         driveAuthorization = GoogleAuthManager(
                             appContext.getSharedPreferences("cloud_sync_test_auth", Context.MODE_PRIVATE)

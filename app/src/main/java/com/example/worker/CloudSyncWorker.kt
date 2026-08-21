@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.first
 
 internal data class CloudSyncWorkerDependencies(
     val dao: FileDao? = null,
-    val operationStore: CloudSyncOperationStore? = null,
+    val operationStoreOverride: CloudSyncOperationStore? = null,
     val providerAdapter: CloudProviderAdapter? = null,
     val driveAuthorization: DriveAuthorizationPort? = null,
     val transferAllowed: (() -> Boolean)? = null
@@ -66,7 +66,7 @@ class CloudSyncWorker(
         }
 
         val leaseOwner = id.toString()
-        val leaseStore = dependencies.operationStore
+        val leaseStore = dependencies.operationStoreOverride
             ?: AppDatabase.getDatabase(applicationContext).cloudSyncOperationStore()
         return@coroutineScope try {
             Log.i(TAG, "Starting background CloudSyncWorker with provider adapter contract...")
