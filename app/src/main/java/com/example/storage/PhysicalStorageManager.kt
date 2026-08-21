@@ -52,6 +52,31 @@ object PhysicalStorageManager {
         return Result.failure(UserSafeException(error))
     }
 
+    /** Rejects names that could alter the target path or contain unsafe filesystem characters. */
+    fun validateSafeFileName(name: String): Result<String> {
+        val trimmed = name.trim()
+        val invalid = trimmed.isBlank() || trimmed == "." || trimmed == ".." ||
+            trimmed != name || trimmed.length > 255 ||
+            trimmed.any { it == '/' || it == '\\' || it.code == 0 || it.isISOControl() }
+        return if (invalid) {
+            Result.failure(IllegalArgumentException("Invalid file name."))
+        } else {
+            Result.success(trimmed)
+        }
+    }
+
+    private fun resolveChildWithinParent(parent: File, name: String): Result<File> {
+        val safeName = validateSafeFileName(name).getOrElse { return Result.failure(it) }
+        val canonicalParent = parent.canonicalFile
+        val canonicalChild = File(canonicalParent, safeName).canonicalFile
+        val boundary = canonicalParent.path + File.separator
+        return if (canonicalChild.path.startsWith(boundary)) {
+            Result.success(canonicalChild)
+        } else {
+            Result.failure(IllegalArgumentException("Target path escapes its parent."))
+        }
+    }
+
     fun safeTrashFileName(name: String): String {
         val basename = File(name).name
         val sanitized = basename.replace(Regex("[^A-Za-z0-9._-]"), "_").take(128)
@@ -129,8 +154,7 @@ object PhysicalStorageManager {
     }
 
     fun renameFile(context: Context, oldPath: String, newName: String): Result<String> {
-        val sanitizedName = File(newName).name
-        if (sanitizedName.isBlank() || sanitizedName != newName) {
+        val sanitizedName = validateSafeFileName(newName).getOrElse {
             return Result.failure(IllegalArgumentException("Invalid file name. Path traversal or directory changes are not allowed."))
         }
         if (oldPath.startsWith("content://")) {
@@ -159,9 +183,12 @@ object PhysicalStorageManager {
             }
         }
         return try {
-            val oldFile = File(oldPath)
+            val oldFile = File(oldPath).canonicalFile
             val parentDir = oldFile.parentFile
-            val newFile = if (parentDir != null) File(parentDir, newName) else File(newName)
+                ?: return sanitizedFailure("PHYSICAL_STORAGE_RENAME", IllegalArgumentException("source has no parent"))
+            val newFile = resolveChildWithinParent(parentDir, sanitizedName).getOrElse {
+                return Result.failure(IllegalArgumentException("Invalid destination path."))
+            }
             var success = false
             if (oldFile.exists()) {
                 try { success = oldFile.renameTo(newFile) } catch (e: Exception) { Log.w(TAG, "Direct File.renameTo failed: ${e.message}") }
@@ -175,10 +202,10 @@ object PhysicalStorageManager {
                     }
                 }
             } else return sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.FileNotFoundException("source unavailable"))
-            updateMediaStoreDisplayName(context, oldPath, newName)
+            updateMediaStoreDisplayName(context, oldFile.path, sanitizedName)
             val finalPath = if (newFile.exists()) newFile.absolutePath else if (success) newFile.absolutePath else oldPath
             if (success || newFile.exists()) {
-                notifyMediaStoreFileChanged(context, oldPath, finalPath)
+                notifyMediaStoreFileChanged(context, oldFile.path, finalPath)
                 Result.success(finalPath)
             } else sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.IOException("rename failed"))
         } catch (e: Exception) {

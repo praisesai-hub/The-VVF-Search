@@ -74,7 +74,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             val appDirs = listOfNotNull(context.getExternalFilesDir(null), context.filesDir, context.cacheDir)
             for (appDir in appDirs) {
                 if (appDir.exists() && appDir.canRead()) {
-                    scanDirectoryRecursively(appDir, processedPaths, 0, 4, computeHashes, emitItem)
+                    scanDirectoryRecursively(appDir, processedPaths, 0, Int.MAX_VALUE, computeHashes, emitItem)
                 }
             }
         } catch (e: Exception) {
@@ -167,6 +167,8 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         onItemDiscovered: suspend (FileItemEntity) -> Unit
     ) {
         currentCoroutineContext().ensureActive()
+        // App-private roots are bounded by Android's sandbox. Do not impose an
+        // arbitrary depth cap: deep user directory trees must remain searchable.
         if (depth > maxDepth) return
         val files = dir.listFiles() ?: return
         for (file in files) {

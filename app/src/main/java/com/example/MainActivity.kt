@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Intent
 import android.net.Uri
+import com.example.storage.StoragePermissionManager
 import android.os.Bundle
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -42,6 +43,11 @@ class MainActivity : FragmentActivity() {
                 VVFSmartManagerApp(viewModel = mainViewModel)
             }
         }
+    }
+
+    /** Opens Android settings only when the restricted full-device permission is unavailable. */
+    fun requestFullDeviceStorageAccess() {
+        StoragePermissionManager.settingsIntent(this)?.let(::startActivity)
     }
 
     /** Opens the Android Storage Access Framework folder picker. */

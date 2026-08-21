@@ -109,6 +109,16 @@ class PhysicalStorageTest {
     }
 
     @Test
+    fun validateSafeFileName_rejectsPathAndControlCharacters() {
+        val invalidNames = listOf("../escape.txt", "/absolute.txt", "nested/name.txt", "nested\\\\name.txt", "..", ".", "bad\u0000name", "bad\nname")
+
+        invalidNames.forEach { name ->
+            assertTrue("Expected rejection for unsafe name", PhysicalStorageManager.validateSafeFileName(name).isFailure)
+        }
+        assertEquals("renamed.txt", PhysicalStorageManager.validateSafeFileName("renamed.txt").getOrThrow())
+    }
+
+    @Test
     fun safeTrashFileName_sanitizesPathUnsafeCharactersAndLength() {
         assertEquals("secret_name.txt", PhysicalStorageManager.safeTrashFileName("/tmp/secret name.txt"))
         assertEquals(128, PhysicalStorageManager.safeTrashFileName("a".repeat(140)).length)
