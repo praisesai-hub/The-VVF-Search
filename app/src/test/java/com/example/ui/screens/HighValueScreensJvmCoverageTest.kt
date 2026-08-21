@@ -11,6 +11,7 @@ import com.example.data.DuplicateGroup
 import com.example.data.FileCategory
 import com.example.data.FileItemEntity
 import com.example.ui.MainViewModel
+import com.example.ui.components.OcrOverlayImage
 import com.example.ui.theme.VVFSmartManagerTheme
 import org.junit.Rule
 import org.junit.Test
@@ -128,6 +129,20 @@ class HighValueScreensJvmCoverageTest {
         composeTestRule.onRoot().assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("section_tab_2").performClick()
+        composeTestRule.onRoot().assertIsDisplayed()
+    }
+
+    @Test
+    fun ocrOverlayRendersSafeFallbackWhenImageIsUnavailable() {
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                OcrOverlayImage(
+                    filePath = "/missing/ocr-preview.png",
+                    ocrBlocks = emptyList()
+                )
+            }
+        }
+
         composeTestRule.onRoot().assertIsDisplayed()
     }
 
