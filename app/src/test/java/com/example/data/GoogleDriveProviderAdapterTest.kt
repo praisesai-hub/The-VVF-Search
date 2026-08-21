@@ -387,7 +387,7 @@ class GoogleDriveProviderAdapterTest {
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
         assertTrue(error.isRetryable)
-        assertEquals("no network", error.message)
+        assertEquals("Network connection is unavailable.", error.message)
     }
 
     @Test
@@ -458,7 +458,7 @@ class GoogleDriveProviderAdapterTest {
         }
 
         assertEquals("remote-resumed", (result as CloudSyncResult.Success).remoteFileId)
-        assertEquals(listOf("bytes */10", "bytes 3-9/10"), ranges)
+        assertEquals("Unexpected resumable request ranges: $ranges", listOf("bytes */10", "bytes 3-9/10"), ranges)
         assertEquals(10L, progress.last().bytesCommitted)
     }
 
