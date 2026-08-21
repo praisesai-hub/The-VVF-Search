@@ -269,16 +269,40 @@ fun VaultScreen(
                 Icon(imageVector = Icons.Default.Lock, contentDescription = stringResource(R.string.vault_locked), tint = BhagwaOrange, modifier = Modifier.size(40.dp))
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = stringResource(R.string.secure_encrypted_vault), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             Text(
-                text = stringResource(if (viewModel.isVaultPinSetupRequired) R.string.create_master_pin else R.string.enter_master_pin),
+                text = stringResource(R.string.secure_encrypted_vault),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = stringResource(
+                    if (viewModel.isVaultPinSetupRequired) {
+                        R.string.create_master_pin
+                    } else {
+                        R.string.enter_master_pin
+                    }
+                ),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                repeat(MIN_VAULT_PIN_LENGTH) { index -> Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index < enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }
+                repeat(MIN_VAULT_PIN_LENGTH) { index ->
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (index < enteredPin.length) {
+                                    BhagwaOrange
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                }
+                            )
+                    )
+                }
             }
             if (pinError != null) { Spacer(modifier = Modifier.height(12.dp)); Text(text = pinError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
             Spacer(modifier = Modifier.height(32.dp))
@@ -328,8 +352,25 @@ fun VaultScreen(
                     Box(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(colors = listOf(CosmicBlue, MaterialTheme.colorScheme.surfaceVariant))).padding(16.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LockOpen, contentDescription = stringResource(R.string.unlocked), tint = EmeraldGreen); Spacer(modifier = Modifier.width(8.dp)); Text(text = stringResource(R.string.encrypted_vault_unlocked), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White) }
-                                Text(text = stringResource(R.string.aes_cipher_active), fontSize = 12.sp, color = SoftGold)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.LockOpen,
+                                        contentDescription = stringResource(R.string.unlocked),
+                                        tint = EmeraldGreen
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.encrypted_vault_unlocked),
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                                Text(
+                                    text = stringResource(R.string.aes_cipher_active),
+                                    fontSize = 12.sp,
+                                    color = SoftGold
+                                )
                             }
                             Button(onClick = { viewModel.lockVault() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.lock_vault)) }
                         }
@@ -339,7 +380,12 @@ fun VaultScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = stringResource(R.string.vault_security_options), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = BhagwaOrange)
+                        Text(
+                            text = stringResource(R.string.vault_security_options),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = BhagwaOrange
+                        )
                         Spacer(modifier = Modifier.height(12.dp))
                         if (isBiometricAvailable) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -385,23 +431,50 @@ fun VaultScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f))) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(imageVector = Icons.Default.Shield, contentDescription = stringResource(R.string.best_effort_wipe_disclaimer), tint = BhagwaOrange, modifier = Modifier.size(24.dp))
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = stringResource(R.string.best_effort_wipe_disclaimer),
+                            tint = BhagwaOrange,
+                            modifier = Modifier.size(24.dp)
+                        )
                         Column {
-                            Text(text = stringResource(R.string.best_effort_source_overwrite), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(
+                                text = stringResource(R.string.best_effort_source_overwrite),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = stringResource(R.string.overwrite_details), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                            Text(
+                                text = stringResource(R.string.overwrite_details),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp
+                            )
                         }
                     }
                 }
             }
-            item { Text(text = stringResource(R.string.encrypted_files, vaultItems.size), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) }
+            item {
+                Text(
+                    text = stringResource(R.string.encrypted_files, vaultItems.size),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
             if (vaultItems.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(imageVector = Icons.Default.Shield, contentDescription = stringResource(R.string.vault_empty), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = stringResource(R.string.no_encrypted_files), textAlign = TextAlign.Center, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = stringResource(R.string.no_encrypted_files),
+                                textAlign = TextAlign.Center,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
