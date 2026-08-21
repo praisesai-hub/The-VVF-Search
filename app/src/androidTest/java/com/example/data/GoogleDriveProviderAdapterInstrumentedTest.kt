@@ -42,7 +42,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         authManager = GoogleAuthManager(preferences)
         fakeInterceptor = RecordingInterceptor()
         adapter = GoogleDriveProviderAdapter(
-            authManager = authManager,
+            driveAuthorization = authManager,
             httpClient = OkHttpClient.Builder().addInterceptor(fakeInterceptor).build(),
         )
     }
