@@ -286,7 +286,10 @@ class VaultRepositoryTest {
 
         legacyRepository.unlockWithPin("12345678")
         try {
-            legacyRepository.unlockFromVault(missingLegacyItem, fileItem(name = "missing-legacy.txt", path = "/restore/missing-legacy.txt"))
+            legacyRepository.unlockFromVault(
+                missingLegacyItem,
+                fileItem(name = "missing-legacy.txt", path = "/restore/missing-legacy.txt")
+            )
             fail("Expected missing legacy vault file to fail closed")
         } catch (error: IllegalStateException) {
             assertTrue(error.message.orEmpty().contains("Legacy vault file is missing"))
