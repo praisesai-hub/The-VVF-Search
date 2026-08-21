@@ -161,6 +161,26 @@ class VaultRepositoryTest {
     }
 
     @Test
+    fun unlockFromVault_usesExplicitV2TargetWithoutDaoLookupAfterPhysicalSuccess() = runBlocking {
+        val target = fileItem(id = 13L, name = "explicit.jpg", path = "/source/explicit.jpg")
+        val vaultItem = vaultItem(id = 32L, originalName = target.name)
+        repository.unlockWithPin("12345678")
+        every {
+            PhysicalStorageManager.decryptAndRestoreStreaming(context, any(), any())
+        } returns Result.success(target.path)
+        val updated = slot<FileItemEntity>()
+        coEvery { dao.updateFile(capture(updated)) } just Runs
+        coEvery { dao.deleteVaultItemById(vaultItem.id) } just Runs
+
+        assertTrue(repository.unlockFromVault(vaultItem, target))
+
+        assertFalse(updated.captured.isVault)
+        coVerify(exactly = 0) { dao.getVaultFileByName(any()) }
+        coVerify(exactly = 1) { dao.updateFile(any()) }
+        coVerify(exactly = 1) { dao.deleteVaultItemById(vaultItem.id) }
+    }
+
+    @Test
     fun unlockFromVault_deletesOrphanedVaultMetadataWhenTargetIsMissing() = runBlocking {
         val vaultItem = vaultItem(id = 44L, originalName = "missing.txt")
         repository.unlockWithPin("12345678")
