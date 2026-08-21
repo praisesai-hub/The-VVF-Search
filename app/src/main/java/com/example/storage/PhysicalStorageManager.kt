@@ -668,7 +668,12 @@ object PhysicalStorageManager {
         if (srcPath.startsWith("content://")) {
             return try {
                 val uri = srcPath.toUri()
-                val fileBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("content unavailable"))
+                val fileBytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                } ?: return sanitizedFailure(
+                    "PHYSICAL_STORAGE_VAULT",
+                    java.io.FileNotFoundException("content unavailable")
+                )
                 if (fileBytes.size > 50 * 1024 * 1024) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))
                 val docName = getFileNameFromContentUri(context, uri)
                 val (encryptedBytes, iv) = encryptAction(fileBytes)
@@ -682,16 +687,33 @@ object PhysicalStorageManager {
         }
         val srcFile = File(srcPath)
         return try {
-            if (!srcFile.exists() || !srcFile.canRead()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("source unavailable"))
+            if (!srcFile.exists() || !srcFile.canRead()) {
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_VAULT",
+                    java.io.FileNotFoundException("source unavailable")
+                )
+            }
             if (srcFile.length() > 50 * 1024 * 1024L) return Result.failure(IllegalArgumentException("File exceeds the maximum secure vault limit of 50MB."))
             val (encryptedBytes, iv) = encryptAction(srcFile.readBytes())
             val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
             try { FileOutputStream(vaultFile).use { it.write(encryptedBytes) } } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
-            if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
+            if (!secureWipeFile(context, srcFile)) {
+                try {
+                    vaultFile.delete()
+                } catch (_: Exception) {
+                }
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_VAULT",
+                    java.io.IOException("source cleanup failed")
+                )
+            }
             Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
         catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) {
+            Log.e(TAG, "Failed to encrypt and wipe source: ${e.message}", e)
+            sanitizedFailure("PHYSICAL_STORAGE", e)
+        }
     }
 
     fun encryptAndWipeSource(context: Context, srcPath: String, keystoreVaultManager: com.example.security.KeystoreVaultManager): Result<VaultStorageResult> {
@@ -702,7 +724,11 @@ object PhysicalStorageManager {
                 val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${docName}.vvf")
                 val cipher = keystoreVaultManager.getEncryptionCipher()
                 val iv = cipher.iv
-                val inputStream = context.contentResolver.openInputStream(uri) ?: return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("content unavailable"))
+                val inputStream = context.contentResolver.openInputStream(uri)
+                    ?: return sanitizedFailure(
+                        "PHYSICAL_STORAGE_VAULT",
+                        java.io.FileNotFoundException("content unavailable")
+                    )
                 try {
                     inputStream.use { fis ->
                         FileOutputStream(vaultFile).use { fos ->
@@ -722,7 +748,12 @@ object PhysicalStorageManager {
         }
         val srcFile = File(srcPath)
         return try {
-            if (!srcFile.exists() || !srcFile.canRead()) return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.FileNotFoundException("source unavailable"))
+            if (!srcFile.exists() || !srcFile.canRead()) {
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_VAULT",
+                    java.io.FileNotFoundException("source unavailable")
+                )
+            }
             val vaultFile = File(getVaultDir(context), "ENC_${System.currentTimeMillis()}_${srcFile.name}.vvf")
             val cipher = keystoreVaultManager.getEncryptionCipher()
             val iv = cipher.iv
@@ -737,11 +768,23 @@ object PhysicalStorageManager {
                     }
                 }
             } catch (e: Exception) { try { vaultFile.delete() } catch (_: Exception) {}; throw e }
-            if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
+            if (!secureWipeFile(context, srcFile)) {
+                try {
+                    vaultFile.delete()
+                } catch (_: Exception) {
+                }
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_VAULT",
+                    java.io.IOException("source cleanup failed")
+                )
+            }
             Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
         catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
-        catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: Exception) {
+            Log.e(TAG, "Failed to encrypt and wipe source Stream: ${e.message}", e)
+            sanitizedFailure("PHYSICAL_STORAGE", e)
+        }
     }
 
     private fun secureWipeFile(context: Context, file: File): Boolean {
