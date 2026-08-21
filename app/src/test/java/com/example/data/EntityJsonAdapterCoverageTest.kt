@@ -156,6 +156,22 @@ class EntityJsonAdapterCoverageTest {
     }
 
     @Test
+    fun generatedVaultAdapter_reusesCachedDefaultsConstructor() {
+        val adapter = directVaultAdapter()
+        val defaultsPayload = """{
+            "originalName":"legacy.txt",
+            "encryptedName":"legacy.vvf",
+            "category":"DOCUMENTS",
+            "sizeBytes":12
+        }"""
+
+        val first = requireNotNull(adapter.fromJson(defaultsPayload))
+        val second = requireNotNull(adapter.fromJson(defaultsPayload))
+
+        assertEquals(first.copy(encryptedAtMs = second.encryptedAtMs), second)
+    }
+
+    @Test
     fun generatedVaultAdapter_rejectsNullRequiredFields() {
         val adapter = directVaultAdapter()
 

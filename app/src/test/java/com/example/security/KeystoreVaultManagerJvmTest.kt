@@ -64,8 +64,29 @@ class KeystoreVaultManagerJvmTest {
 
         assertTrue(manager.biometricWrapKeyExists())
         manager.deleteBiometricWrapKey()
+        manager.deleteBiometricWrapKey()
 
-        assertTrue(store.deletedAliases.isNotEmpty())
+        assertEquals(listOf("VVF_VAULT_BIOMETRIC_WRAP_KEY_V2"), store.deletedAliases)
+    }
+
+    @Test
+    fun legacyKeyLookupFailureLogsDiagnosticsAndFailsClosed() {
+        val store = availableStore()
+        val diagnostics = mutableListOf<String>()
+        val manager = KeystoreVaultManager(
+            alias,
+            injectedKeyStorePort = store,
+            diagnosticLogger = { message, _ -> diagnostics += message }
+        )
+        store.throwOnLegacyAliasLookup = true
+
+        val failure = runCatching { manager.getEncryptionCipher() }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(
+            listOf("Failed to access Android Keystore", "Error accessing legacy vault key"),
+            diagnostics
+        )
     }
 
     @Test
@@ -181,8 +202,12 @@ class KeystoreVaultManagerJvmTest {
         var failVaultCreation = false
         var failBiometricCreation = false
         var throwOnBiometricAliasLookup = false
+        var throwOnLegacyAliasLookup = false
 
         override fun containsAlias(alias: String): Boolean {
+            if (throwOnLegacyAliasLookup && alias == "unit-test-vault-key") {
+                error("test legacy lookup failure")
+            }
             if (throwOnBiometricAliasLookup && alias == "VVF_VAULT_BIOMETRIC_WRAP_KEY_V2") {
                 error("test biometric lookup failure")
             }
