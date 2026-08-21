@@ -37,6 +37,7 @@ data class VaultRestoreRequest(
 @Suppress("LargeClass")
 object PhysicalStorageManager {
     private const val TAG = "PhysicalStorageManager"
+    private const val MAX_OPERATION_TOKEN_LENGTH = 64
 
     private fun <T> sanitizedFailure(
         operation: String,
@@ -214,7 +215,8 @@ object PhysicalStorageManager {
     }
 
     fun trashPathForOperation(context: Context, path: String, operationId: String): String {
-        val operationToken = operationId.replace(Regex("[^A-Za-z0-9_-]"), "_").take(64)
+        val operationToken = operationId.replace(Regex("[^A-Za-z0-9_-]"), "_")
+            .take(MAX_OPERATION_TOKEN_LENGTH)
         val prefix = if (operationToken.isBlank()) System.currentTimeMillis().toString() else "op_$operationToken"
         val name = if (path.startsWith("content://")) {
             runCatching {
