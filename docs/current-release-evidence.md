@@ -35,7 +35,17 @@ The GitHub API response for `GET /repos/praisesai-hub/The-VVF-Search/branches/ma
 }
 ```
 
-The repository rulesets endpoint returned an empty list: `[]`. Required merge checks are therefore not evidenced as enforced at repository level.
+At the initial freeze, the repository rulesets endpoint returned an empty list: `[]`. To apply the confirmed release-gate finding, an active repository ruleset was subsequently created:
+
+- **Ruleset:** `main-release-gates`
+- **Ruleset ID:** `21172655`
+- **Target:** `refs/heads/main`
+- **Enforcement:** `active`
+- **Bypass:** none; `current_user_can_bypass: never`
+- **Required checks:** `Build & Test Android App`, `Run Instrumented Android Tests`, `Analyze (java-kotlin)`, and `submit-gradle`
+- **Additional rules:** deletion blocked and non-fast-forward updates blocked
+
+The effective-rules endpoint confirmed the same active rules. Classic branch protection remains unavailable on this personal repository, but the repository ruleset now provides the supported merge-gate mechanism.
 
 ## Open pull requests at freeze
 
@@ -50,7 +60,7 @@ The repository rulesets endpoint returned an empty list: `[]`. Required merge ch
 
 ## Interpretation
 
-The pasted audit was correct that the historical `39d5635` Android failure was a real failing CI run, but it is not the latest repository state. Current evidence shows recent CodeQL and dependency-submission success, while Android CI has not yet been demonstrated green after the latest fixes. Branch protection remains absent. The appropriate release decision remains **NO-GO**.
+The pasted audit was correct that the historical `39d5635` Android failure was a real failing CI run, but it is not the latest repository state. Current evidence shows recent CodeQL and dependency-submission success, while Android CI has not yet been demonstrated green after the latest fixes. Branch protection remains absent. The appropriate release decision remains **NO-GO** because Android CI is not yet green and Room encryption and clean release evidence remain unresolved. The branch merge-gate finding is now **applied and API-verified** through repository ruleset `21172655`.
 
 ## Verification commands
 
