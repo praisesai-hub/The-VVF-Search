@@ -7,13 +7,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VideoDuplicateEvidenceTest {
+    private data class VideoDetails(
+        val durationMs: Long = 10_000L,
+        val width: Int = 1920,
+        val height: Int = 1080,
+        val chunkHash: String? = null
+    )
+
     private fun video(
         id: Long,
         samples: String,
-        durationMs: Long = 10_000L,
-        width: Int = 1920,
-        height: Int = 1080,
-        chunkHash: String = "chunk-$id"
+        details: VideoDetails = VideoDetails()
     ) = FileItemEntity(
         id = id,
         name = "video-$id.mp4",
@@ -22,11 +26,11 @@ class VideoDuplicateEvidenceTest {
         sizeBytes = 1L,
         videoFingerprintVersion = 2,
         videoSampleHashes = samples,
-        videoDurationMs = durationMs,
-        videoWidth = width,
-        videoHeight = height,
+        videoDurationMs = details.durationMs,
+        videoWidth = details.width,
+        videoHeight = details.height,
         videoAudioSignature = "yes|video/mp4|1000000",
-        videoChunkHash = chunkHash
+        videoChunkHash = details.chunkHash ?: "chunk-$id"
     )
 
     @Test
@@ -54,9 +58,7 @@ class VideoDuplicateEvidenceTest {
         val differentMedia = video(
             2L,
             first.videoSampleHashes,
-            durationMs = 20_000L,
-            width = 1280,
-            height = 720
+            VideoDetails(durationMs = 20_000L, width = 1280, height = 720)
         )
 
         assertFalse(VideoDuplicateEvidence.compare(first, differentMedia, threshold = 95).matches)
@@ -64,8 +66,9 @@ class VideoDuplicateEvidenceTest {
 
     @Test
     fun equalChunkHash_isStrongEvidenceEvenWhenSamplesAreUnavailable() {
-        val first = video(1L, "", chunkHash = "same-chunk")
-        val second = video(2L, "", chunkHash = "same-chunk")
+        val chunkDetails = VideoDetails(chunkHash = "same-chunk")
+        val first = video(1L, "", chunkDetails)
+        val second = video(2L, "", chunkDetails)
 
         assertTrue(VideoDuplicateEvidence.compare(first, second, threshold = 95).matches)
     }
