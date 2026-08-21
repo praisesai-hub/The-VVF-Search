@@ -6,6 +6,8 @@ import kotlin.math.max
 
 object VideoDuplicateEvidence {
     private const val MIN_TEMPORAL_SAMPLES = 3
+    private const val MAX_TEMPORAL_SAMPLES = 12
+    private const val BUCKET_PREFIX_LENGTH = 8
 
     fun sampleHashes(file: FileItemEntity): List<String> {
         val stored = file.videoSampleHashes
@@ -16,7 +18,7 @@ object VideoDuplicateEvidence {
     }
 
     fun bucketKeys(file: FileItemEntity): Set<String> = sampleHashes(file)
-        .map { hash -> "video_${hash.substring(0, 4)}" }
+        .map { hash -> "video_${hash.substring(0, BUCKET_PREFIX_LENGTH)}" }
         .toSet()
 
     fun compare(first: FileItemEntity, second: FileItemEntity, threshold: Int): Comparison {
@@ -25,7 +27,10 @@ object VideoDuplicateEvidence {
         val metadataMatch = durationCompatible(first, second) &&
             resolutionCompatible(first, second) &&
             audioCompatible(first, second)
-        val cryptographicMatch = first.md5Hash.isNotBlank() && first.md5Hash == second.md5Hash
+        val cryptographicMatch = first.sizeBytes > 0L &&
+            first.sizeBytes == second.sizeBytes &&
+            first.md5Hash.isNotBlank() &&
+            first.md5Hash == second.md5Hash
         if (cryptographicMatch) return Comparison(true, 100)
         val chunkMatch = first.videoChunkHash.isNotBlank() &&
             first.videoChunkHash == second.videoChunkHash
@@ -34,12 +39,15 @@ object VideoDuplicateEvidence {
             return Comparison(false, 0)
         }
 
-        val maxDistance = ((100 - threshold) * 64) / 100
-        val compared = firstSamples.zip(secondSamples).take(MIN_TEMPORAL_SAMPLES)
-        val distances = compared.map { (left, right) -> hammingDistance(left, right) }
+        val normalizedThreshold = threshold.coerceIn(0, 100)
+        val maxDistance = ((100 - normalizedThreshold) * 64) / 100
+        val compared = firstSamples.zip(secondSamples).take(MAX_TEMPORAL_SAMPLES)
+        val distances = compared.map { pair -> hammingDistance(pair.first, pair.second) }
         val matchingSamples = distances.count { it <= maxDistance }
         val averageDistance = distances.average()
-        val temporalMatch = matchingSamples == MIN_TEMPORAL_SAMPLES && averageDistance <= maxDistance
+        val temporalMatch = compared.size >= MIN_TEMPORAL_SAMPLES &&
+            matchingSamples == compared.size &&
+            averageDistance <= maxDistance
         val match = temporalMatch && metadataMatch
         val score = if (chunkMatch) {
             100
@@ -59,9 +67,8 @@ object VideoDuplicateEvidence {
     }
 
     private fun audioCompatible(first: FileItemEntity, second: FileItemEntity): Boolean {
-        return first.videoAudioSignature.isBlank() ||
-            second.videoAudioSignature.isBlank() ||
-            first.videoAudioSignature == second.videoAudioSignature
+        if (first.videoAudioSignature.isBlank() || second.videoAudioSignature.isBlank()) return false
+        return first.videoAudioSignature == second.videoAudioSignature
     }
 
     private fun resolutionCompatible(first: FileItemEntity, second: FileItemEntity): Boolean {
