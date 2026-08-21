@@ -42,6 +42,9 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         private const val FINGERPRINT_CHUNK_BYTES = 64 * 1024
         private const val MIDPOINT_DIVISOR = 2L
         private const val DEFAULT_VIDEO_KEYFRAME_TIME_US = 1_000_000L
+        private const val DOCUMENT_INITIAL_CHUNK_BYTES = 8 * 1024
+        private const val DOCUMENT_BOUNDARY_SAMPLE_BYTES = 4 * 1024
+        private const val DOCUMENT_FINGERPRINT_HEX_LENGTH = 16
         private val VIDEO_SAMPLE_RATIOS = listOf(
             VIDEO_SAMPLE_AT_TEN_PERCENT,
             VIDEO_SAMPLE_AT_THIRTY_FIVE_PERCENT,
@@ -398,51 +401,78 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
 
     /** Content-URI equivalent of the document candidate fingerprint; it is not exact identity. */
     suspend fun computeContentUriDocumentCandidateFingerprint(uri: Uri): String = withContext(Dispatchers.IO) {
-        val input = try { context.contentResolver.openInputStream(uri) } catch (_: Exception) { null }
+        val input = runCatching { context.contentResolver.openInputStream(uri) }.getOrNull()
             ?: return@withContext ""
         try {
-            val digest = MessageDigest.getInstance("SHA-256")
-            val first = ByteArray(8192)
-            var firstRead = 0
-            while (firstRead < first.size) {
-                currentCoroutineContext().ensureActive()
-                val read = input.read(first, firstRead, first.size - firstRead)
-                if (read <= 0) break
-                firstRead += read
-            }
-            if (firstRead == 0) return@withContext ""
-            val size = try { context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L } catch (_: Exception) { -1L }
-            digest.update("DOC_SIZE:$size:".toByteArray())
-            val needsBoundarySampling = size > first.size || (size < 0L && firstRead == first.size)
-            if (!needsBoundarySampling) {
-                digest.update(first, 0, firstRead)
-            } else {
-                digest.update(first, 0, 4096)
-                digest.update(first, 4096, 4096)
-                val tail = ByteArray(4096)
-                var tailSize = 0
-                val buffer = ByteArray(8192)
-                while (true) {
-                    currentCoroutineContext().ensureActive()
-                    val read = input.read(buffer)
-                    if (read <= 0) break
-                    for (index in 0 until read) {
-                        tail[tailSize % tail.size] = buffer[index]
-                        tailSize++
-                    }
-                }
-                if (tailSize > 0) {
-                    val start = tailSize % tail.size
-                    for (index in 0 until tail.size) digest.update(tail[(start + index) % tail.size])
-                }
-            }
-            digest.digest().joinToString("") { "%02x".format(it) }.take(16)
-        } catch (e: Exception) {
-            Log.w(TAG, "Content URI document candidate fingerprint failed: ${e.message}")
-            ""
+            runCatching {
+                computeContentUriDocumentFingerprint(input, contentUriLength(uri))
+            }.onFailure { error ->
+                Log.w(TAG, "Content URI document candidate fingerprint failed: ${error.message}")
+            }.getOrDefault("")
         } finally {
             input.close()
         }
+    }
+
+    private fun contentUriLength(uri: Uri): Long =
+        runCatching { context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L }
+            .getOrDefault(-1L)
+
+    private suspend fun computeContentUriDocumentFingerprint(input: InputStream, size: Long): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val firstChunk = ByteArray(DOCUMENT_INITIAL_CHUNK_BYTES)
+        val firstRead = readInitialDocumentChunk(input, firstChunk)
+        if (firstRead == 0) return ""
+        digest.update("DOC_SIZE:$size:".toByteArray())
+        if (size > firstChunk.size || (size < 0L && firstRead == firstChunk.size)) {
+            updateDigestWithDocumentBoundaries(input, digest, firstChunk)
+        } else {
+            digest.update(firstChunk, 0, firstRead)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }.take(DOCUMENT_FINGERPRINT_HEX_LENGTH)
+    }
+
+    private suspend fun readInitialDocumentChunk(input: InputStream, buffer: ByteArray): Int {
+        var bytesRead = 0
+        while (bytesRead < buffer.size) {
+            currentCoroutineContext().ensureActive()
+            val read = input.read(buffer, bytesRead, buffer.size - bytesRead)
+            if (read <= 0) break
+            bytesRead += read
+        }
+        return bytesRead
+    }
+
+    private suspend fun updateDigestWithDocumentBoundaries(
+        input: InputStream,
+        digest: MessageDigest,
+        firstChunk: ByteArray
+    ) {
+        digest.update(firstChunk, 0, DOCUMENT_BOUNDARY_SAMPLE_BYTES)
+        digest.update(firstChunk, DOCUMENT_BOUNDARY_SAMPLE_BYTES, DOCUMENT_BOUNDARY_SAMPLE_BYTES)
+        val tail = readDocumentTail(input)
+        tail.forEach(digest::update)
+    }
+
+    private suspend fun readDocumentTail(input: InputStream): ByteArray {
+        val tail = ByteArray(DOCUMENT_BOUNDARY_SAMPLE_BYTES)
+        var tailSize = 0
+        val buffer = ByteArray(DOCUMENT_INITIAL_CHUNK_BYTES)
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val read = input.read(buffer)
+            if (read <= 0) break
+            for (index in 0 until read) {
+                tail[tailSize % tail.size] = buffer[index]
+                tailSize++
+            }
+        }
+        return if (tailSize > 0) rotateTail(tail, tailSize) else ByteArray(0)
+    }
+
+    private fun rotateTail(tail: ByteArray, tailSize: Int): ByteArray {
+        val start = tailSize % tail.size
+        return ByteArray(tail.size) { index -> tail[(start + index) % tail.size] }
     }
 
     fun determineCategory(fileName: String): FileCategory {
