@@ -193,4 +193,21 @@ class FirebaseAuthManagerTest {
         assertFalse(result.isSuccessful)
         assertEquals("Microsoft provider failed", result.exception?.message)
     }
+
+    @Test
+    fun signInWithMicrosoft_failsClosedWhenProviderReturnsNoAuthenticatedUser() {
+        val authResult = mockk<AuthResult> {
+            every { user } returns null
+        }
+        every {
+            auth.startActivityForSignInWithProvider(any(), any())
+        } returns Tasks.forResult(authResult)
+        val manager = FirebaseAuthManager(context, auth, credentialManager)
+
+        val result = manager.signInWithMicrosoft(mockk<Activity>(relaxed = true))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertFalse(result.isSuccessful)
+        assertEquals("Firebase did not return an authenticated user", result.exception?.message)
+    }
 }
