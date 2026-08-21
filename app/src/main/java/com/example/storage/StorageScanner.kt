@@ -31,6 +31,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     companion object {
         private const val TAG = "StorageScanner"
         private const val BATCH_SIZE = 100
+        private const val MAX_DISCOVERED_FILES = 250_000
     }
 
     fun scanDeviceStorageFlow(computeHashes: Boolean = false): Flow<List<FileItemEntity>> = channelFlow {
@@ -173,8 +174,11 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         val files = dir.listFiles() ?: return
         for (file in files) {
             currentCoroutineContext().ensureActive()
+            if (processedPaths.size >= MAX_DISCOVERED_FILES) return
             if (file.name.startsWith(".")) continue
+            val canonicalFile = runCatching { file.canonicalFile }.getOrNull() ?: continue
             if (file.isDirectory) {
+                if (canonicalFile.path != file.absoluteFile.path) continue
                 if (file.name.equals("Android", ignoreCase = true) && depth == 0) continue
                 scanDirectoryRecursively(file, processedPaths, depth + 1, maxDepth, computeHashes, onItemDiscovered)
             } else if (file.isFile && file.length() > 0L) {
