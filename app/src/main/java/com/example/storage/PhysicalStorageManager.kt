@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
@@ -100,6 +101,29 @@ object PhysicalStorageManager {
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
+
+    /** Resolves a physical path and requires it to remain under an approved storage root. */
+    fun resolveAllowedPhysicalPath(context: Context, path: String): Result<File> {
+        if (path.startsWith("content://")) return Result.failure(IllegalArgumentException("Content URI is not a physical path."))
+        return runCatching {
+            val candidate = File(path).canonicalFile
+            val roots = listOfNotNull(
+                context.filesDir,
+                context.cacheDir,
+                context.getExternalFilesDir(null),
+                context.externalCacheDir,
+                Environment.getExternalStorageDirectory()
+            ).map { it.canonicalFile }
+            val allowed = roots.any { root ->
+                candidate.path == root.path || candidate.path.startsWith(root.path + File.separator)
+            }
+            check(allowed) { "Path is outside approved storage roots." }
+            candidate
+        }
+    }
+
+    private fun requireAllowedPhysicalPath(context: Context, path: String): File =
+        resolveAllowedPhysicalPath(context, path).getOrElse { throw IllegalArgumentException("Path is outside approved storage roots.") }
 
     fun getFileNameFromContentUri(context: Context, uri: Uri): String {
         try {
@@ -284,7 +308,7 @@ object PhysicalStorageManager {
 
     fun restoreFromTrash(context: Context, trashPath: String, originalPath: String): Result<String> {
         if (originalPath.startsWith("content://")) {
-            val trashFile = File(trashPath)
+            val trashFile = try { requireAllowedPhysicalPath(context, trashPath) } catch (e: Exception) { return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", e) }
             if (!trashFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.FileNotFoundException("trash file unavailable"))
             return try {
                 val uri = originalPath.toUri()
@@ -302,7 +326,7 @@ object PhysicalStorageManager {
                 Result.success(restoredFile.absolutePath)
             } catch (e: Exception) { sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
-        val trashFile = File(trashPath)
+        val trashFile = try { requireAllowedPhysicalPath(context, trashPath) } catch (e: Exception) { return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", e) }
         if (!trashFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.FileNotFoundException("trash file unavailable"))
         val targetFile = File(originalPath)
         targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
