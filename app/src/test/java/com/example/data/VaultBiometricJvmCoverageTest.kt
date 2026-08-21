@@ -88,6 +88,31 @@ class VaultBiometricJvmCoverageTest {
     }
 
     @Test
+    fun vaultSecurityDelegate_requiresSessionAndReplacesItAcrossBiometricUnlock() {
+        val manager = KeystoreVaultManager(
+            "vault-test-key",
+            injectedKeyStorePort = FakeVaultKeyStorePort()
+        )
+        val engine = VaultManagerEngine(context, manager, injectedVaultStore = MapStore())
+        val delegate = VaultSecurityDelegate(engine)
+        val enrollmentResult = authenticationResult(manager.prepareBiometricEncryptionCipher())
+
+        assertFalse(delegate.completeBiometricEnrollment(enrollmentResult))
+        assertThrows(SecurityException::class.java) { delegate.requireAuthenticatedSession() }
+
+        assertTrue(delegate.initializeVaultPin("12345678"))
+        assertTrue(delegate.unlockWithPin("12345678"))
+        assertTrue(delegate.completeBiometricEnrollment(enrollmentResult))
+
+        val unlockResult = authenticationResult(delegate.prepareBiometricUnlockCipher())
+        assertTrue(delegate.completeBiometricUnlock(unlockResult))
+        assertTrue(delegate.requireAuthenticatedSession().copyKeyBytes().isNotEmpty())
+
+        delegate.lockSession()
+        assertThrows(SecurityException::class.java) { delegate.requireAuthenticatedSession() }
+    }
+
+    @Test
     fun changeVaultPin_rewrapsTheSameDekAndRejectsThePreviousPin() {
         val manager = KeystoreVaultManager(
             "vault-test-key",
