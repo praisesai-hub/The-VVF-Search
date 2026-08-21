@@ -36,6 +36,7 @@ GitHub run `32421178517` (Android CI/CD #355) remained in progress at the time o
 | `32441466581` | `0216834` | Failed: JVM coverage and Detekt. | Failed-step-log verified: aggregate 50.81%, security 76.45%, data 70.56%, vault 90.36%, cloud 90.44% (cloud floor passed); Detekt 138 weighted issues. Artifact download timed out during TLS handshake. | Skipped by the successful-build dependency; no emulator was provisioned. |
 | `32442093960` | `7afc16f` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.96%, security 80.22%, data 70.60%, vault 90.62%, cloud 90.44% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 | `32442620986` | `befe6d8` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.93%, security 80.22%, data 70.60%, vault 90.62%, cloud 90.44% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
+| `32443202510` | `809c9c4` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 51.54%, security 80.22%, data 72.26%, vault 90.62%, cloud 90.49% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 
 The `Run Instrumented Android Tests` job now declares a successful `Build & Test Android App` dependency. This changes the prior failure mode: a JVM coverage failure prevents emulator allocation rather than requiring a later cancellation. The earlier cancellation used the workflow-run operation because GitHub documents cancellation at run scope rather than as a per-job REST operation.[1]
 
@@ -52,6 +53,8 @@ Run `32441466581` reproduced the coverage values at the displayed two-decimal pr
 Run `32442093960` verified the Security test seams and Firebase result-branch tests: Security coverage rose from **76.45%** to **80.22%**, FirebaseAuthManager rose to **87.66%**, and AndroidKeystoreCrypto became directly covered at **70.00%**. Vault rose to **90.62%**. These are measurable improvements, but Security remains 9.78 points and Vault 4.38 points below their enforced floors; aggregate and repository/data gates also remain failed, so the branch is not eligible for merge.
 
 Run `32442620986` included duplicate-cleanup and physical-storage source refactors plus a cloud-retry repository test. The run added covered instructions but also increased the aggregate instruction denominator from 84,442 to 84,608, so aggregate coverage rounded down by 0.03 points. Security, data, Vault, and cloud values were unchanged at displayed precision. This is evidence that the batch preserved test execution but did not yet advance the remaining JVM floors; it remains a no-merge result.
+
+Run `32443202510` produced the largest data-layer gain so far: repository/data coverage rose from **70.60%** to **72.26%**, aggregate coverage rose to **51.54%**, and SmartManagerRepository moved from 36.75% to 43.40%. The physical recycle-move test exercised 137 additional SmartManagerRepository instructions, while CloudSyncEngine coverage reached 96.22%. Security and Vault were unchanged, all non-cloud JVM floors remain failed, and the branch remains ineligible for merge.
 
 ## References
 
