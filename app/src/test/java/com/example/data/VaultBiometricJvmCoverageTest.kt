@@ -113,6 +113,15 @@ class VaultBiometricJvmCoverageTest {
     }
 
     @Test
+    fun vaultPinApi_defaultStoredHashDelegatesAnEmptyOverride() {
+        val engine = mockk<VaultManagerEngine>()
+        every { engine.verifyVaultPin("12345678", "") } returns true
+        val api: VaultPinApi = VaultSecurityDelegate(engine)
+
+        assertTrue(api.verifyVaultPin("12345678"))
+    }
+
+    @Test
     fun changeVaultPin_rewrapsTheSameDekAndRejectsThePreviousPin() {
         val manager = KeystoreVaultManager(
             "vault-test-key",
