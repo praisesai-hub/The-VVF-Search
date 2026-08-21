@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -150,6 +151,59 @@ class SmartManagerRepositoryJvmCoverageTest {
         assertTrue(database.fileOperationStore().getOpenOperations().isEmpty())
         File(recycled.path).delete()
         Unit
+    }
+
+    @Test
+    fun recycleRestoreReturnsFileToOriginalPathAndClearsItsOperationLedger() = runBlocking {
+        val source = File(context.cacheDir, "restore-${System.nanoTime()}.txt").apply {
+            writeText("restore fixture")
+        }
+        val fileId = dao.insertFile(
+            FileItemEntity(
+                name = source.name,
+                path = source.absolutePath,
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = source.length()
+            )
+        )
+        val repository = repository { false }
+        repository.moveToRecycleBin(dao.getFileById(fileId) ?: error("restore fixture missing"))
+        val recycled = dao.getFileById(fileId) ?: error("recycled restore fixture missing")
+
+        repository.restoreFromRecycleBin(recycled)
+
+        val restored = dao.getFileById(fileId) ?: error("restored fixture missing")
+        assertEquals(source.absolutePath, restored.path)
+        assertEquals("", restored.originalPath)
+        assertFalse(restored.isRecycleBin)
+        assertEquals(0L, restored.deletedTimestampMs)
+        assertTrue(source.exists())
+        assertEquals("restore fixture", source.readText())
+        assertFalse(File(recycled.path).exists())
+        assertTrue(database.fileOperationStore().getOpenOperations().isEmpty())
+        assertTrue(source.delete())
+    }
+
+    @Test
+    fun permanentDeleteRemovesPhysicalFileDaoRowAndOperationLedger() = runBlocking {
+        val source = File(context.cacheDir, "delete-${System.nanoTime()}.txt").apply {
+            writeText("delete fixture")
+        }
+        val fileId = dao.insertFile(
+            FileItemEntity(
+                name = source.name,
+                path = source.absolutePath,
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = source.length()
+            )
+        )
+        val repository = repository { false }
+
+        repository.deletePermanently(dao.getFileById(fileId) ?: error("delete fixture missing"))
+
+        assertFalse(source.exists())
+        assertNull(dao.getFileById(fileId))
+        assertTrue(database.fileOperationStore().getOpenOperations().isEmpty())
     }
 
     @Test
