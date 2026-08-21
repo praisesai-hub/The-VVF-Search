@@ -310,7 +310,12 @@ class AppDatabaseMigrationTest {
         assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("heartbeatAtMs")))
         assertEquals(0L, cursor.getLong(cursor.getColumnIndexOrThrow("completedAtMs")))
         cursor.close()
-        val indexCursor = db.query("SELECT name FROM sqlite_master WHERE type='index' AND name='index_cloud_sync_operationId'")
+        val indexCursor = db.query(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type='index' AND name='index_cloud_sync_operationId'
+            """.trimIndent()
+        )
         assertTrue(indexCursor.moveToFirst())
         indexCursor.close()
         val workTableCursor = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='work_operations'")
@@ -330,8 +335,23 @@ class AppDatabaseMigrationTest {
             .build()
         val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
         val db = helper.writableDatabase
-        db.execSQL("CREATE TABLE files (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, path TEXT NOT NULL, category TEXT NOT NULL, sizeBytes INTEGER NOT NULL)")
-        db.execSQL("INSERT INTO files (id, name, path, category, sizeBytes) VALUES (701, 'clip.mp4', '/videos/clip.mp4', 'VIDEO', 100)")
+        db.execSQL(
+            """
+            CREATE TABLE files (
+                id INTEGER PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                path TEXT NOT NULL,
+                category TEXT NOT NULL,
+                sizeBytes INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO files (id, name, path, category, sizeBytes)
+            VALUES (701, 'clip.mp4', '/videos/clip.mp4', 'VIDEO', 100)
+            """.trimIndent()
+        )
 
         AppDatabase.MIGRATION_6_7.migrate(db)
 
@@ -359,8 +379,24 @@ class AppDatabaseMigrationTest {
             .build()
         val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
         val db = helper.writableDatabase
-        db.execSQL("CREATE TABLE files (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, path TEXT NOT NULL, category TEXT NOT NULL, sizeBytes INTEGER NOT NULL, visualSimilarityHash TEXT NOT NULL DEFAULT '')")
-        db.execSQL("INSERT INTO files (id, name, path, category, sizeBytes, visualSimilarityHash) VALUES (801, 'report.pdf', '/docs/report.pdf', 'DOCUMENTS', 100, 'legacy-candidate')")
+        db.execSQL(
+            """
+            CREATE TABLE files (
+                id INTEGER PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                path TEXT NOT NULL,
+                category TEXT NOT NULL,
+                sizeBytes INTEGER NOT NULL,
+                visualSimilarityHash TEXT NOT NULL DEFAULT ''
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO files (id, name, path, category, sizeBytes, visualSimilarityHash)
+            VALUES (801, 'report.pdf', '/docs/report.pdf', 'DOCUMENTS', 100, 'legacy-candidate')
+            """.trimIndent()
+        )
 
         AppDatabase.MIGRATION_7_8.migrate(db)
 
@@ -382,12 +418,25 @@ class AppDatabaseMigrationTest {
             .build()
         val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
         val db = helper.writableDatabase
-        db.execSQL("CREATE TABLE cloud_sync (id INTEGER PRIMARY KEY NOT NULL, operationId TEXT NOT NULL, status TEXT NOT NULL)")
+        db.execSQL(
+            """
+            CREATE TABLE cloud_sync (
+                id INTEGER PRIMARY KEY NOT NULL,
+                operationId TEXT NOT NULL,
+                status TEXT NOT NULL
+            )
+            """.trimIndent()
+        )
         db.execSQL("INSERT INTO cloud_sync (id, operationId, status) VALUES (901, 'op-901', 'QUEUED')")
 
         AppDatabase.MIGRATION_8_9.migrate(db)
 
-        val cursor = db.query("SELECT remoteFileId, resumableSessionUri, resumableBytesCommitted FROM cloud_sync WHERE id = 901")
+        val cursor = db.query(
+            """
+            SELECT remoteFileId, resumableSessionUri, resumableBytesCommitted
+            FROM cloud_sync WHERE id = 901
+            """.trimIndent()
+        )
         assertTrue(cursor.moveToFirst())
         assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("remoteFileId")))
         assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("resumableSessionUri")))
@@ -409,7 +458,14 @@ class AppDatabaseMigrationTest {
         val db = helper.writableDatabase
 
         AppDatabase.MIGRATION_9_10.migrate(db)
-        db.execSQL("INSERT INTO file_operations (operationId, operationType, fileId, sourcePath, targetPath, status, createdAtMs, updatedAtMs, lastErrorCode) VALUES ('file-DELETE-1', 'DELETE', 1, '/source', '', 'PREPARED', 10, 10, NULL)")
+        db.execSQL(
+            """
+            INSERT INTO file_operations (
+                operationId, operationType, fileId, sourcePath, targetPath,
+                status, createdAtMs, updatedAtMs, lastErrorCode
+            ) VALUES ('file-DELETE-1', 'DELETE', 1, '/source', '', 'PREPARED', 10, 10, NULL)
+            """.trimIndent()
+        )
 
         val cursor = db.query("SELECT operationType, status FROM file_operations WHERE operationId = 'file-DELETE-1'")
         assertTrue(cursor.moveToFirst())
