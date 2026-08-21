@@ -291,44 +291,52 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                 val itemUri = ContentUris.withAppendedId(collectionUri, id)
                 val path = itemUri.toString()
                 if (!processedPaths.add(path)) continue
-                val category = determineCategory(name)
-                val hash = if (computeHashes) computeContentUriHash(itemUri) else ""
-                val visualHash = if (computeHashes && category == FileCategory.IMAGES) {
-                    computeContentUriDHash(itemUri)
-                } else {
-                    ""
-                }
-                val documentCandidateFingerprint = if (
-                    computeHashes && category == FileCategory.DOCUMENTS
-                ) {
-                    computeContentUriDocumentCandidateFingerprint(itemUri)
-                } else {
-                    ""
-                }
-                val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) {
-                    computeContentUriVideoFingerprint(itemUri)
-                } else {
-                    null
-                }
-                onItemDiscovered(FileItemEntity(
-                    name = name,
-                    path = path,
-                    category = category.name,
-                    sizeBytes = size,
-                    dateModifiedMs = if (dateSec > 0) dateSec * 1000L else System.currentTimeMillis(),
-                    md5Hash = hash,
-                    visualSimilarityHash = visualHash,
-                    documentCandidateFingerprint = documentCandidateFingerprint,
-                    videoFingerprintVersion = videoFingerprint?.version ?: 0,
-                    videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
-                    videoDurationMs = videoFingerprint?.durationMs ?: 0L,
-                    videoWidth = videoFingerprint?.width ?: 0,
-                    videoHeight = videoFingerprint?.height ?: 0,
-                    videoAudioSignature = videoFingerprint?.audioSignature.orEmpty(),
-                    videoChunkHash = videoFingerprint?.chunkHash.orEmpty()
-                ))
+                onItemDiscovered(createMediaStoreFileItem(itemUri, name, size, dateSec, computeHashes))
             }
         }
+    }
+
+    private suspend fun createMediaStoreFileItem(
+        itemUri: Uri,
+        name: String,
+        size: Long,
+        dateSec: Long,
+        computeHashes: Boolean
+    ): FileItemEntity {
+        val category = determineCategory(name)
+        val hash = if (computeHashes) computeContentUriHash(itemUri) else ""
+        val visualHash = if (computeHashes && category == FileCategory.IMAGES) {
+            computeContentUriDHash(itemUri)
+        } else {
+            ""
+        }
+        val documentCandidateFingerprint = if (computeHashes && category == FileCategory.DOCUMENTS) {
+            computeContentUriDocumentCandidateFingerprint(itemUri)
+        } else {
+            ""
+        }
+        val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) {
+            computeContentUriVideoFingerprint(itemUri)
+        } else {
+            null
+        }
+        return FileItemEntity(
+            name = name,
+            path = itemUri.toString(),
+            category = category.name,
+            sizeBytes = size,
+            dateModifiedMs = if (dateSec > 0) dateSec * 1000L else System.currentTimeMillis(),
+            md5Hash = hash,
+            visualSimilarityHash = visualHash,
+            documentCandidateFingerprint = documentCandidateFingerprint,
+            videoFingerprintVersion = videoFingerprint?.version ?: 0,
+            videoSampleHashes = videoFingerprint?.serializedSamples().orEmpty(),
+            videoDurationMs = videoFingerprint?.durationMs ?: 0L,
+            videoWidth = videoFingerprint?.width ?: 0,
+            videoHeight = videoFingerprint?.height ?: 0,
+            videoAudioSignature = videoFingerprint?.audioSignature.orEmpty(),
+            videoChunkHash = videoFingerprint?.chunkHash.orEmpty()
+        )
     }
 
     suspend fun computeFileHash(file: File): String = withContext(Dispatchers.IO) {
