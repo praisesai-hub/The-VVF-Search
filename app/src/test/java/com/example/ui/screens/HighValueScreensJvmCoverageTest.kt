@@ -181,6 +181,8 @@ class HighValueScreensJvmCoverageTest {
         }
 
         composeTestRule.onRoot().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("section_tab_1").performClick()
+        composeTestRule.onRoot().assertIsDisplayed()
     }
 
 }
