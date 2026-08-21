@@ -328,31 +328,39 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         }
     }
 
-    private fun computeContentUriChunkHash(uri: Uri): String {
-        return try {
-            val input = context.contentResolver.openInputStream(uri) ?: return ""
-            input.use {
-                val digest = MessageDigest.getInstance("SHA-256")
-                val buffer = ByteArray(FINGERPRINT_CHUNK_BYTES)
-                var total = 0L
-                var firstRead = 0
-                while (firstRead < buffer.size) {
-                    val read = it.read(buffer, firstRead, buffer.size - firstRead)
-                    if (read <= 0) break
-                    firstRead += read
-                }
-                if (firstRead > 0) digest.update(buffer, 0, firstRead)
-                while (true) {
-                    val read = it.read(buffer)
-                    if (read <= 0) break
-                    total += read
-                }
-                digest.update("CONTENT_URI_VIDEO:$total".toByteArray())
-                digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Content URI video chunk fingerprint failed: ${e.message}")
-            ""
+    private fun computeContentUriChunkHash(uri: Uri): String =
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use(::computeChunkHash).orEmpty()
+        }.onFailure { error ->
+            Log.w(TAG, "Content URI video chunk fingerprint failed: ${error.message}")
+        }.getOrDefault("")
+
+    private fun computeChunkHash(input: InputStream): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(FINGERPRINT_CHUNK_BYTES)
+        val firstRead = readInitialChunk(input, buffer)
+        if (firstRead > 0) digest.update(buffer, 0, firstRead)
+        val remainingBytes = countRemainingBytes(input, buffer)
+        digest.update("CONTENT_URI_VIDEO:$remainingBytes".toByteArray())
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+    }
+
+    private fun readInitialChunk(input: InputStream, buffer: ByteArray): Int {
+        var bytesRead = 0
+        while (bytesRead < buffer.size) {
+            val read = input.read(buffer, bytesRead, buffer.size - bytesRead)
+            if (read <= 0) break
+            bytesRead += read
+        }
+        return bytesRead
+    }
+
+    private fun countRemainingBytes(input: InputStream, buffer: ByteArray): Long {
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) return total
+            total += read
         }
     }
 
