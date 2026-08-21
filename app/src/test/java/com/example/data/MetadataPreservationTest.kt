@@ -8,7 +8,23 @@ class MetadataPreservationTest {
 
     @Test
     fun `test upsert preserves existing enriched metadata and state`() {
-        val existing = FileItemEntity(
+        val merged = mergePreservingMetadata(existingEnrichedFile(), freshScannedFile())
+
+        assertEquals(42L, merged.id)
+        assertEquals("/storage/emulated/0/Vault/document.pdf", merged.originalPath)
+        assertEquals("a1b2c3d4e5", merged.md5Hash)
+        assertEquals("Confidential Financial Report 2026", merged.ocrText)
+        assertEquals("finance,work,2026", merged.tags)
+        assertTrue(merged.isVault)
+        assertEquals("phash123456", merged.visualSimilarityHash)
+        assertEquals("candidate123456", merged.documentCandidateFingerprint)
+        assertEquals(1, merged.semanticEmbeddingVersion)
+        assertTrue(merged.semanticIndexed)
+        assertEquals("0.1,0.2,0.3,0.4", merged.semanticEmbeddingString)
+        assertEquals(1000050L, merged.dateModifiedMs)
+    }
+
+    private fun existingEnrichedFile() = FileItemEntity(
             id = 42L,
             name = "document.pdf",
             path = "/storage/emulated/0/Documents/document.pdf",
@@ -29,8 +45,7 @@ class MetadataPreservationTest {
             semanticEmbeddingString = "0.1,0.2,0.3,0.4"
         )
 
-        // Fresh entity discovered during a re-scan with default blank fields
-        val freshScanned = FileItemEntity(
+    private fun freshScannedFile() = FileItemEntity(
             id = 0L,
             name = "document.pdf",
             path = "/storage/emulated/0/Documents/document.pdf",
@@ -39,8 +54,7 @@ class MetadataPreservationTest {
             dateModifiedMs = 1000050L
         )
 
-        // Merge logic used in upsertFilesPreservingMetadata
-        val merged = existing.copy(
+    private fun mergePreservingMetadata(existing: FileItemEntity, freshScanned: FileItemEntity) = existing.copy(
             name = freshScanned.name,
             category = freshScanned.category,
             sizeBytes = freshScanned.sizeBytes,
@@ -58,18 +72,4 @@ class MetadataPreservationTest {
             isRecycleBin = existing.isRecycleBin,
             deletedTimestampMs = existing.deletedTimestampMs
         )
-
-        assertEquals(42L, merged.id)
-        assertEquals("/storage/emulated/0/Vault/document.pdf", merged.originalPath)
-        assertEquals("a1b2c3d4e5", merged.md5Hash)
-        assertEquals("Confidential Financial Report 2026", merged.ocrText)
-        assertEquals("finance,work,2026", merged.tags)
-        assertTrue(merged.isVault)
-        assertEquals("phash123456", merged.visualSimilarityHash)
-        assertEquals("candidate123456", merged.documentCandidateFingerprint)
-        assertEquals(1, merged.semanticEmbeddingVersion)
-        assertTrue(merged.semanticIndexed)
-        assertEquals("0.1,0.2,0.3,0.4", merged.semanticEmbeddingString)
-        assertEquals(1000050L, merged.dateModifiedMs)
-    }
 }
