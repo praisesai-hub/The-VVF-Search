@@ -243,6 +243,7 @@ class EntityJsonAdapterCoverageTest {
         val adapter = directVaultAdapter()
         val validJson = FULL_VAULT_JSON
         val nullPayloads = listOf(
+            validJson.replace("\"id\":1", "\"id\":null"),
             validJson.replace("\"originalName\":\"source.txt\"", "\"originalName\":null"),
             validJson.replace("\"encryptedName\":\"source.vvf\"", "\"encryptedName\":null"),
             validJson.replace("\"encryptedFilePath\":\"/vault/source.vvf\"", "\"encryptedFilePath\":null"),
