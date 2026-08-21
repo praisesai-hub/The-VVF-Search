@@ -100,6 +100,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 private const val ONE_MINUTE_MS = 60_000L
 private const val FIVE_MINUTES_MS = 5 * ONE_MINUTE_MS
 
+private fun isInvalidVaultPin(pin: String): Boolean =
+    pin.length !in MIN_VAULT_PIN_LENGTH..MAX_VAULT_PIN_LENGTH ||
+        pin.none(Char::isDigit) ||
+        pin.any(Char::isWhitespace)
+
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @Composable
 fun VaultScreen(
@@ -243,7 +248,7 @@ fun VaultScreen(
             confirmButton = {
                 Button(onClick = {
                     if (changePinNew != changePinConfirm) changePinError = pinMismatch
-                    else if (changePinNew.length < MIN_VAULT_PIN_LENGTH || changePinNew.length > MAX_VAULT_PIN_LENGTH || !changePinNew.any { it.isDigit() } || changePinNew.any { it.isWhitespace() }) changePinError = invalidVaultPin
+                    else if (isInvalidVaultPin(changePinNew)) changePinError = invalidVaultPin
                     else {
                         val success = viewModel.changeVaultPin(changePinOld, changePinNew)
                         if (success) {
