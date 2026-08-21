@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabaseLockedException
+import android.graphics.Bitmap
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.CoroutineStart
@@ -219,12 +220,29 @@ class SmartManagerRepositoryJvmCoverageTest {
         val source = File(context.cacheDir, "scan-${System.nanoTime()}.txt").apply {
             writeText("incremental scan document fixture")
         }
+        val image = File(context.cacheDir, "scan-${System.nanoTime()}.png")
+        val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.eraseColor(android.graphics.Color.BLUE)
+            image.outputStream().use { output -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, output) }
+        } finally {
+            bitmap.recycle()
+        }
         val fileId = dao.insertFile(
             FileItemEntity(
                 name = source.name,
                 path = source.absolutePath,
                 category = FileCategory.DOCUMENTS.name,
                 sizeBytes = source.length(),
+                semanticIndexed = true
+            )
+        )
+        val imageId = dao.insertFile(
+            FileItemEntity(
+                name = image.name,
+                path = image.absolutePath,
+                category = FileCategory.IMAGES.name,
+                sizeBytes = image.length(),
                 semanticIndexed = true
             )
         )
@@ -237,12 +255,17 @@ class SmartManagerRepositoryJvmCoverageTest {
 
         withTimeout(5_000L) { completion.await() }
         val scanned = dao.getFileById(fileId) ?: error("incrementally scanned fixture missing")
+        val scannedImage = dao.getFileById(imageId) ?: error("incrementally scanned image missing")
         assertTrue(scanned.md5Hash.isNotBlank())
         assertTrue(scanned.documentCandidateFingerprint.isNotBlank())
         assertTrue(scanned.semanticIndexed)
+        assertTrue(scannedImage.md5Hash.isNotBlank())
+        assertTrue(scannedImage.visualSimilarityHash.isNotBlank())
+        assertTrue(scannedImage.semanticIndexed)
         assertEquals(1.0f, repository.scanProgress.value)
         assertFalse(repository.isScanning.value)
         assertTrue(source.delete())
+        assertTrue(image.delete())
     }
 
     @Test
