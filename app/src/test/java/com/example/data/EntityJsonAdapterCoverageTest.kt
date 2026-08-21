@@ -171,6 +171,42 @@ class EntityJsonAdapterCoverageTest {
         }
     }
 
+    @Test
+    fun generatedVaultAdapter_rejectsNullForEveryNonNullableVaultField() {
+        val adapter = directVaultAdapter()
+        val validJson = fullVaultJson()
+        val nullPayloads = listOf(
+            validJson.replace("\"originalName\":\"source.txt\"", "\"originalName\":null"),
+            validJson.replace("\"encryptedName\":\"source.vvf\"", "\"encryptedName\":null"),
+            validJson.replace("\"encryptedFilePath\":\"/vault/source.vvf\"", "\"encryptedFilePath\":null"),
+            validJson.replace("\"ivBase64\":\"iv\"", "\"ivBase64\":null"),
+            validJson.replace("\"category\":\"DOCUMENTS\"", "\"category\":null"),
+            validJson.replace("\"sizeBytes\":1", "\"sizeBytes\":null"),
+            validJson.replace("\"encryptedAtMs\":2", "\"encryptedAtMs\":null"),
+            validJson.replace("\"isBiometricProtected\":true", "\"isBiometricProtected\":null"),
+            validJson.replace("\"vaultFormatVersion\":3", "\"vaultFormatVersion\":null"),
+        )
+
+        nullPayloads.forEach { payload ->
+            assertThrows(JsonDataException::class.java) { adapter.fromJson(payload) }
+        }
+    }
+
+    @Test
+    fun generatedVaultAdapter_rejectsEachMissingRequiredVaultField() {
+        val adapter = directVaultAdapter()
+        val missingRequiredPayloads = listOf(
+            """{"encryptedName":"source.vvf","category":"DOCUMENTS","sizeBytes":1}""",
+            """{"originalName":"source.txt","category":"DOCUMENTS","sizeBytes":1}""",
+            """{"originalName":"source.txt","encryptedName":"source.vvf","sizeBytes":1}""",
+            """{"originalName":"source.txt","encryptedName":"source.vvf","category":"DOCUMENTS"}""",
+        )
+
+        missingRequiredPayloads.forEach { payload ->
+            assertThrows(JsonDataException::class.java) { adapter.fromJson(payload) }
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun directVaultAdapter(): JsonAdapter<VaultItemEntity> {
         val adapterClass = Class.forName("com.example.data.VaultItemEntityJsonAdapter")
@@ -181,4 +217,17 @@ class EntityJsonAdapterCoverageTest {
         }
         return adapter as JsonAdapter<VaultItemEntity>
     }
+
+    private fun fullVaultJson(): String = """{
+        "id":1,
+        "originalName":"source.txt",
+        "encryptedName":"source.vvf",
+        "encryptedFilePath":"/vault/source.vvf",
+        "ivBase64":"iv",
+        "category":"DOCUMENTS",
+        "sizeBytes":1,
+        "encryptedAtMs":2,
+        "isBiometricProtected":true,
+        "vaultFormatVersion":3
+    }"""
 }

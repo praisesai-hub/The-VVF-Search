@@ -1,7 +1,11 @@
 package com.example.security
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import android.content.pm.ApplicationInfo
+import io.mockk.every
+import io.mockk.mockk
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
 import java.security.GeneralSecurityException
 import java.nio.file.Files
@@ -13,20 +17,19 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
 class SecureKeyValueStoreTest {
     private lateinit var directory: File
     private lateinit var crypto: SecureStoreCrypto
+    private lateinit var context: Context
 
     @Before
     fun setUp() {
         directory = Files.createTempDirectory("vvf-secure-store-").toFile()
         crypto = ReversibleCrypto()
+        val applicationInfo = ApplicationInfo().apply { dataDir = directory.absolutePath }
+        context = mockk()
+        every { context.applicationInfo } returns applicationInfo
     }
 
     @After
@@ -71,6 +74,44 @@ class SecureKeyValueStoreTest {
         File(directory, FILE_NAME).writeBytes(byteArrayOf(1, 2, 3, 4))
 
         assertThrows(IllegalStateException::class.java) { store.getString("pin") }
+    }
+
+    @Test
+    fun `invalid envelope version and bounded payload sizes fail closed`() {
+        val store = store()
+        val malformedEnvelopes = listOf(
+            envelopeBytes(version = 2, ivSize = 12, ciphertextSize = 16),
+            envelopeBytes(ivSize = 0, ciphertextSize = 16),
+            envelopeBytes(ivSize = 33, ciphertextSize = 16),
+            envelopeBytes(ivSize = 12, ciphertextSize = 0),
+            envelopeBytes(ivSize = 12, ciphertextSize = 524_289),
+        )
+
+        malformedEnvelopes.forEach { envelope ->
+            File(directory, FILE_NAME).writeBytes(envelope)
+            assertThrows(IllegalStateException::class.java) { store.getString("pin") }
+        }
+    }
+
+    @Test
+    fun `malformed decrypted payloads fail closed`() {
+        val store = store()
+        val malformedPayloads = listOf(
+            plaintextBytes(magic = 0, version = 1, count = 0),
+            plaintextBytes(magic = PLAINTEXT_MAGIC, version = 2, count = 0),
+            plaintextBytes(magic = PLAINTEXT_MAGIC, version = 1, count = -1),
+            plaintextBytes(magic = PLAINTEXT_MAGIC, version = 1, count = 2) {
+                writeUTF("duplicate")
+                writeUTF("first")
+                writeUTF("duplicate")
+                writeUTF("second")
+            },
+        )
+
+        malformedPayloads.forEach { payload ->
+            writeEncryptedEnvelope(payload)
+            assertThrows(IllegalStateException::class.java) { store.getString("pin") }
+        }
     }
 
     @Test
@@ -260,8 +301,49 @@ class SecureKeyValueStoreTest {
         crypto = crypto
     )
 
-    private val context: Context
-        get() = ApplicationProvider.getApplicationContext()
+    private fun envelopeBytes(
+        magic: Int = ENVELOPE_MAGIC,
+        version: Int = 1,
+        ivSize: Int,
+        ciphertextSize: Int,
+    ): ByteArray = ByteArrayOutputStream().use { bytes ->
+        DataOutputStream(bytes).use { output ->
+            output.writeInt(magic)
+            output.writeInt(version)
+            output.writeInt(ivSize)
+            if (ivSize in 1..32) output.write(ByteArray(ivSize))
+            output.writeInt(ciphertextSize)
+            if (ciphertextSize in 1..512 * 1024) output.write(ByteArray(ciphertextSize))
+        }
+        bytes.toByteArray()
+    }
+
+    private fun plaintextBytes(
+        magic: Int,
+        version: Int,
+        count: Int,
+        values: DataOutputStream.() -> Unit = {},
+    ): ByteArray = ByteArrayOutputStream().use { bytes ->
+        DataOutputStream(bytes).use { output ->
+            output.writeInt(magic)
+            output.writeInt(version)
+            output.writeInt(count)
+            output.values()
+        }
+        bytes.toByteArray()
+    }
+
+    private fun writeEncryptedEnvelope(plaintext: ByteArray) {
+        val encrypted = crypto.encrypt(plaintext)
+        File(directory, FILE_NAME).writeBytes(
+            envelopeBytes(
+                ivSize = encrypted.iv.size,
+                ciphertextSize = encrypted.ciphertext.size,
+            ).let { header ->
+                header.dropLast(encrypted.ciphertext.size).toByteArray() + encrypted.ciphertext
+            }
+        )
+    }
 
     private class ReversibleCrypto : SecureStoreCrypto {
         override fun encrypt(plaintext: ByteArray): EncryptedPayload =
@@ -290,5 +372,7 @@ class SecureKeyValueStoreTest {
 
     private companion object {
         const val FILE_NAME = "secure-test-store"
+        const val ENVELOPE_MAGIC = 0x56564645
+        const val PLAINTEXT_MAGIC = 0x56564650
     }
 }

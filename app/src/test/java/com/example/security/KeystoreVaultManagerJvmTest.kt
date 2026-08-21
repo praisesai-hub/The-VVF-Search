@@ -3,6 +3,7 @@ package com.example.security
 import javax.crypto.spec.SecretKeySpec
 import java.security.MessageDigest
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -137,6 +138,31 @@ class KeystoreVaultManagerJvmTest {
         val failure = runCatching { provisioningFailingManager.prepareBiometricEncryptionCipher() }
             .exceptionOrNull()
         assertTrue(failure is IllegalStateException)
+    }
+
+    @Test
+    fun encryptedResultUsesContentEqualityAndStableContentHashCode() {
+        val first = KeystoreVaultManager.EncryptedResult(byteArrayOf(1, 2), byteArrayOf(3, 4))
+        val sameContent = KeystoreVaultManager.EncryptedResult(byteArrayOf(1, 2), byteArrayOf(3, 4))
+        val differentCiphertext = KeystoreVaultManager.EncryptedResult(byteArrayOf(9, 2), byteArrayOf(3, 4))
+        val differentIv = KeystoreVaultManager.EncryptedResult(byteArrayOf(1, 2), byteArrayOf(9, 4))
+
+        assertEquals(first, sameContent)
+        assertEquals(first.hashCode(), sameContent.hashCode())
+        assertNotEquals(first, differentCiphertext)
+        assertNotEquals(first, differentIv)
+        assertNotEquals(first, "not-an-encrypted-result")
+    }
+
+    @Test
+    fun pinVerificationRejectsUnsupportedIterationsAndMalformedHexSegments() {
+        val manager = KeystoreVaultManager(alias, injectedKeyStorePort = availableStore())
+
+        assertFalse(manager.verifyPin("946281", "9999:00:00"))
+        assertFalse(manager.verifyPin("946281", "2000001:00:00"))
+        assertFalse(manager.verifyPin("946281", "210000:0:00"))
+        assertFalse(manager.verifyPin("946281", "210000:00:0"))
+        assertFalse(manager.verifyPin("946281", "210000:00:gg"))
     }
 
     private fun availableStore(): FakeVaultKeyStorePort = FakeVaultKeyStorePort().apply {
