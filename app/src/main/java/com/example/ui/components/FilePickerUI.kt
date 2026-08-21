@@ -417,49 +417,55 @@ fun PickableFileRowItem(
                     checkedColor = BhagwaOrange
                 )
             )
-
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        color = getCategoryBgColor(file.category),
-                        shape = RoundedCornerShape(10.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = getCategoryIcon(file.category),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
+            FilePickerCategoryIcon(file.category)
             Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = file.name,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = stringResource(
-                        R.string.format_file_size_category,
-                        formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size)),
-                        localizedFileCategory(file.category)
-                    ),
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            FilePickerMetadata(file, Modifier.weight(1f))
         }
     }
 }
 
+@Composable
+private fun FilePickerCategoryIcon(category: FileCategory) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .background(
+                color = getCategoryBgColor(category),
+                shape = RoundedCornerShape(10.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = getCategoryIcon(category),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun FilePickerMetadata(file: PickableLocalFile, modifier: Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = file.name,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = stringResource(
+                R.string.format_file_size_category,
+                formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size)),
+                localizedFileCategory(file.category)
+            ),
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
 
 
 private fun getCategoryIcon(category: FileCategory): ImageVector {
