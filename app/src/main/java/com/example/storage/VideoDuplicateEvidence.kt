@@ -6,8 +6,10 @@ import kotlin.math.max
 
 object VideoDuplicateEvidence {
     private const val MIN_TEMPORAL_SAMPLES = 3
+    private const val HASH_BUCKET_PREFIX_LENGTH = 4
     private const val DHASH_HEX_LENGTH = 16
     private const val DHASH_BIT_LENGTH = 64
+    private const val NO_MATCH_SCORE = 0
     private const val MAX_MATCH_SCORE = 100
     private const val MIN_DURATION_TOLERANCE_MS = 1_000L
     private const val DURATION_TOLERANCE_DIVISOR = 20L
@@ -23,7 +25,7 @@ object VideoDuplicateEvidence {
     }
 
     fun bucketKeys(file: FileItemEntity): Set<String> = sampleHashes(file)
-        .map { hash -> "video_${hash.substring(0, 4)}" }
+        .map { hash -> "video_${hash.substring(0, HASH_BUCKET_PREFIX_LENGTH)}" }
         .toSet()
 
     fun compare(first: FileItemEntity, second: FileItemEntity, threshold: Int): Comparison {
@@ -39,7 +41,7 @@ object VideoDuplicateEvidence {
             secondSamples.size >= MIN_TEMPORAL_SAMPLES
         val comparison = when {
             cryptographicMatch || (chunkMatch && metadataMatch) -> Comparison(true, MAX_MATCH_SCORE)
-            !hasEnoughTemporalEvidence -> Comparison(false, 0)
+            !hasEnoughTemporalEvidence -> Comparison(false, NO_MATCH_SCORE)
             else -> temporalComparison(firstSamples, secondSamples, threshold, metadataMatch, chunkMatch)
         }
         return comparison
