@@ -207,6 +207,75 @@ class EntityJsonAdapterCoverageTest {
         }
     }
 
+    @Test
+    fun generatedCloudAdapter_appliesDefaultsAndSkipsUnknownFields() {
+        val adapter = moshi.adapter(CloudSyncItemEntity::class.java)
+        val beforeDecode = System.currentTimeMillis()
+
+        val decoded = requireNotNull(
+            adapter.fromJson(
+                """{
+                    "provider":"GOOGLE_DRIVE",
+                    "fileName":"legacy.txt",
+                    "fileSize":12,
+                    "status":"QUEUED",
+                    "futureCheckpoint":"ignored"
+                }"""
+            )
+        )
+
+        assertEquals(0L, decoded.id)
+        assertEquals("", decoded.filePath)
+        assertEquals(false, decoded.isCore)
+        assertEquals(true, decoded.lastSyncedMs >= beforeDecode)
+        assertEquals(true, decoded.operationId.startsWith("op-"))
+        assertEquals(null, decoded.leaseOwner)
+        assertEquals(0L, decoded.resumableBytesCommitted)
+    }
+
+    @Test
+    fun generatedCloudAdapter_rejectsNullForEveryNonNullableCloudField() {
+        val adapter = moshi.adapter(CloudSyncItemEntity::class.java)
+        val validJson = fullCloudJson()
+        val nullPayloads = listOf(
+            validJson.replace("\"provider\":\"GOOGLE_DRIVE\"", "\"provider\":null"),
+            validJson.replace("\"fileName\":\"source.txt\"", "\"fileName\":null"),
+            validJson.replace("\"filePath\":\"/source.txt\"", "\"filePath\":null"),
+            validJson.replace("\"fileSize\":1", "\"fileSize\":null"),
+            validJson.replace("\"status\":\"QUEUED\"", "\"status\":null"),
+            validJson.replace("\"lastSyncedMs\":2", "\"lastSyncedMs\":null"),
+            validJson.replace("\"isCore\":false", "\"isCore\":null"),
+            validJson.replace("\"operationId\":\"operation-1\"", "\"operationId\":null"),
+            validJson.replace("\"leaseExpiresAtMs\":3", "\"leaseExpiresAtMs\":null"),
+            validJson.replace("\"attemptCount\":4", "\"attemptCount\":null"),
+            validJson.replace("\"startedAtMs\":5", "\"startedAtMs\":null"),
+            validJson.replace("\"heartbeatAtMs\":6", "\"heartbeatAtMs\":null"),
+            validJson.replace("\"completedAtMs\":7", "\"completedAtMs\":null"),
+            validJson.replace("\"remoteFileId\":\"remote-1\"", "\"remoteFileId\":null"),
+            validJson.replace("\"resumableSessionUri\":\"session-1\"", "\"resumableSessionUri\":null"),
+            validJson.replace("\"resumableBytesCommitted\":8", "\"resumableBytesCommitted\":null"),
+        )
+
+        nullPayloads.forEach { payload ->
+            assertThrows(JsonDataException::class.java) { adapter.fromJson(payload) }
+        }
+    }
+
+    @Test
+    fun generatedCloudAdapter_rejectsEachMissingRequiredCloudField() {
+        val adapter = moshi.adapter(CloudSyncItemEntity::class.java)
+        val missingRequiredPayloads = listOf(
+            """{"fileName":"source.txt","fileSize":1,"status":"QUEUED"}""",
+            """{"provider":"GOOGLE_DRIVE","fileSize":1,"status":"QUEUED"}""",
+            """{"provider":"GOOGLE_DRIVE","fileName":"source.txt","status":"QUEUED"}""",
+            """{"provider":"GOOGLE_DRIVE","fileName":"source.txt","fileSize":1}""",
+        )
+
+        missingRequiredPayloads.forEach { payload ->
+            assertThrows(JsonDataException::class.java) { adapter.fromJson(payload) }
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun directVaultAdapter(): JsonAdapter<VaultItemEntity> {
         val adapterClass = Class.forName("com.example.data.VaultItemEntityJsonAdapter")
@@ -229,5 +298,27 @@ class EntityJsonAdapterCoverageTest {
         "encryptedAtMs":2,
         "isBiometricProtected":true,
         "vaultFormatVersion":3
+    }"""
+
+    private fun fullCloudJson(): String = """{
+        "id":1,
+        "provider":"GOOGLE_DRIVE",
+        "fileName":"source.txt",
+        "filePath":"/source.txt",
+        "fileSize":1,
+        "status":"QUEUED",
+        "lastSyncedMs":2,
+        "isCore":false,
+        "operationId":"operation-1",
+        "leaseOwner":"worker-1",
+        "leaseExpiresAtMs":3,
+        "attemptCount":4,
+        "startedAtMs":5,
+        "heartbeatAtMs":6,
+        "completedAtMs":7,
+        "lastErrorCode":"none",
+        "remoteFileId":"remote-1",
+        "resumableSessionUri":"session-1",
+        "resumableBytesCommitted":8
     }"""
 }
