@@ -70,3 +70,8 @@
 - [ ] Complete localization, architecture-boundary, and release-evidence remediation batches from the reconciled requirements.
 - [ ] Resolve or formally hold dependency and stale PRs using current green-baseline evidence.
 - [ ] Dispatch only one bounded CI validation after a complete correction batch and document terminal results.
+- [x] Install a local JDK compiler and Android SDK API 37/required build tools for pre-CI compilation feedback.
+- [x] Repair CloudSyncWorker durable checkpoint persistence to map sealed cloud result variants through CloudTransferProgress.
+- [x] Remove unnecessary Robolectric startup from the pure temporary-file JVM test.
+- [ ] Make the no-secret local debug build path compatible with the Google Services plugin without committing credentials or weakening Firebase consent controls.
+- [ ] Diagnose and, if safely feasible, stabilize local resource-constrained full JVM/Lint validation; do not treat daemon interruption as quality-gate evidence.

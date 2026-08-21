@@ -12,6 +12,7 @@ import com.example.data.CloudSyncItemEntity
 import com.example.data.CloudSyncOperationStore
 import com.example.data.CloudSyncPolicy
 import com.example.data.CloudSyncResult
+import com.example.data.CloudTransferProgress
 import com.example.data.FileDao
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
@@ -181,7 +182,16 @@ class CloudSyncWorker @JvmOverloads constructor(
         leaseOwner: String
     ): CloudSyncItemOutcome = when (result) {
         is CloudSyncResult.Success -> {
-            persistTransferState(operationId, result, leaseStore, leaseOwner)
+            persistTransferState(
+                operationId,
+                CloudTransferProgress(
+                    remoteFileId = result.remoteFileId,
+                    resumableSessionUri = result.resumableSessionUri,
+                    bytesCommitted = result.bytesCommitted
+                ),
+                leaseStore,
+                leaseOwner
+            )
             if (leaseStore.markCompleted(operationId, leaseOwner, System.currentTimeMillis()) > 0) {
                 CloudSyncItemOutcome.SYNCED
             } else {
@@ -190,7 +200,16 @@ class CloudSyncWorker @JvmOverloads constructor(
             }
         }
         is CloudSyncResult.Error -> {
-            persistTransferState(operationId, result, leaseStore, leaseOwner)
+            persistTransferState(
+                operationId,
+                CloudTransferProgress(
+                    remoteFileId = result.remoteFileId,
+                    resumableSessionUri = result.resumableSessionUri,
+                    bytesCommitted = result.bytesCommitted
+                ),
+                leaseStore,
+                leaseOwner
+            )
             val canRetry = result.isRetryable && runAttemptCount + 1 < RetryDecision.DEFAULT_MAX_ATTEMPTS
             leaseStore.markFailed(
                 operationId = operationId,
@@ -216,16 +235,16 @@ class CloudSyncWorker @JvmOverloads constructor(
 
     private suspend fun persistTransferState(
         operationId: String,
-        result: CloudSyncResult,
+        progress: CloudTransferProgress,
         leaseStore: CloudSyncOperationStore,
         leaseOwner: String
     ) {
         leaseStore.updateTransferState(
             operationId = operationId,
             leaseOwner = leaseOwner,
-            remoteFileId = result.remoteFileId.orEmpty(),
-            resumableSessionUri = result.resumableSessionUri.orEmpty(),
-            bytesCommitted = result.bytesCommitted
+            remoteFileId = progress.remoteFileId.orEmpty(),
+            resumableSessionUri = progress.resumableSessionUri.orEmpty(),
+            bytesCommitted = progress.bytesCommitted
         )
     }
 
