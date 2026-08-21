@@ -88,7 +88,7 @@ class VaultManagerEngine(
             throw VaultAuthenticationLockedOutException(currentState.lockedUntilMs)
         }
         if (!verifyVaultPin(pin)) {
-            recordFailedAuthentication(currentState.failedAttempts, now)
+            recordFailedAuthentication(vaultStore, currentState.failedAttempts, now)
             error("Invalid vault PIN")
         }
         val dek = if (hasPinEnvelope(vaultStore)) {
@@ -97,7 +97,7 @@ class VaultManagerEngine(
             migrateLegacyPinToEnvelope(vaultStore, keystoreVaultManager, pin)
         }
         return try {
-            resetFailedAuthentication()
+            resetFailedAuthentication(vaultStore)
             VaultCryptoSession.fromKeyBytes(dek)
         } finally {
             dek.fill(0)
@@ -109,7 +109,7 @@ class VaultManagerEngine(
         val currentState = getVaultLockoutState()
         if (currentState.lockedUntilMs > now || !isValidVaultPin(newPin)) return false
         return if (!verifyVaultPin(oldPin)) {
-            recordFailedAuthentication(currentState.failedAttempts, now)
+            recordFailedAuthentication(vaultStore, currentState.failedAttempts, now)
             false
         } else {
             val currentDek = try {
@@ -190,7 +190,7 @@ class VaultManagerEngine(
         val wrapped = decode(stored(vaultStore, BIOMETRIC_WRAP_CIPHERTEXT_KEY))
         val dek = cipher.doFinal(wrapped)
         return try {
-            resetFailedAuthentication()
+            resetFailedAuthentication(vaultStore)
             VaultCryptoSession.fromKeyBytes(dek)
         } finally {
             dek.fill(0)
@@ -208,35 +208,40 @@ class VaultManagerEngine(
         return committed
     }
 
-    private fun recordFailedAuthentication(previousAttempts: Int, now: Long) {
-        val nextAttempts = previousAttempts.coerceAtLeast(0) + 1
-        val lockoutExponent = ((nextAttempts - 1) / MAX_VAULT_FAILED_ATTEMPTS)
-            .coerceAtMost(MAX_VAULT_LOCKOUT_EXPONENT)
-        val duration = (VAULT_BASE_LOCKOUT_MS * (1L shl lockoutExponent))
-            .coerceAtMost(VAULT_MAX_LOCKOUT_MS)
-        val lockedUntil = if (nextAttempts >= MAX_VAULT_FAILED_ATTEMPTS) now + duration else 0L
-        check(vaultStore.commit(
-            mapOf(
-                FAILED_ATTEMPTS_KEY to nextAttempts.toString(),
-                LOCKED_UNTIL_MS_KEY to lockedUntil.toString()
-            )
-        )) { "Vault authentication state could not be persisted" }
-    }
-
-    private fun resetFailedAuthentication() {
-        check(vaultStore.commit(
-            mapOf(
-                FAILED_ATTEMPTS_KEY to "0",
-                LOCKED_UNTIL_MS_KEY to "0"
-            )
-        )) { "Vault authentication state could not be reset" }
-    }
 }
 
 private fun isValidVaultPin(pin: String): Boolean =
     pin.length in MIN_VAULT_PIN_LENGTH..MAX_VAULT_PIN_LENGTH &&
         pin.none(Char::isWhitespace) &&
         pin.any(Char::isDigit)
+
+private fun recordFailedAuthentication(
+    vaultStore: StringKeyValueStore,
+    previousAttempts: Int,
+    now: Long
+) {
+    val nextAttempts = previousAttempts.coerceAtLeast(0) + 1
+    val lockoutExponent = ((nextAttempts - 1) / MAX_VAULT_FAILED_ATTEMPTS)
+        .coerceAtMost(MAX_VAULT_LOCKOUT_EXPONENT)
+    val duration = (VAULT_BASE_LOCKOUT_MS * (1L shl lockoutExponent))
+        .coerceAtMost(VAULT_MAX_LOCKOUT_MS)
+    val lockedUntil = if (nextAttempts >= MAX_VAULT_FAILED_ATTEMPTS) now + duration else 0L
+    check(vaultStore.commit(
+        mapOf(
+            FAILED_ATTEMPTS_KEY to nextAttempts.toString(),
+            LOCKED_UNTIL_MS_KEY to lockedUntil.toString()
+        )
+    )) { "Vault authentication state could not be persisted" }
+}
+
+private fun resetFailedAuthentication(vaultStore: StringKeyValueStore) {
+    check(vaultStore.commit(
+        mapOf(
+            FAILED_ATTEMPTS_KEY to "0",
+            LOCKED_UNTIL_MS_KEY to "0"
+        )
+    )) { "Vault authentication state could not be reset" }
+}
 
 internal fun VaultManagerEngine.getStoredVaultPinHash(): String = storedVaultPinHash
 
