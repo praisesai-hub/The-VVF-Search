@@ -146,9 +146,23 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     val name = child.name ?: continue
                     val category = determineCategory(name)
                     val hash = if (computeHashes) computeContentUriHash(child.uri) else ""
-                    val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeContentUriDHash(child.uri) else ""
-                    val documentCandidateFingerprint = if (computeHashes && category == FileCategory.DOCUMENTS) computeContentUriDocumentCandidateFingerprint(child.uri) else ""
-                    val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeContentUriVideoFingerprint(child.uri) else null
+                    val visualHash = if (computeHashes && category == FileCategory.IMAGES) {
+                        computeContentUriDHash(child.uri)
+                    } else {
+                        ""
+                    }
+                    val documentCandidateFingerprint = if (
+                        computeHashes && category == FileCategory.DOCUMENTS
+                    ) {
+                        computeContentUriDocumentCandidateFingerprint(child.uri)
+                    } else {
+                        ""
+                    }
+                    val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) {
+                        computeContentUriVideoFingerprint(child.uri)
+                    } else {
+                        null
+                    }
                     emit(FileItemEntity(
                         name = name,
                         path = uriString,
@@ -200,9 +214,23 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                 if (processedPaths.add(path)) {
                     val category = determineCategory(file.name)
                     val hash = if (computeHashes) computeFileHashQuietly(file) else ""
-                    val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeDHashQuietly(file) else ""
-                    val documentCandidateFingerprint = if (computeHashes && category == FileCategory.DOCUMENTS) computeDocumentCandidateFingerprint(file) else ""
-                    val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeVideoFingerprint(file) else null
+                    val visualHash = if (computeHashes && category == FileCategory.IMAGES) {
+                        computeDHashQuietly(file)
+                    } else {
+                        ""
+                    }
+                    val documentCandidateFingerprint = if (
+                        computeHashes && category == FileCategory.DOCUMENTS
+                    ) {
+                        computeDocumentCandidateFingerprint(file)
+                    } else {
+                        ""
+                    }
+                    val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) {
+                        computeVideoFingerprint(file)
+                    } else {
+                        null
+                    }
                     onItemDiscovered(FileItemEntity(
                         name = file.name,
                         path = path,
@@ -265,9 +293,23 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                 if (!processedPaths.add(path)) continue
                 val category = determineCategory(name)
                 val hash = if (computeHashes) computeContentUriHash(itemUri) else ""
-                val visualHash = if (computeHashes && category == FileCategory.IMAGES) computeContentUriDHash(itemUri) else ""
-                val documentCandidateFingerprint = if (computeHashes && category == FileCategory.DOCUMENTS) computeContentUriDocumentCandidateFingerprint(itemUri) else ""
-                val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) computeContentUriVideoFingerprint(itemUri) else null
+                val visualHash = if (computeHashes && category == FileCategory.IMAGES) {
+                    computeContentUriDHash(itemUri)
+                } else {
+                    ""
+                }
+                val documentCandidateFingerprint = if (
+                    computeHashes && category == FileCategory.DOCUMENTS
+                ) {
+                    computeContentUriDocumentCandidateFingerprint(itemUri)
+                } else {
+                    ""
+                }
+                val videoFingerprint = if (computeHashes && category == FileCategory.VIDEO) {
+                    computeContentUriVideoFingerprint(itemUri)
+                } else {
+                    null
+                }
                 onItemDiscovered(FileItemEntity(
                     name = name,
                     path = path,
@@ -298,7 +340,9 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, uri)
-            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val durationMs = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull() ?: 0L
             val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
             val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
             val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO).orEmpty()
@@ -327,7 +371,11 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             Log.w(TAG, "Content URI video fingerprint failed: ${e.message}")
             null
         } finally {
-            try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release() } catch (_: Exception) {}
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release()
+            } catch (_: Exception) {
+                // Best-effort resource cleanup.
+            }
         }
     }
 
@@ -385,7 +433,11 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private suspend fun computeFileHashQuietly(file: File): String = try { computeFileHash(file) } catch (_: Exception) { "" }
+    private suspend fun computeFileHashQuietly(file: File): String = try {
+        computeFileHash(file)
+    } catch (_: Exception) {
+        ""
+    }
 
     private suspend fun computeContentUriDHash(uri: Uri): String = try {
         val bitmap = withContext(Dispatchers.IO) {
@@ -496,8 +548,16 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             for (y in 0 until 8) for (x in 0 until 8) {
                 val pixelLeft = scaledBitmap[x, y]
                 val pixelRight = scaledBitmap[x + 1, y]
-                val grayLeft = (Color.red(pixelLeft) * 299 + Color.green(pixelLeft) * 587 + Color.blue(pixelLeft) * 114) / 1000
-                val grayRight = (Color.red(pixelRight) * 299 + Color.green(pixelRight) * 587 + Color.blue(pixelRight) * 114) / 1000
+                val grayLeft = (
+                    Color.red(pixelLeft) * 299 +
+                        Color.green(pixelLeft) * 587 +
+                        Color.blue(pixelLeft) * 114
+                    ) / 1000
+                val grayRight = (
+                    Color.red(pixelRight) * 299 +
+                        Color.green(pixelRight) * 587 +
+                        Color.blue(pixelRight) * 114
+                    ) / 1000
                 if (grayLeft > grayRight) hashBits = hashBits or (1L shl (63 - bitIndex))
                 bitIndex++
             }
@@ -553,7 +613,9 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(file.absolutePath)
-            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val durationMs = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull() ?: 0L
             val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
             val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
             val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO).orEmpty()
@@ -583,7 +645,11 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             Log.e(TAG, "Video multi-sample fingerprint failed for ${file.name}: ${e.message}")
             null
         } finally {
-            try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release() } catch (_: Exception) {}
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release()
+            } catch (_: Exception) {
+                // Best-effort resource cleanup.
+            }
         }
     }
 
@@ -616,13 +682,19 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         }
     }
 
-    suspend fun computeVideoDHash(file: File, timeUs: Long = DEFAULT_VIDEO_KEYFRAME_TIME_US): String = withContext(Dispatchers.IO) {
+    suspend fun computeVideoDHash(
+        file: File,
+        timeUs: Long = DEFAULT_VIDEO_KEYFRAME_TIME_US
+    ): String = withContext(Dispatchers.IO) {
         if (!file.exists() || !file.canRead() || !isVideoFile(file.name)) return@withContext ""
         ensureActive()
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(file.absolutePath)
-            val keyframeBitmap = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: retriever.frameAtTime
+            val keyframeBitmap = retriever.getFrameAtTime(
+                timeUs,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            ) ?: retriever.frameAtTime
             if (keyframeBitmap != null) {
                 val hash = computeDHashFromBitmap(keyframeBitmap)
                 keyframeBitmap.recycle()
@@ -632,13 +704,23 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             Log.e(TAG, "Video keyframe dHash failed for ${file.name}: ${e.message}")
             ""
         } finally {
-            try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release() } catch (_: Exception) {}
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release()
+            } catch (_: Exception) {
+                // Best-effort resource cleanup.
+            }
         }
     }
 
-    fun isVideoFile(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() in listOf("mp4", "mkv", "avi", "mov", "webm", "3gp", "flv")
+    fun isVideoFile(fileName: String): Boolean =
+        fileName.substringAfterLast('.', "").lowercase() in listOf(
+            "mp4", "mkv", "avi", "mov", "webm", "3gp", "flv"
+        )
     fun isPdfFile(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() == "pdf"
-    fun isDocumentFile(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() in listOf("pdf", "doc", "docx", "txt", "rtf", "xls", "xlsx", "ppt", "pptx", "csv")
+    fun isDocumentFile(fileName: String): Boolean =
+        fileName.substringAfterLast('.', "").lowercase() in listOf(
+            "pdf", "doc", "docx", "txt", "rtf", "xls", "xlsx", "ppt", "pptx", "csv"
+        )
 
     /**
      * Computes structural evidence from document size plus boundary bytes.
@@ -679,7 +761,10 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     }
 
     suspend fun computeDHashQuietly(file: File): String = try { computeDHash(file) } catch (_: Exception) { "" }
-    fun isImageFile(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() in listOf("jpg", "jpeg", "png", "webp", "heic", "bmp", "gif")
+    fun isImageFile(fileName: String): Boolean =
+        fileName.substringAfterLast('.', "").lowercase() in listOf(
+            "jpg", "jpeg", "png", "webp", "heic", "bmp", "gif"
+        )
 
     override fun calculateHammingDistance(hash1: String, hash2: String): Int {
         if (hash1.length != 16 || hash2.length != 16) return -1
