@@ -52,6 +52,39 @@ class SmartManagerRepositoryJvmCoverageTest {
     }
 
     @Test
+    fun cloudQueuePersistsEnabledTransferAndRejectsEquivalentQueuedPath() = runBlocking {
+        dao.insertPlugins(
+            listOf(PluginEntity("gdrive_sync", "Drive", "CLOUD_PROVIDER", "Drive", true, true))
+        )
+        val repository = repository { true }
+
+        assertTrue(
+            repository.enqueueCloudSyncItem(
+                provider = "GOOGLE_DRIVE",
+                fileName = "invoice.pdf",
+                size = 55L,
+                filePath = "/documents/invoice.pdf",
+                isCore = true
+            )
+        )
+
+        val queued = dao.getCloudSyncItems().first().single()
+        assertEquals("QUEUED", queued.status)
+        assertEquals("/documents/invoice.pdf", queued.filePath)
+        assertTrue(queued.isCore)
+        assertTrue(queued.operationId.isNotBlank())
+        assertFalse(
+            repository.enqueueCloudSyncItem(
+                provider = "google_drive",
+                fileName = "renamed.pdf",
+                size = 99L,
+                filePath = "/documents/invoice.pdf"
+            )
+        )
+        assertEquals(1, dao.getCloudSyncItems().first().size)
+    }
+
+    @Test
     fun cloudCancellationOnlyRemovesNonSyncedRowsAndRetryRejectsMissingOrSyncedRows() = runBlocking {
         val syncedId = dao.insertCloudSyncItem(cloudItem("SYNCED"))
         val queuedId = dao.insertCloudSyncItem(cloudItem("QUEUED"))
