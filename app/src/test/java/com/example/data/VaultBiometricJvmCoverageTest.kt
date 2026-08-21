@@ -122,6 +122,19 @@ class VaultBiometricJvmCoverageTest {
     }
 
     @Test
+    fun vaultLockoutState_onlyLocksUntilItsDeadlineIsInTheFuture() {
+        val now = System.currentTimeMillis()
+
+        assertTrue(
+            VaultLockoutState(failedAttempts = 5, lockedUntilMs = now + 60_000L).isLockedOut
+        )
+        assertFalse(VaultLockoutState(failedAttempts = 5, lockedUntilMs = now).isLockedOut)
+        assertFalse(
+            VaultLockoutState(failedAttempts = 5, lockedUntilMs = now - 1L).isLockedOut
+        )
+    }
+
+    @Test
     fun changeVaultPin_rewrapsTheSameDekAndRejectsThePreviousPin() {
         val manager = KeystoreVaultManager(
             "vault-test-key",
