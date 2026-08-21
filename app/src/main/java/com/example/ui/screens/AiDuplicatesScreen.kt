@@ -76,6 +76,8 @@ import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 
+private const val PERCENT_SCALE = 100
+
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @Composable
 fun AiDuplicatesScreen(
@@ -242,7 +244,10 @@ fun DuplicateCleanerSection(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = stringResource(R.string.background_indexing_progress, (scanProgress * 100).toInt()),
+                            text = stringResource(
+                                R.string.background_indexing_progress,
+                                (scanProgress * PERCENT_SCALE).toInt()
+                            ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -273,7 +278,10 @@ fun DuplicateCleanerSection(
                             )
                         }
                         Text(
-                            text = stringResource(R.string.indexed_percent, (documentStats.third * 100).toInt()),
+                            text = stringResource(
+                                R.string.indexed_percent,
+                                (documentStats.third * PERCENT_SCALE).toInt()
+                            ),
                             fontWeight = FontWeight.Bold,
                             color = SkyCyan,
                             fontSize = 13.sp
