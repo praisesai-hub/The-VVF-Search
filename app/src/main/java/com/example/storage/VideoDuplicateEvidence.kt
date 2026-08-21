@@ -75,8 +75,10 @@ object VideoDuplicateEvidence {
 
     private fun hammingDistance(first: String, second: String): Int {
         if (first.length != 16 || second.length != 16) return 64
-        return first.zip(second).sum { (left, right) ->
-            (left.digitToInt(16) xor right.digitToInt(16)).countOneBits()
+        return first.zip(second).sumOf { pair ->
+            val left = pair.first.digitToInt(16)
+            val right = pair.second.digitToInt(16)
+            (left xor right).countOneBits()
         }
     }
 }

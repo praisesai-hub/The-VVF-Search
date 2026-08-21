@@ -17,13 +17,16 @@ class CacheCleanupWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result = executeWithDurableLease(
+    override suspend fun doWork(): Result = kotlinx.coroutines.coroutineScope {
+        executeWithDurableLease(
         context = applicationContext,
-        worker = this,
+        worker = this@CacheCleanupWorker,
+        scope = this,
         workName = WORK_NAME,
         operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
         block = { runWork() }
-    )
+        )
+    }
 
     private suspend fun runWork(): Result {
         Log.i(TAG, "Starting CacheCleanupWorker...")

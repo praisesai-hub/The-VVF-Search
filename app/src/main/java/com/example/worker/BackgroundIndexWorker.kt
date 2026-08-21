@@ -23,13 +23,16 @@ class BackgroundIndexWorker(
         const val WORK_NAME = "VVF_BACKGROUND_STORAGE_INDEX"
     }
 
-    override suspend fun doWork(): androidx.work.ListenableWorker.Result = executeWithDurableLease(
+    override suspend fun doWork(): androidx.work.ListenableWorker.Result = kotlinx.coroutines.coroutineScope {
+        executeWithDurableLease(
         context = applicationContext,
-        worker = this,
+        worker = this@BackgroundIndexWorker,
+        scope = this,
         workName = WORK_NAME,
         operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
         block = { runWork() }
-    )
+        )
+    }
 
     private suspend fun runWork(): androidx.work.ListenableWorker.Result {
         Log.i(TAG, "Starting background file storage indexing...")
