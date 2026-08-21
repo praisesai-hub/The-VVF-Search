@@ -162,6 +162,44 @@ class FirebaseAuthManagerTest {
     }
 
     @Test
+    fun signInWithGoogle_returnsTheAuthenticatedFirebaseUser() = runBlocking {
+        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        val expectedUser = mockk<FirebaseUser>()
+        val authResult = mockk<AuthResult> {
+            every { user } returns expectedUser
+        }
+        coEvery {
+            credentialManager.getCredential(any(), any<GetCredentialRequest>())
+        } returns GetCredentialResponse(googleCredential())
+        every { auth.signInWithCredential(any()) } returns Tasks.forResult(authResult)
+        val manager = FirebaseAuthManager(context, auth, credentialManager)
+
+        val result = manager.signInWithGoogle()
+
+        assertTrue(result.isSuccess)
+        assertSame(expectedUser, result.getOrNull())
+        verify(exactly = 1) { auth.signInWithCredential(any()) }
+    }
+
+    @Test
+    fun signInWithGoogle_failsClosedWhenFirebaseReturnsNoUser() = runBlocking {
+        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        val authResult = mockk<AuthResult> {
+            every { user } returns null
+        }
+        coEvery {
+            credentialManager.getCredential(any(), any<GetCredentialRequest>())
+        } returns GetCredentialResponse(googleCredential())
+        every { auth.signInWithCredential(any()) } returns Tasks.forResult(authResult)
+        val manager = FirebaseAuthManager(context, auth, credentialManager)
+
+        val result = manager.signInWithGoogle()
+
+        assertTrue(result.isFailure)
+        assertEquals("Firebase did not return an authenticated user", result.exceptionOrNull()?.message)
+    }
+
+    @Test
     fun signInWithMicrosoft_returnsTheAuthenticatedUserOnSuccess() {
         val expectedUser = mockk<FirebaseUser>()
         val authResult = mockk<AuthResult> {
@@ -210,4 +248,10 @@ class FirebaseAuthManagerTest {
         assertFalse(result.isSuccessful)
         assertEquals("Firebase did not return an authenticated user", result.exception?.message)
     }
+
+    private fun googleCredential() =
+        com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Builder()
+            .setId("fixture-user")
+            .setIdToken("eyJhbGciOiJub25lIn0.eyJzdWIiOiJmaXh0dXJlLXVzZXIifQ.c2lnbmF0dXJl")
+            .build()
 }
