@@ -31,12 +31,15 @@ GitHub run `32421178517` (Android CI/CD #355) remained in progress at the time o
 | `32434615029` | `c12bc5e` | Failed: JVM coverage and Detekt. | Aggregate 50.01%, security 76.22%, data 68.65%, vault 90.21%, cloud 85.18%. | Skipped by the new job dependency; no emulator was provisioned. |
 | `32438766220` | `bccf9bc` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.12%, security 76.22%, data 68.64%, vault 90.21%, cloud 85.18%. | Skipped by the successful-build dependency; no emulator was provisioned. |
 | `32439552753` | `e402eed` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.12%, security 76.22%, data 68.65%, vault 90.21%, cloud 85.18%. | Skipped by the successful-build dependency; no emulator was provisioned. |
+| `32440000409` | `8b49184` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.37%, security 76.22%, data 69.35%, vault 90.36%, cloud 90.44% (cloud floor passed). | Skipped by the successful-build dependency; no emulator was provisioned. |
 
 The `Run Instrumented Android Tests` job now declares a successful `Build & Test Android App` dependency. This changes the prior failure mode: a JVM coverage failure prevents emulator allocation rather than requiring a later cancellation. The earlier cancellation used the workflow-run operation because GitHub documents cancellation at run scope rather than as a per-job REST operation.[1]
 
 Run `32438766220` completed **all JVM unit tests successfully** before coverage enforcement failed. Its `jvm-unit-test-coverage` artifact was downloaded and checked locally with `scripts/check_coverage_floor.py`; the latest table row is therefore artifact-derived rather than inferred from a workflow log. The report contained 42,312 covered and 84,422 total instructions for aggregate coverage, and all five configured JVM package floors remained below target.
 
 Run `32439552753` independently reproduced the same gate failures after the Keystore/Vault test batch: 42,304 covered out of 84,404 aggregate instructions, with no package-specific floor increase at the displayed two-decimal precision. The subsequent locally verified commits therefore target other recorded high-miss paths—Cloud queue persistence and generated adapter defaults—rather than claiming an unmeasured improvement.
+
+Run `32440000409` measured the first cloud-gate success: 3,527 of 3,900 cloud-sync instructions covered (**90.44%**) against the 90% floor. It also raised repository/data coverage by 0.70 percentage points and Vault coverage by 0.15 points. Aggregate, Security, Data, Vault, and Detekt gates still failed, so this remains a no-merge result.
 
 ## References
 
