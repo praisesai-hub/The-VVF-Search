@@ -126,7 +126,8 @@ class DuplicateCleanupWorker(
         if (totals.duplicatesFound > 0) {
             Log.i(
                 TAG,
-                "DuplicateCleanupWorker moved ${totals.duplicatesFound} duplicate files (${totals.bytesCleaned / 1024} KB) to Recycle Bin."
+                "DuplicateCleanupWorker moved ${totals.duplicatesFound} duplicate files " +
+                    "(${totals.bytesCleaned / 1024} KB) to Recycle Bin."
             )
             sendNotification(applicationContext, totals.duplicatesFound, totals.bytesCleaned)
         } else {
