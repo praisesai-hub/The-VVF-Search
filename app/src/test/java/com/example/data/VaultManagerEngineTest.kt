@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
 import com.example.security.KeystoreVaultManager
+import com.example.security.StringKeyValueStore
+import javax.crypto.Cipher
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -244,6 +246,47 @@ class VaultManagerEngineTest {
         verify(exactly = 0) { keystore.deleteBiometricWrapKey() }
     }
 
+    @Test
+    fun unlockWithPin_failsClosedWhenSuccessfulAuthenticationCannotResetLockoutState() {
+        val store = CommitControlledStore()
+        every { keystore.hashPin("12345678") } returns "stored-hash"
+        every { keystore.verifyPin("12345678", "stored-hash") } returns true
+        val engine = VaultManagerEngine(context, keystore, injectedVaultStore = store)
+
+        assertTrue(engine.initializeVaultPin("12345678"))
+        store.commitResult = false
+
+        assertThrows(IllegalStateException::class.java) { engine.unlockWithPin("12345678") }
+        assertEquals("0", store.getString("vault_failed_attempts"))
+        assertEquals("0", store.getString("vault_locked_until_ms"))
+    }
+
+    @Test
+    fun changeVaultPin_returnsFalseWhenPresentPinEnvelopeCannotBeUnwrapped() {
+        val store = CommitControlledStore().apply {
+            putPersistedValue("vault_pin_hash", "stored-hash")
+            putPersistedValue("vault_pin_wrap_salt", "AAAAAAAAAAAAAAAAAAAAAA==")
+            putPersistedValue("vault_pin_wrap_iv", "AAAAAAAAAAAAAAAA")
+            putPersistedValue("vault_pin_wrap_ciphertext", "AAAAAAAAAAAAAAAAAAAAAA==")
+        }
+        every { keystore.verifyPin("12345678", "stored-hash") } returns true
+        val engine = VaultManagerEngine(context, keystore, injectedVaultStore = store)
+
+        assertFalse(engine.changeVaultPin("12345678", "87654321"))
+        assertEquals("stored-hash", store.getString("vault_pin_hash"))
+        verify(exactly = 0) { keystore.hashPin("87654321") }
+    }
+
+    @Test
+    fun prepareBiometricEnrollmentCipher_delegatesToKeystore() {
+        val cipher = mockk<Cipher>()
+        every { keystore.prepareBiometricEncryptionCipher() } returns cipher
+        val engine = VaultManagerEngine(context, keystore, CommitControlledPreferences(commitResult = true))
+
+        assertEquals(cipher, engine.prepareBiometricEnrollmentCipher())
+        verify(exactly = 1) { keystore.prepareBiometricEncryptionCipher() }
+    }
+
     private class CommitControlledPreferences(
         private val commitResult: Boolean
     ) : SharedPreferences {
@@ -318,6 +361,25 @@ class VaultManagerEngineTest {
                 pendingRemovals.forEach(values::remove)
                 values.putAll(pendingValues)
             }
+        }
+    }
+
+    private class CommitControlledStore : StringKeyValueStore {
+        private val values = mutableMapOf<String, String>()
+        var commitResult = true
+
+        fun putPersistedValue(key: String, value: String) {
+            values[key] = value
+        }
+
+        override fun getString(key: String, defaultValue: String?): String? = values[key] ?: defaultValue
+
+        override fun commit(values: Map<String, String?>): Boolean {
+            if (!commitResult) return false
+            values.forEach { (key, value) ->
+                if (value == null) this.values.remove(key) else this.values[key] = value
+            }
+            return true
         }
     }
 }
