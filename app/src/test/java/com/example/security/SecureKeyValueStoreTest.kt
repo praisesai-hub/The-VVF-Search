@@ -214,6 +214,37 @@ class SecureKeyValueStoreTest {
     }
 
     @Test
+    fun `crypto provider failures fail closed before any durable store is created`() {
+        val failures = listOf<Throwable>(
+            GeneralSecurityException("keystore unavailable"),
+            IllegalStateException("keystore state invalid"),
+        )
+
+        failures.forEachIndexed { index, failure ->
+            val fileName = "failing-crypto-$index"
+            val failingStore = SecureKeyValueStore(
+                context = context,
+                fileName = fileName,
+                keyAlias = "unused",
+                directory = directory,
+                crypto = object : SecureStoreCrypto {
+                    override fun encrypt(plaintext: ByteArray): EncryptedPayload = throw failure
+
+                    override fun decrypt(payload: EncryptedPayload): ByteArray = error("not used")
+                }
+            )
+
+            val exception = assertThrows(IllegalStateException::class.java) {
+                failingStore.commit(mapOf("token" to "secret"))
+            }
+            assertEquals("Unable to durably write secure preferences", exception.message)
+            assertEquals(failure, exception.cause)
+            assertFalse(File(directory, fileName).exists())
+            assertFalse(File(directory, "$fileName.tmp").exists())
+        }
+    }
+
+    @Test
     fun `invalid file name is rejected`() {
         assertThrows(IllegalArgumentException::class.java) {
             SecureKeyValueStore(context, "../unsafe", "unused", directory, crypto)
@@ -236,7 +267,7 @@ class SecureKeyValueStoreTest {
     }
 
     @Test
-    fun `invalid crypto output is rejected before any encrypted envelope is written`() {
+    fun `invalid crypto output fails closed before any encrypted envelope is written`() {
         val invalidIvStore = SecureKeyValueStore(
             context = context,
             fileName = "invalid-iv-store",
@@ -258,10 +289,10 @@ class SecureKeyValueStoreTest {
             }
         )
 
-        assertThrows(IllegalArgumentException::class.java) {
+        assertThrows(IllegalStateException::class.java) {
             invalidIvStore.commit(mapOf("token" to "value"))
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertThrows(IllegalStateException::class.java) {
             invalidCiphertextStore.commit(mapOf("token" to "value"))
         }
         assertFalse(File(directory, "invalid-iv-store").exists())

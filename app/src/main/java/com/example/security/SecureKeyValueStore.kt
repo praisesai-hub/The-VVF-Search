@@ -127,9 +127,18 @@ class SecureKeyValueStore(
 
     private fun writeValues(values: Map<String, String>) {
         val plaintext = encodeValues(values)
-        val encrypted = crypto.encrypt(plaintext)
-        require(encrypted.iv.size in MIN_IV_BYTES..MAX_IV_BYTES) { "Invalid AES-GCM IV" }
-        require(encrypted.ciphertext.size in MIN_CIPHERTEXT_BYTES..MAX_CIPHERTEXT_BYTES) { "Invalid ciphertext" }
+        val encrypted = try {
+            crypto.encrypt(plaintext).also { payload ->
+                require(payload.iv.size in MIN_IV_BYTES..MAX_IV_BYTES) { "Invalid AES-GCM IV" }
+                require(payload.ciphertext.size in MIN_CIPHERTEXT_BYTES..MAX_CIPHERTEXT_BYTES) { "Invalid ciphertext" }
+            }
+        } catch (e: GeneralSecurityException) {
+            secureWriteFailure(e)
+        } catch (e: IllegalArgumentException) {
+            secureWriteFailure(e)
+        } catch (e: IllegalStateException) {
+            secureWriteFailure(e)
+        }
 
         try {
             FileOutputStream(tempFile, false).use { output ->
@@ -148,15 +157,6 @@ class SecureKeyValueStore(
                 throw IOException("Atomic secure store replacement failed")
             }
         } catch (e: IOException) {
-            tempFile.delete()
-            secureWriteFailure(e)
-        } catch (e: GeneralSecurityException) {
-            tempFile.delete()
-            secureWriteFailure(e)
-        } catch (e: IllegalArgumentException) {
-            tempFile.delete()
-            secureWriteFailure(e)
-        } catch (e: IllegalStateException) {
             tempFile.delete()
             secureWriteFailure(e)
         }
