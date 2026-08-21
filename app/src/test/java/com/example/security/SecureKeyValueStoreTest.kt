@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verifyOrder
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -57,6 +58,27 @@ class SecureKeyValueStoreTest {
 
         assertEquals("updated", store.getString("a"))
         assertNull(store.getString("b"))
+    }
+
+    @Test
+    fun `shared preferences adapter removes null values before durable updates`() {
+        val preferences = mockk<android.content.SharedPreferences>()
+        val editor = mockk<android.content.SharedPreferences.Editor>()
+        every { preferences.edit() } returns editor
+        every { editor.remove("expired") } returns editor
+        every { editor.putString("active", "value") } returns editor
+        every { editor.commit() } returns false
+        every { preferences.getString("missing", "fallback") } returns "fallback"
+        val store = SharedPreferencesKeyValueStore(preferences)
+
+        assertFalse(store.commit(mapOf("active" to "value", "expired" to null)))
+        assertEquals("fallback", store.getString("missing", "fallback"))
+        verifyOrder {
+            preferences.edit()
+            editor.remove("expired")
+            editor.putString("active", "value")
+            editor.commit()
+        }
     }
 
     @Test
