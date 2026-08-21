@@ -349,8 +349,16 @@ class DuplicateDetectionEngineTest {
             sizeBytes = 1L,
             documentCandidateFingerprint = "same-fingerprint"
         )
-        val second = first.copy(id = 3002L, name = "report-two.pdf", path = "/docs/report-two.pdf")
-        val different = first.copy(id = 3003L, name = "different.pdf", documentCandidateFingerprint = "different-fingerprint")
+        val second = first.copy(
+            id = 3002L,
+            name = "report-two.pdf",
+            path = "/docs/report-two.pdf"
+        )
+        val different = first.copy(
+            id = 3003L,
+            name = "different.pdf",
+            documentCandidateFingerprint = "different-fingerprint"
+        )
         val vaultCopy = first.copy(id = 3004L, name = "vault.pdf", isVault = true)
         val recycledCopy = first.copy(id = 3005L, name = "recycled.pdf", isRecycleBin = true)
         val wrongCategory = first.copy(id = 3006L, name = "photo.jpg", category = FileCategory.IMAGES.name)
