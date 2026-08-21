@@ -33,28 +33,38 @@ object VideoDuplicateEvidence {
             resolutionCompatible(first, second) &&
             audioCompatible(first, second)
         val cryptographicMatch = first.md5Hash.isNotBlank() && first.md5Hash == second.md5Hash
-        if (cryptographicMatch) return Comparison(true, MAX_MATCH_SCORE)
         val chunkMatch = first.videoChunkHash.isNotBlank() &&
             first.videoChunkHash == second.videoChunkHash
-        if (chunkMatch && metadataMatch) return Comparison(true, MAX_MATCH_SCORE)
-        if (firstSamples.size < MIN_TEMPORAL_SAMPLES || secondSamples.size < MIN_TEMPORAL_SAMPLES) {
-            return Comparison(false, 0)
+        val hasEnoughTemporalEvidence = firstSamples.size >= MIN_TEMPORAL_SAMPLES &&
+            secondSamples.size >= MIN_TEMPORAL_SAMPLES
+        val comparison = when {
+            cryptographicMatch || (chunkMatch && metadataMatch) -> Comparison(true, MAX_MATCH_SCORE)
+            !hasEnoughTemporalEvidence -> Comparison(false, 0)
+            else -> temporalComparison(firstSamples, secondSamples, threshold, metadataMatch, chunkMatch)
         }
+        return comparison
+    }
 
+    private fun temporalComparison(
+        firstSamples: List<String>,
+        secondSamples: List<String>,
+        threshold: Int,
+        metadataMatch: Boolean,
+        chunkMatch: Boolean
+    ): Comparison {
         val maxDistance = ((MAX_MATCH_SCORE - threshold) * DHASH_BIT_LENGTH) / MAX_MATCH_SCORE
         val compared = firstSamples.zip(secondSamples).take(MIN_TEMPORAL_SAMPLES)
         val distances = compared.map { (left, right) -> hammingDistance(left, right) }
         val matchingSamples = distances.count { it <= maxDistance }
         val averageDistance = distances.average()
         val temporalMatch = matchingSamples == MIN_TEMPORAL_SAMPLES && averageDistance <= maxDistance
-        val match = temporalMatch && metadataMatch
         val score = if (chunkMatch) {
             MAX_MATCH_SCORE
         } else {
             ((DHASH_BIT_LENGTH.toDouble() - averageDistance.coerceIn(0.0, DHASH_BIT_LENGTH.toDouble())) *
                 MAX_MATCH_SCORE.toDouble() / DHASH_BIT_LENGTH).toInt()
         }
-        return Comparison(match, score)
+        return Comparison(temporalMatch && metadataMatch, score)
     }
 
     data class Comparison(val matches: Boolean, val score: Int)
