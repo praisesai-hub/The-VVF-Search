@@ -267,16 +267,29 @@ object PhysicalStorageManager {
         val srcFile = File(path)
         if (!srcFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.FileNotFoundException("source unavailable"))
         val trashFile = File(trashPathForOperation(context, path, operationId))
-        var moved = false
-        try { moved = srcFile.renameTo(trashFile) } catch (e: Exception) { Log.w(TAG, "Direct rename to trash failed: ${e.message}") }
-        if (!moved) {
-            try {
-                srcFile.copyTo(trashFile, overwrite = true)
-                if (srcFile.delete() || deleteFromMediaStore(context, path)) moved = true else try { trashFile.delete() } catch (_: Exception) {}
-            } catch (e: Exception) { Log.e(TAG, "Copy to trash failed: ${e.message}"); try { trashFile.delete() } catch (_: Exception) {} }
-        }
+        val moved = renameToTrash(srcFile, trashFile) || copyAndDeleteSource(context, srcFile, trashFile, path)
         return if (moved && trashFile.exists()) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) } else sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("move failed"))
     }
+
+    private fun renameToTrash(source: File, trash: File): Boolean =
+        runCatching { source.renameTo(trash) }
+            .onFailure { error -> Log.w(TAG, "Direct rename to trash failed: ${error.message}") }
+            .getOrDefault(false)
+
+    private fun copyAndDeleteSource(context: Context, source: File, trash: File, sourcePath: String): Boolean =
+        runCatching {
+            source.copyTo(trash, overwrite = true)
+            if (source.delete() || deleteFromMediaStore(context, sourcePath)) {
+                true
+            } else {
+                deleteQuietly(trash)
+                false
+            }
+        }.onFailure { error ->
+            Log.e(TAG, "Copy to trash failed: ${error.message}")
+            deleteQuietly(trash)
+        }
+            .getOrDefault(false)
 
     private fun deleteQuietly(file: File) {
         runCatching { file.delete() }
