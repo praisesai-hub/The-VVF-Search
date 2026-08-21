@@ -116,6 +116,24 @@ class SecureKeyValueStoreTest {
     }
 
     @Test
+    fun `truncated valid envelope maps read io failure to the safe error`() {
+        val store = store()
+        File(directory, FILE_NAME).writeBytes(
+            byteArrayOf(
+                (ENVELOPE_MAGIC ushr 24).toByte(),
+                (ENVELOPE_MAGIC ushr 16).toByte(),
+                (ENVELOPE_MAGIC ushr 8).toByte(),
+                ENVELOPE_MAGIC.toByte()
+            )
+        )
+
+        val error = assertThrows(IllegalStateException::class.java) { store.getString("pin") }
+
+        assertEquals("Unable to decrypt or parse secure preferences", error.message)
+        assertTrue(error.cause is java.io.IOException)
+    }
+
+    @Test
     fun `invalid envelope version and bounded payload sizes fail closed`() {
         val store = store()
         val malformedEnvelopes = listOf(
@@ -193,6 +211,34 @@ class SecureKeyValueStoreTest {
         )
 
         assertThrows(IllegalStateException::class.java) { failing.getString("token") }
+    }
+
+    @Test
+    fun `crypto read argument and security failures retain their safe error causes`() {
+        val writer = store()
+        writer.commit(mapOf("token" to "secret"))
+        val failures = listOf<Throwable>(
+            GeneralSecurityException("tamper"),
+            IllegalArgumentException("invalid crypto payload")
+        )
+
+        failures.forEachIndexed { index, failure ->
+            val failing = SecureKeyValueStore(
+                context = context,
+                fileName = FILE_NAME,
+                keyAlias = "unused",
+                directory = directory,
+                crypto = object : SecureStoreCrypto {
+                    override fun encrypt(plaintext: ByteArray): EncryptedPayload = error("not used")
+
+                    override fun decrypt(payload: EncryptedPayload): ByteArray = throw failure
+                }
+            )
+
+            val error = assertThrows(IllegalStateException::class.java) { failing.getString("token-$index") }
+            assertEquals("Unable to decrypt or parse secure preferences", error.message)
+            assertEquals(failure, error.cause)
+        }
     }
 
     @Test
