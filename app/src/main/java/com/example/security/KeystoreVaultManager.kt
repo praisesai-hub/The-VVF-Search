@@ -28,8 +28,8 @@ class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
 
     private val keyStore: KeyStore? = try {
         getKeyStore()
-    } catch (e: Throwable) {
-        Log.e(TAG, "Android Keystore unavailable", e)
+    } catch (e: Exception) {
+        Log.e(TAG, "Android Keystore unavailable; error=${e::class.simpleName}")
         null
     }
 

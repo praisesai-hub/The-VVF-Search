@@ -2,6 +2,7 @@ package com.example.worker
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import java.io.File
@@ -51,6 +52,8 @@ class CacheCleanupWorker(
             Log.i(TAG, "Cache cleanup complete. Deleted $deletedFilesCount files, freeing ${deletedSize / 1024} KB.")
             
             Result.success()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val diagnostic = DomainErrorMapper.fromThrowable("CACHE_CLEANUP", e)
             DiagnosticLogger.log(TAG, diagnostic)

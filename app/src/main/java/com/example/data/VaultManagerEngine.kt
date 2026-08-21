@@ -11,6 +11,7 @@ import com.example.security.SharedPreferencesKeyValueStore
 import com.example.security.StringKeyValueStore
 import com.example.security.VaultCryptoSession
 import com.example.security.VaultKeyEnvelope
+import com.example.security.VaultPinPolicy
 import javax.crypto.Cipher
 
 private const val VAULT_PIN_HASH_KEY = "vault_pin_hash"
@@ -23,8 +24,8 @@ private const val BIOMETRIC_WRAP_CIPHERTEXT_KEY = "vault_biometric_wrap_cipherte
 private const val FAILED_ATTEMPTS_KEY = "vault_failed_attempts"
 private const val LOCKED_UNTIL_MS_KEY = "vault_locked_until_ms"
 
-const val MIN_VAULT_PIN_LENGTH = 8
-const val MAX_VAULT_PIN_LENGTH = 128
+const val MIN_VAULT_PIN_LENGTH = VaultPinPolicy.MIN_LENGTH
+const val MAX_VAULT_PIN_LENGTH = VaultPinPolicy.MAX_LENGTH
 const val MAX_VAULT_FAILED_ATTEMPTS = 5
 const val VAULT_BASE_LOCKOUT_MS = 30_000L
 const val VAULT_MAX_LOCKOUT_MS = 24 * 60 * 60 * 1000L

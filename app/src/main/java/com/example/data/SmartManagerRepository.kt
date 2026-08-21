@@ -64,8 +64,8 @@ open class SmartManagerRepository(
         if (isAssetExists("mobile_clip_embedding.tflite") && isAssetExists("mobile_clip_vocab.txt")) {
             try {
                 TFLiteSemanticEmbeddingProvider().apply { loadModelFromAssets(context) }
-            } catch (e: Throwable) {
-                Log.e("SmartManagerRepository", "TFLite semantic model failed to load", e)
+            } catch (e: Exception) {
+                Log.e("SmartManagerRepository", "TFLite semantic model failed to load; error=${e::class.simpleName}")
                 FallbackSemanticEmbeddingProvider()
             }
         } else {

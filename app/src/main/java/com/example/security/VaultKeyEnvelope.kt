@@ -15,7 +15,6 @@ object VaultKeyEnvelope {
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val AES_ALGORITHM = "AES"
     private const val DEK_BYTES = 32
-    private const val PIN_LENGTH = 4
     private const val DERIVED_KEY_BITS = DEK_BYTES * 8
 
     data class PinWrap(val salt: ByteArray, val iv: ByteArray, val ciphertext: ByteArray)
@@ -41,8 +40,8 @@ object VaultKeyEnvelope {
     }
 
     private fun derivePinKey(pin: String, salt: ByteArray): SecretKeySpec {
-        require(pin.length == PIN_LENGTH && pin.all(Char::isDigit)) {
-            "Vault PIN must be four digits"
+        require(VaultPinPolicy.isValid(pin)) {
+            "Vault PIN must contain ${VaultPinPolicy.MIN_LENGTH} to ${VaultPinPolicy.MAX_LENGTH} digits"
         }
         require(salt.size == SALT_BYTES) { "Invalid PIN-wrap salt" }
         val spec = PBEKeySpec(pin.toCharArray(), salt, PBKDF2_ITERATIONS, DERIVED_KEY_BITS)

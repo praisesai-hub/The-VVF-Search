@@ -228,7 +228,7 @@ object PhysicalStorageManager {
                 } catch (_: Exception) { false }
                 !stillExists
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to delete content URI $path: ${e.message}")
+                Log.w(TAG, "Failed to delete content URI; error=${e::class.simpleName}")
                 false
             }
         }
@@ -336,7 +336,7 @@ object PhysicalStorageManager {
                     Result.success(restoredFile.absolutePath)
                 }
             } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-            catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+            catch (e: OutOfMemoryError) { sanitizedFailure("PHYSICAL_STORAGE", e) }
             catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         return try {
@@ -351,7 +351,7 @@ object PhysicalStorageManager {
             notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
             Result.success(targetFile.absolutePath)
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: OutOfMemoryError) { sanitizedFailure("PHYSICAL_STORAGE", e) }
         catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
@@ -385,7 +385,7 @@ object PhysicalStorageManager {
                     Result.success(restoredFile.absolutePath)
                 }
             } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-            catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+            catch (e: OutOfMemoryError) { sanitizedFailure("PHYSICAL_STORAGE", e) }
             catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         return try {
@@ -407,7 +407,7 @@ object PhysicalStorageManager {
             notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
             Result.success(targetFile.absolutePath)
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Decryption failed: Incorrect PIN or tampered vault data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: OutOfMemoryError) { sanitizedFailure("PHYSICAL_STORAGE", e) }
         catch (e: Exception) { Log.e(TAG, "Failed to decrypt and restore Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
@@ -608,7 +608,7 @@ object PhysicalStorageManager {
             if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
             Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: OutOfMemoryError) { sanitizedFailure("PHYSICAL_STORAGE", e) }
         catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
@@ -658,7 +658,7 @@ object PhysicalStorageManager {
             if (!secureWipeFile(context, srcFile)) { try { vaultFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_VAULT", java.io.IOException("source cleanup failed")) }
             Result.success(VaultStorageResult(vaultFile.absolutePath, vaultFile.name, iv))
         } catch (e: javax.crypto.AEADBadTagException) { Result.failure(java.security.GeneralSecurityException("Encryption failed: Incorrect key or tampered data.", e)) }
-        catch (e: OutOfMemoryError) { System.gc(); sanitizedFailure("PHYSICAL_STORAGE", e) }
+        catch (e: OutOfMemoryError) { sanitizedFailure("PHYSICAL_STORAGE", e) }
         catch (e: Exception) { Log.e(TAG, "Failed to encrypt and wipe source Stream: ${e.message}", e); sanitizedFailure("PHYSICAL_STORAGE", e) }
     }
 
@@ -730,7 +730,7 @@ object PhysicalStorageManager {
         if (newPath.startsWith("content://")) return
         try {
             val file = File(newPath)
-            if (file.exists()) android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null) { path, uri -> Log.d(TAG, "Scanned $path -> $uri") }
+            if (file.exists()) android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null) { path, uri -> Log.d(TAG, "Media scan completed; uriType=${uri.scheme}") }
         } catch (e: Exception) { Log.w(TAG, "Failed to notify media scanner: ${e.message}") }
     }
 

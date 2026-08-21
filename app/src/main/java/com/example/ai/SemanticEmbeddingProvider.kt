@@ -195,7 +195,7 @@ class TFLiteSemanticEmbeddingProvider(
                 val buffer = fileChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, modelFile.length())
                 loadModelFromBuffer(buffer)
             }
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             Log.w("TFLiteSemantic", "Failed to load TFLite model from file: ${e.message}")
             interpreter = null
             vocabMap = null
@@ -269,7 +269,7 @@ class TFLiteSemanticEmbeddingProvider(
                 vocabMap = null
                 false
             }
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             Log.i("TFLiteSemantic", "TFLite model or vocab asset not found in assets (optional feature): ${e.message}")
             interpreter = null
             vocabMap = null
@@ -286,7 +286,7 @@ class TFLiteSemanticEmbeddingProvider(
             interpreter = Interpreter(buffer, options)
             Log.i("TFLiteSemantic", "TFLite Model loaded successfully from buffer")
             true
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             Log.w("TFLiteSemantic", "Failed to load TFLite model from buffer: ${e.message}")
             interpreter = null
             vocabMap = null
@@ -354,7 +354,6 @@ class TFLiteSemanticEmbeddingProvider(
             normalizeEmbedding(outputArray[0])
         } catch (e: OutOfMemoryError) {
             Log.e("TFLiteSemantic", "OutOfMemoryError during image embedding inference for ${file.name}: ${e.message}")
-            System.gc()
             null
         } catch (e: Exception) {
             Log.w("TFLiteSemantic", "Error during image embedding inference: ${e.message}")

@@ -67,7 +67,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "PDF OCR failed on $filePath: ${e.message}")
+                Log.e(TAG, "PDF OCR failed for file=${File(filePath).name}: ${e::class.simpleName}")
                 emptyList()
             }
         }
@@ -75,7 +75,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
         val image = try {
             InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
         } catch (e: Exception) {
-            Log.e(TAG, "Image loading for OCR failed on $filePath: ${e.message}")
+            Log.e(TAG, "Image loading for OCR failed for file=${File(filePath).name}: ${e::class.simpleName}")
             return@withContext emptyList()
         }
         recognize(image, filePath).flatMap { visionText ->
@@ -108,7 +108,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
                     }
                 }.filter(String::isNotBlank).joinToString("\n\n")
             } catch (e: Exception) {
-                Log.e(TAG, "PDF OCR failed on $filePath: ${e.message}")
+                Log.e(TAG, "PDF OCR failed for file=${File(filePath).name}: ${e::class.simpleName}")
                 ""
             }
         }
@@ -116,7 +116,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
         val image = try {
             InputImage.fromFilePath(context, android.net.Uri.fromFile(file))
         } catch (e: Exception) {
-            Log.e(TAG, "Image loading for OCR failed on $filePath: ${e.message}")
+            Log.e(TAG, "Image loading for OCR failed for file=${File(filePath).name}: ${e::class.simpleName}")
             return@withContext ""
         }
         recognizedText(image, filePath)
@@ -128,7 +128,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
                 PdfRenderer(pfd).use(::renderPages)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "PDF page rendering for OCR failed on ${file.path}: ${e.message}")
+            Log.e(TAG, "PDF page rendering for OCR failed for file=${file.name}: ${e::class.simpleName}")
             emptyList()
         }
     }
@@ -154,7 +154,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
                         if (continuation.isActive) continuation.resume(visionText)
                     }
                     .addOnFailureListener { error ->
-                        Log.e(TAG, "ML Kit OCR failed on $filePath: ${error.message}")
+                        Log.e(TAG, "ML Kit OCR failed for file=${File(filePath).name}: ${error::class.simpleName}")
                         if (continuation.isActive) continuation.resume(null)
                     }
             }

@@ -2,6 +2,7 @@ package com.example.worker
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
@@ -57,6 +58,8 @@ class BackgroundIndexWorker(
             }
 
             androidx.work.ListenableWorker.Result.success()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val diagnostic = DomainErrorMapper.fromThrowable("BACKGROUND_INDEXING", e)
             DiagnosticLogger.log(TAG, diagnostic)
