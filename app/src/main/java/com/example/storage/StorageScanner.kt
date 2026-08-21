@@ -31,6 +31,23 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     companion object {
         private const val TAG = "StorageScanner"
         private const val BATCH_SIZE = 100
+        private const val MIN_VIDEO_DURATION_MS = 1L
+        private const val MICROSECONDS_PER_MILLISECOND = 1_000L
+        private const val VIDEO_SAMPLE_AT_TEN_PERCENT = 0.10
+        private const val VIDEO_SAMPLE_AT_THIRTY_FIVE_PERCENT = 0.35
+        private const val VIDEO_SAMPLE_AT_SIXTY_PERCENT = 0.60
+        private const val VIDEO_SAMPLE_AT_EIGHTY_FIVE_PERCENT = 0.85
+        private const val DHASH_HEX_LENGTH = 16
+        private const val MIN_VIDEO_FINGERPRINT_SAMPLES = 3
+        private const val FINGERPRINT_CHUNK_BYTES = 64 * 1024
+        private const val MIDPOINT_DIVISOR = 2L
+        private const val DEFAULT_VIDEO_KEYFRAME_TIME_US = 1_000_000L
+        private val VIDEO_SAMPLE_RATIOS = listOf(
+            VIDEO_SAMPLE_AT_TEN_PERCENT,
+            VIDEO_SAMPLE_AT_THIRTY_FIVE_PERCENT,
+            VIDEO_SAMPLE_AT_SIXTY_PERCENT,
+            VIDEO_SAMPLE_AT_EIGHTY_FIVE_PERCENT,
+        )
     }
 
     fun scanDeviceStorageFlow(computeHashes: Boolean = false): Flow<List<FileItemEntity>> = channelFlow {
@@ -284,17 +301,17 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO).orEmpty()
             val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty()
             val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE).orEmpty()
-            val durationUs = durationMs.coerceAtLeast(1L) * 1_000L
-            val sampleTimes = listOf(0.10, 0.35, 0.60, 0.85).map { (durationUs * it).toLong() }
+            val durationUs = durationMs.coerceAtLeast(MIN_VIDEO_DURATION_MS) * MICROSECONDS_PER_MILLISECOND
+            val sampleTimes = VIDEO_SAMPLE_RATIOS.map { (durationUs * it).toLong() }
             val sampleHashes = sampleTimes.mapNotNull { sampleUs ->
                 currentCoroutineContext().ensureActive()
                 val bitmap = retriever.getFrameAtTime(sampleUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     ?: retriever.frameAtTime
                 bitmap?.let {
                     try { computeDHashFromBitmap(it) } finally { it.recycle() }
-                }?.takeIf { it.length == 16 }
+                }?.takeIf { it.length == DHASH_HEX_LENGTH }
             }
-            if (sampleHashes.size < 3) return@withContext null
+            if (sampleHashes.size < MIN_VIDEO_FINGERPRINT_SAMPLES) return@withContext null
             VideoFingerprint(
                 sampleHashes = sampleHashes,
                 durationMs = durationMs,
@@ -316,7 +333,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             val input = context.contentResolver.openInputStream(uri) ?: return ""
             input.use {
                 val digest = MessageDigest.getInstance("SHA-256")
-                val buffer = ByteArray(64 * 1024)
+                val buffer = ByteArray(FINGERPRINT_CHUNK_BYTES)
                 var total = 0L
                 var firstRead = 0
                 while (firstRead < buffer.size) {
@@ -505,17 +522,17 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty()
             val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE).orEmpty()
             val audioSignature = "$hasAudio|$mime|$bitrate"
-            val durationUs = durationMs.coerceAtLeast(1L) * 1_000L
-            val sampleTimes = listOf(0.10, 0.35, 0.60, 0.85).map { (durationUs * it).toLong() }
+            val durationUs = durationMs.coerceAtLeast(MIN_VIDEO_DURATION_MS) * MICROSECONDS_PER_MILLISECOND
+            val sampleTimes = VIDEO_SAMPLE_RATIOS.map { (durationUs * it).toLong() }
             val sampleHashes = sampleTimes.mapNotNull { sampleUs ->
                 ensureActive()
                 val bitmap = retriever.getFrameAtTime(sampleUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     ?: retriever.frameAtTime
                 bitmap?.let {
                     try { computeDHashFromBitmap(it) } finally { it.recycle() }
-                }?.takeIf { it.length == 16 }
+                }?.takeIf { it.length == DHASH_HEX_LENGTH }
             }
-            if (sampleHashes.size < 3) return@withContext null
+            if (sampleHashes.size < MIN_VIDEO_FINGERPRINT_SAMPLES) return@withContext null
             VideoFingerprint(
                 sampleHashes = sampleHashes,
                 durationMs = durationMs,
@@ -539,8 +556,10 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             val digest = MessageDigest.getInstance("SHA-256")
             digest.update("VIDEO_CHUNKS:$length".toByteArray())
             java.io.RandomAccessFile(file, "r").use { raf ->
-                val chunkSize = 64 * 1024
-                val offsets = listOf(0L, (length / 2L - chunkSize / 2L).coerceAtLeast(0L), (length - chunkSize).coerceAtLeast(0L)).distinct()
+                val chunkSize = FINGERPRINT_CHUNK_BYTES
+                val midpoint = (length / MIDPOINT_DIVISOR - chunkSize / MIDPOINT_DIVISOR)
+                    .coerceAtLeast(0L)
+                val offsets = listOf(0L, midpoint, (length - chunkSize).coerceAtLeast(0L)).distinct()
                 offsets.forEach { offset ->
                     raf.seek(offset)
                     val buffer = ByteArray(chunkSize)
@@ -555,7 +574,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         }
     }
 
-    suspend fun computeVideoDHash(file: File, timeUs: Long = 1_000_000L): String = withContext(Dispatchers.IO) {
+    suspend fun computeVideoDHash(file: File, timeUs: Long = DEFAULT_VIDEO_KEYFRAME_TIME_US): String = withContext(Dispatchers.IO) {
         if (!file.exists() || !file.canRead() || !isVideoFile(file.name)) return@withContext ""
         ensureActive()
         val retriever = MediaMetadataRetriever()
