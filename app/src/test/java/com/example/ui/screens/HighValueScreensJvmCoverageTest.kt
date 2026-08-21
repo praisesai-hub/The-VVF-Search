@@ -2,7 +2,9 @@ package com.example.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
 import com.example.data.DuplicateGroup
@@ -87,6 +89,45 @@ class HighValueScreensJvmCoverageTest {
             }
         }
 
+        composeTestRule.onRoot().assertIsDisplayed()
+    }
+
+    @Test
+    fun duplicateCleanerSwitchesToOcrAndSemanticSearchSections() {
+        val ocrFile = FileItemEntity(
+            id = 31L,
+            name = "receipt.jpg",
+            path = "/data/receipt.jpg",
+            category = FileCategory.IMAGES.name,
+            sizeBytes = 256L,
+            ocrText = "invoice total"
+        )
+        val semanticResult = ocrFile.copy(
+            id = 32L,
+            name = "semantic-match.pdf",
+            path = "/data/semantic-match.pdf",
+            category = FileCategory.DOCUMENTS.name
+        )
+
+        composeTestRule.setContent {
+            VVFSmartManagerTheme {
+                AiDuplicatesScreen(
+                    viewModel = viewModel(),
+                    level1Duplicates = emptyList(),
+                    level3Duplicates = emptyList(),
+                    similarityThreshold = 0.7f,
+                    selectedDuplicateIds = emptySet(),
+                    semanticQuery = "invoice",
+                    ocrScannedFiles = listOf(ocrFile),
+                    semanticSearchResults = listOf(semanticResult)
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("section_tab_1").performClick()
+        composeTestRule.onRoot().assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("section_tab_2").performClick()
         composeTestRule.onRoot().assertIsDisplayed()
     }
 
