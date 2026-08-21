@@ -192,7 +192,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         val notFound = runBlocking { adapter.downloadFile("remote.txt", destination) }
         assertTrue(notFound is CloudSyncResult.Error)
         assertFalse((notFound as CloudSyncResult.Error).isRetryable)
-        assertTrue(notFound.message.contains("File not found"))
+        assertEquals("The requested cloud file was not found.", notFound.message)
 
         var requestCount = 0
         fakeInterceptor.responseProvider = { request ->
@@ -213,7 +213,7 @@ class GoogleDriveProviderAdapterInstrumentedTest {
         assertTrue(networkFailure is CloudSyncResult.Error)
         val networkFailureError = networkFailure as CloudSyncResult.Error
         assertTrue(networkFailureError.isRetryable)
-        assertEquals("no network", networkFailureError.message)
+        assertEquals("Network connection is unavailable.", networkFailureError.message)
         destination.delete()
     }
 

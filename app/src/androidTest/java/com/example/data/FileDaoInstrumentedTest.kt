@@ -245,6 +245,7 @@ class FileDaoInstrumentedTest {
             category = FileCategory.VIDEO.name,
             hash = "video-hash",
             visualHash = "video-visual",
+            videoSampleHashes = "0011223344556677;0011223344556677;0011223344556677",
             semanticIndexed = true,
         )
         dao.insertFileDirect(keep)
