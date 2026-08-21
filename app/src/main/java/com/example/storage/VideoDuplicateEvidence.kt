@@ -6,6 +6,13 @@ import kotlin.math.max
 
 object VideoDuplicateEvidence {
     private const val MIN_TEMPORAL_SAMPLES = 3
+    private const val DHASH_HEX_LENGTH = 16
+    private const val DHASH_BIT_LENGTH = 64
+    private const val MAX_MATCH_SCORE = 100
+    private const val MIN_DURATION_TOLERANCE_MS = 1_000L
+    private const val DURATION_TOLERANCE_DIVISOR = 20L
+    private const val ASPECT_RATIO_TOLERANCE = 0.02
+    private const val DIMENSION_TOLERANCE_RATIO = 0.25
 
     fun sampleHashes(file: FileItemEntity): List<String> {
         val stored = file.videoSampleHashes
@@ -26,15 +33,15 @@ object VideoDuplicateEvidence {
             resolutionCompatible(first, second) &&
             audioCompatible(first, second)
         val cryptographicMatch = first.md5Hash.isNotBlank() && first.md5Hash == second.md5Hash
-        if (cryptographicMatch) return Comparison(true, 100)
+        if (cryptographicMatch) return Comparison(true, MAX_MATCH_SCORE)
         val chunkMatch = first.videoChunkHash.isNotBlank() &&
             first.videoChunkHash == second.videoChunkHash
-        if (chunkMatch && metadataMatch) return Comparison(true, 100)
+        if (chunkMatch && metadataMatch) return Comparison(true, MAX_MATCH_SCORE)
         if (firstSamples.size < MIN_TEMPORAL_SAMPLES || secondSamples.size < MIN_TEMPORAL_SAMPLES) {
             return Comparison(false, 0)
         }
 
-        val maxDistance = ((100 - threshold) * 64) / 100
+        val maxDistance = ((MAX_MATCH_SCORE - threshold) * DHASH_BIT_LENGTH) / MAX_MATCH_SCORE
         val compared = firstSamples.zip(secondSamples).take(MIN_TEMPORAL_SAMPLES)
         val distances = compared.map { (left, right) -> hammingDistance(left, right) }
         val matchingSamples = distances.count { it <= maxDistance }
@@ -42,9 +49,10 @@ object VideoDuplicateEvidence {
         val temporalMatch = matchingSamples == MIN_TEMPORAL_SAMPLES && averageDistance <= maxDistance
         val match = temporalMatch && metadataMatch
         val score = if (chunkMatch) {
-            100
+            MAX_MATCH_SCORE
         } else {
-            ((64.0 - averageDistance.coerceIn(0.0, 64.0)) * 100.0 / 64.0).toInt()
+            ((DHASH_BIT_LENGTH.toDouble() - averageDistance.coerceIn(0.0, DHASH_BIT_LENGTH.toDouble())) *
+                MAX_MATCH_SCORE.toDouble() / DHASH_BIT_LENGTH).toInt()
         }
         return Comparison(match, score)
     }
@@ -54,7 +62,10 @@ object VideoDuplicateEvidence {
     private fun durationCompatible(first: FileItemEntity, second: FileItemEntity): Boolean {
         if (first.videoDurationMs <= 0L || second.videoDurationMs <= 0L) return false
         val difference = abs(first.videoDurationMs - second.videoDurationMs)
-        val tolerance = max(1_000L, max(first.videoDurationMs, second.videoDurationMs) / 20L)
+        val tolerance = max(
+            MIN_DURATION_TOLERANCE_MS,
+            max(first.videoDurationMs, second.videoDurationMs) / DURATION_TOLERANCE_DIVISOR
+        )
         return difference <= tolerance
     }
 
@@ -68,15 +79,17 @@ object VideoDuplicateEvidence {
         if (first.videoWidth <= 0 || first.videoHeight <= 0 || second.videoWidth <= 0 || second.videoHeight <= 0) return false
         val firstRatio = first.videoWidth.toDouble() / first.videoHeight.toDouble()
         val secondRatio = second.videoWidth.toDouble() / second.videoHeight.toDouble()
-        return abs(firstRatio - secondRatio) <= 0.02 &&
-            abs(first.videoWidth - second.videoWidth).toDouble() <= max(first.videoWidth, second.videoWidth).toDouble() * 0.25 &&
-            abs(first.videoHeight - second.videoHeight).toDouble() <= max(first.videoHeight, second.videoHeight).toDouble() * 0.25
+        return abs(firstRatio - secondRatio) <= ASPECT_RATIO_TOLERANCE &&
+            abs(first.videoWidth - second.videoWidth).toDouble() <=
+            max(first.videoWidth, second.videoWidth).toDouble() * DIMENSION_TOLERANCE_RATIO &&
+            abs(first.videoHeight - second.videoHeight).toDouble() <=
+            max(first.videoHeight, second.videoHeight).toDouble() * DIMENSION_TOLERANCE_RATIO
     }
 
     private fun hammingDistance(first: String, second: String): Int {
-        if (first.length != 16 || second.length != 16) return 64
+        if (first.length != DHASH_HEX_LENGTH || second.length != DHASH_HEX_LENGTH) return DHASH_BIT_LENGTH
         return first.zip(second).sumOf { (left, right) ->
-            (left.digitToInt(16) xor right.digitToInt(16)).countOneBits()
+            (left.digitToInt(DHASH_HEX_LENGTH) xor right.digitToInt(DHASH_HEX_LENGTH)).countOneBits()
         }
     }
 }
