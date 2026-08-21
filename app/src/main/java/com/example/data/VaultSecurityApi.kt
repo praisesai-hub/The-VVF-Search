@@ -65,7 +65,7 @@ private class VaultPinDelegate(
     private val engine: VaultManagerEngine,
     private val sessions: VaultSessionHolder
 ) : VaultPinApi {
-    override fun hasVaultPin(): Boolean = engine.hasVaultPin()
+    override fun hasVaultPin(): Boolean = engine.hasVaultPin
 
     override fun getVaultLockoutState(): VaultLockoutState = engine.getVaultLockoutState()
 

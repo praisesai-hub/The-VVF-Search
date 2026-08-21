@@ -47,7 +47,8 @@ class VaultManagerEngine(
             ?: createSecureVaultStore(context)
     }
 
-    fun hasVaultPin(): Boolean = stored(vaultStore, VAULT_PIN_HASH_KEY).isNotBlank()
+    val hasVaultPin: Boolean
+        get() = stored(vaultStore, VAULT_PIN_HASH_KEY).isNotBlank()
 
     fun getVaultLockoutState(): VaultLockoutState = VaultLockoutState(
         failedAttempts = stored(vaultStore, FAILED_ATTEMPTS_KEY).toIntOrNull()?.coerceAtLeast(0) ?: 0,
@@ -58,7 +59,7 @@ class VaultManagerEngine(
         get() = stored(vaultStore, VAULT_PIN_HASH_KEY)
 
     fun initializeVaultPin(pin: String): Boolean {
-        if (hasVaultPin() || !isValidVaultPin(pin)) return false
+        if (hasVaultPin || !VaultPinPolicy.isValid(pin)) return false
         val dek = keystoreVaultManager.randomVaultDek()
         val pinWrap = VaultKeyEnvelope.wrapWithPin(dek, pin)
         val values = mapOf(
@@ -76,7 +77,7 @@ class VaultManagerEngine(
     }
 
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean {
-        if (!isValidVaultPin(inputPin)) return false
+        if (!VaultPinPolicy.isValid(inputPin)) return false
         val expectedHash = if (storedHash.isNotBlank()) storedHash else getStoredVaultPinHash()
         return expectedHash.isNotBlank() && keystoreVaultManager.verifyPin(inputPin, expectedHash)
     }
@@ -107,7 +108,7 @@ class VaultManagerEngine(
     fun changeVaultPin(oldPin: String, newPin: String): Boolean {
         val now = nowMs()
         val currentState = getVaultLockoutState()
-        if (currentState.lockedUntilMs > now || !isValidVaultPin(newPin)) return false
+        if (currentState.lockedUntilMs > now || !VaultPinPolicy.isValid(newPin)) return false
         return if (!verifyVaultPin(oldPin)) {
             recordFailedAuthentication(vaultStore, currentState.failedAttempts, now)
             false
@@ -210,10 +211,12 @@ class VaultManagerEngine(
 
 }
 
-private fun isValidVaultPin(pin: String): Boolean =
-    pin.length in MIN_VAULT_PIN_LENGTH..MAX_VAULT_PIN_LENGTH &&
-        pin.none(Char::isWhitespace) &&
-        pin.any(Char::isDigit)
+private object VaultPinPolicy {
+    fun isValid(pin: String): Boolean =
+        pin.length in MIN_VAULT_PIN_LENGTH..MAX_VAULT_PIN_LENGTH &&
+            pin.none(Char::isWhitespace) &&
+            pin.any(Char::isDigit)
+}
 
 private fun recordFailedAuthentication(
     vaultStore: StringKeyValueStore,

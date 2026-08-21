@@ -49,7 +49,7 @@ class VaultManagerEngineTest {
 
         assertTrue(engine.initializeVaultPin("12345678"))
         assertEquals("derived-hash", engine.getStoredVaultPinHash())
-        assertTrue(engine.hasVaultPin())
+        assertTrue(engine.hasVaultPin)
         verify(exactly = 1) { keystore.hashPin("12345678") }
     }
 
@@ -60,7 +60,7 @@ class VaultManagerEngineTest {
         val engine = VaultManagerEngine(context, keystore, prefs)
 
         assertFalse(engine.initializeVaultPin("12345678"))
-        assertFalse(engine.hasVaultPin())
+        assertFalse(engine.hasVaultPin)
         assertEquals("", engine.getStoredVaultPinHash())
         verify(exactly = 1) { keystore.hashPin("12345678") }
     }
