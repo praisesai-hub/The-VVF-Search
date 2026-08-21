@@ -128,7 +128,6 @@ class GoogleDriveProviderAdapter(
                         else -> return classifyHttpError(
                             "File upload failed",
                             response.code,
-                            response.body?.string(),
                             sessionUri,
                             offset
                         )
@@ -142,7 +141,7 @@ class GoogleDriveProviderAdapter(
                 bytesCommitted = offset
             )
         } catch (e: DriveHttpException) {
-            classifyHttpError("Resumable upload preparation failed", e.code, null, transferState.resumableSessionUri, transferState.bytesCommitted)
+            classifyHttpError("Resumable upload preparation failed", e.code, transferState.resumableSessionUri, transferState.bytesCommitted)
         } catch (_: MissingUploadLocationException) {
             CloudSyncResult.Error("Cloud upload could not be initialized: Missing 'Location' header.", false)
         } catch (e: Exception) {
@@ -169,7 +168,7 @@ class GoogleDriveProviderAdapter(
                 .build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    return classifyHttpError("Media download failed", response.code, response.body?.string())
+                    return classifyHttpError("Media download failed", response.code)
                 }
                 val body = response.body ?: return CloudSyncResult.Error(
                     "Media download response body was empty.", false
@@ -184,7 +183,7 @@ class GoogleDriveProviderAdapter(
                 CloudSyncResult.Success(bytes, fileId, bytesCommitted = bytes)
             }
         } catch (e: DriveHttpException) {
-            classifyHttpError("File search failed", e.code, null)
+            classifyHttpError("File search failed", e.code)
         } catch (e: Exception) {
             classifyException(e)
         }
@@ -294,11 +293,13 @@ class GoogleDriveProviderAdapter(
     private fun classifyHttpError(
         context: String,
         code: Int,
-        errorBody: String?,
         sessionUri: String? = null,
         bytesCommitted: Long = 0L
     ): CloudSyncResult.Error {
-        val retryable = code == 408 || code == 429 || code >= 500 || (code == 404 && sessionUri != null)
+        val retryable = code == HTTP_REQUEST_TIMEOUT ||
+            code == HTTP_RATE_LIMITED ||
+            code >= HTTP_SERVER_ERROR_MIN ||
+            (code == HTTP_NOT_FOUND && sessionUri != null)
         return CloudSyncResult.Error(
             message = "$context: HTTP $code",
             isRetryable = retryable,
@@ -372,6 +373,10 @@ class GoogleDriveProviderAdapter(
     companion object {
         private const val UPLOAD_CHUNK_BYTES = 256L * 1024L
         private const val HTTP_RESUME_INCOMPLETE = 308
+        private const val HTTP_REQUEST_TIMEOUT = 408
+        private const val HTTP_RATE_LIMITED = 429
+        private const val HTTP_SERVER_ERROR_MIN = 500
+        private const val HTTP_NOT_FOUND = 404
         private const val DRIVE_QUERY_PAGE_SIZE = 1_000
         private const val FILE_ID_CAPTURE_GROUP = 1
         private const val TRANSFER_COPY_BUFFER_BYTES = 64 * 1024
