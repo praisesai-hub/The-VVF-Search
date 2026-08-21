@@ -4,9 +4,13 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabaseLockedException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -205,6 +209,40 @@ class SmartManagerRepositoryJvmCoverageTest {
         assertFalse(source.exists())
         assertNull(dao.getFileById(fileId))
         assertTrue(database.fileOperationStore().getOpenOperations().isEmpty())
+    }
+
+    @Test
+    fun incrementalScanPersistsDocumentCandidateEvidenceAndCompletesProgress() = runBlocking {
+        dao.insertPlugins(
+            listOf(PluginEntity("ocr_engine", "OCR", "AI", "test-only disabled OCR", false, false))
+        )
+        val source = File(context.cacheDir, "scan-${System.nanoTime()}.txt").apply {
+            writeText("incremental scan document fixture")
+        }
+        val fileId = dao.insertFile(
+            FileItemEntity(
+                name = source.name,
+                path = source.absolutePath,
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = source.length(),
+                semanticIndexed = true
+            )
+        )
+        val repository = repository { false }
+        val completion = async(start = CoroutineStart.UNDISPATCHED) {
+            repository.scanProgress.drop(1).first { it == 1.0f }
+        }
+
+        repository.startIncrementalDuplicateScan()
+
+        withTimeout(5_000L) { completion.await() }
+        val scanned = dao.getFileById(fileId) ?: error("incrementally scanned fixture missing")
+        assertTrue(scanned.md5Hash.isNotBlank())
+        assertTrue(scanned.documentCandidateFingerprint.isNotBlank())
+        assertTrue(scanned.semanticIndexed)
+        assertEquals(1.0f, repository.scanProgress.value)
+        assertFalse(repository.isScanning.value)
+        assertTrue(source.delete())
     }
 
     @Test
