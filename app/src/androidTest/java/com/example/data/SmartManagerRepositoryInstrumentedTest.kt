@@ -50,9 +50,9 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null
         override suspend fun moveFilesToRecycleBinAtomic(files: List<FileItemEntity>) = updateFiles(files)
         override suspend fun getFileById(id: Long): FileItemEntity? =
-            (activeFiles + unhashedFiles).firstOrNull { it.id == id }
+            (activeFiles + unhashedFiles + recycleBinFiles).firstOrNull { it.id == id }
         override suspend fun getFileByName(name: String): FileItemEntity? =
-            (activeFiles + unhashedFiles).firstOrNull { it.name == name }
+            (activeFiles + unhashedFiles + recycleBinFiles).firstOrNull { it.name == name }
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flow { emit(activeFiles.toList()) }
@@ -67,6 +67,10 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun insertFile(file: FileItemEntity): Long = file.id
         override suspend fun insertFiles(files: List<FileItemEntity>) = Unit
         override suspend fun updateFile(file: FileItemEntity) {
+            activeFiles.removeAll { it.id == file.id }
+            unhashedFiles.removeAll { it.id == file.id }
+            recycleBinFiles.removeAll { it.id == file.id }
+            if (file.isRecycleBin) recycleBinFiles += file else activeFiles += file
             updatedSingleFiles += file
         }
         override suspend fun getFileByPath(path: String): FileItemEntity? = null
@@ -74,6 +78,9 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun getAllOrdinaryFilesDirect(): List<FileItemEntity> = emptyList()
         override suspend fun deleteFilesByIds(ids: List<Long>) = Unit
         override suspend fun deleteFileById(id: Long) {
+            activeFiles.removeAll { it.id == id }
+            unhashedFiles.removeAll { it.id == id }
+            recycleBinFiles.removeAll { it.id == id }
             deletedFileIds += id
         }
         override suspend fun emptyRecycleBin() {
