@@ -256,8 +256,8 @@ jobs:
               cp -R "$source" "$destination"
             fi
           done
-          java -version > release-evidence/java-version.txt 2>&1 || true
-          ./gradlew --version > release-evidence/gradle-version.txt 2>&1 || true
+          java -version > release-evidence/java-version.txt 2>&1
+          ./gradlew --version > release-evidence/gradle-version.txt 2>&1
           git rev-parse HEAD > release-evidence/checked-out-commit.txt
           git status --short > release-evidence/working-tree-status.txt
           python3 scripts/collect_release_evidence.py \
