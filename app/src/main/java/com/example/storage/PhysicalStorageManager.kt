@@ -229,18 +229,39 @@ object PhysicalStorageManager {
     fun moveToTrash(context: Context, path: String): Result<String> =
         moveToTrash(context, path, "")
 
-    fun moveToTrash(context: Context, path: String, operationId: String): Result<String> {
+    fun moveToTrash(context: Context, path: String, operationId: String): Result<String> =
         if (path.startsWith("content://")) {
-            val uri = path.toUri()
-            val trashFile = File(trashPathForOperation(context, path, operationId))
-            return try {
-                val copied = context.contentResolver.openInputStream(uri)?.use { input -> trashFile.outputStream().use { output -> input.copyTo(output) }; true } ?: false
-                if (!copied) { try { trashFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("copy failed")) }
-                val originalDeleted = deleteContentUri(context, uri)
-                if (originalDeleted) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) }
-                else { try { trashFile.delete() } catch (_: Exception) {}; sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("delete failed")) }
-            } catch (e: Exception) { try { trashFile.delete() } catch (_: Exception) {}; sanitizedFailure("PHYSICAL_STORAGE", e) }
+            moveContentUriToTrash(context, path, operationId)
+        } else {
+            moveFileToTrash(context, path, operationId)
         }
+
+    private fun moveContentUriToTrash(context: Context, path: String, operationId: String): Result<String> {
+        val uri = path.toUri()
+        val trashFile = File(trashPathForOperation(context, path, operationId))
+        return try {
+            val copied = context.contentResolver.openInputStream(uri)?.use { input ->
+                trashFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+                true
+            } ?: false
+            val originalDeleted = copied && deleteContentUri(context, uri)
+            if (originalDeleted) {
+                notifyMediaStoreFileDeleted(context, path)
+                Result.success(trashFile.absolutePath)
+            } else {
+                deleteQuietly(trashFile)
+                val reason = if (copied) "delete failed" else "copy failed"
+                sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException(reason))
+            }
+        } catch (e: Exception) {
+            deleteQuietly(trashFile)
+            sanitizedFailure("PHYSICAL_STORAGE", e)
+        }
+    }
+
+    private fun moveFileToTrash(context: Context, path: String, operationId: String): Result<String> {
         val srcFile = File(path)
         if (!srcFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.FileNotFoundException("source unavailable"))
         val trashFile = File(trashPathForOperation(context, path, operationId))
@@ -253,6 +274,10 @@ object PhysicalStorageManager {
             } catch (e: Exception) { Log.e(TAG, "Copy to trash failed: ${e.message}"); try { trashFile.delete() } catch (_: Exception) {} }
         }
         return if (moved && trashFile.exists()) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) } else sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("move failed"))
+    }
+
+    private fun deleteQuietly(file: File) {
+        runCatching { file.delete() }
     }
 
     fun restoreFromTrash(context: Context, trashPath: String, originalPath: String): Result<String> {
