@@ -4,6 +4,7 @@ import com.example.context.drive.DriveAuthorizationPort
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
 import com.google.gson.Gson
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
