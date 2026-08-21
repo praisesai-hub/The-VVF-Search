@@ -7,7 +7,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import androidx.core.graphics.get
 import androidx.core.graphics.scale
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -28,29 +27,18 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 
 class StorageScanner(private val context: Context) : HammingDistanceCalculator {
+    private val videoFingerprintEngine = VideoFingerprintEngine(
+        context = context,
+        dHashFromBitmap = ::computeDHashFromBitmap,
+        isVideoFile = ::isVideoFile
+    )
+
     companion object {
         private const val TAG = "StorageScanner"
         private const val BATCH_SIZE = 100
-        private const val MIN_VIDEO_DURATION_MS = 1L
-        private const val MICROSECONDS_PER_MILLISECOND = 1_000L
-        private const val VIDEO_SAMPLE_AT_TEN_PERCENT = 0.10
-        private const val VIDEO_SAMPLE_AT_THIRTY_FIVE_PERCENT = 0.35
-        private const val VIDEO_SAMPLE_AT_SIXTY_PERCENT = 0.60
-        private const val VIDEO_SAMPLE_AT_EIGHTY_FIVE_PERCENT = 0.85
-        private const val DHASH_HEX_LENGTH = 16
-        private const val MIN_VIDEO_FINGERPRINT_SAMPLES = 3
-        private const val FINGERPRINT_CHUNK_BYTES = 64 * 1024
-        private const val MIDPOINT_DIVISOR = 2L
-        private const val DEFAULT_VIDEO_KEYFRAME_TIME_US = 1_000_000L
         private const val DOCUMENT_INITIAL_CHUNK_BYTES = 8 * 1024
         private const val DOCUMENT_BOUNDARY_SAMPLE_BYTES = 4 * 1024
         private const val DOCUMENT_FINGERPRINT_HEX_LENGTH = 16
-        private val VIDEO_SAMPLE_RATIOS = listOf(
-            VIDEO_SAMPLE_AT_TEN_PERCENT,
-            VIDEO_SAMPLE_AT_THIRTY_FIVE_PERCENT,
-            VIDEO_SAMPLE_AT_SIXTY_PERCENT,
-            VIDEO_SAMPLE_AT_EIGHTY_FIVE_PERCENT,
-        )
     }
 
     fun scanDeviceStorageFlow(computeHashes: Boolean = false): Flow<List<FileItemEntity>> = channelFlow {
@@ -344,84 +332,8 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         file.inputStream().use { computeStreamHash(it) }
     }
 
-    suspend fun computeContentUriVideoFingerprint(uri: Uri): VideoFingerprint? = withContext(Dispatchers.IO) {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(context, uri)
-            val durationMs = retriever.extractMetadata(
-                MediaMetadataRetriever.METADATA_KEY_DURATION
-            )?.toLongOrNull() ?: 0L
-            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
-            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
-            val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO).orEmpty()
-            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty()
-            val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE).orEmpty()
-            val durationUs = durationMs.coerceAtLeast(MIN_VIDEO_DURATION_MS) * MICROSECONDS_PER_MILLISECOND
-            val sampleTimes = VIDEO_SAMPLE_RATIOS.map { (durationUs * it).toLong() }
-            val sampleHashes = sampleTimes.mapNotNull { sampleUs ->
-                currentCoroutineContext().ensureActive()
-                val bitmap = retriever.getFrameAtTime(sampleUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    ?: retriever.frameAtTime
-                bitmap?.let {
-                    try { computeDHashFromBitmap(it) } finally { it.recycle() }
-                }?.takeIf { it.length == DHASH_HEX_LENGTH }
-            }
-            if (sampleHashes.size < MIN_VIDEO_FINGERPRINT_SAMPLES) return@withContext null
-            VideoFingerprint(
-                sampleHashes = sampleHashes,
-                durationMs = durationMs,
-                width = width,
-                height = height,
-                audioSignature = "$hasAudio|$mime|$bitrate",
-                chunkHash = computeContentUriChunkHash(uri)
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Content URI video fingerprint failed: ${e.message}")
-            null
-        } finally {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release()
-            } catch (_: Exception) {
-                // Best-effort resource cleanup.
-            }
-        }
-    }
-
-    private fun computeContentUriChunkHash(uri: Uri): String =
-        runCatching {
-            context.contentResolver.openInputStream(uri)?.use(::computeChunkHash).orEmpty()
-        }.onFailure { error ->
-            Log.w(TAG, "Content URI video chunk fingerprint failed: ${error.message}")
-        }.getOrDefault("")
-
-    private fun computeChunkHash(input: InputStream): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val buffer = ByteArray(FINGERPRINT_CHUNK_BYTES)
-        val firstRead = readInitialChunk(input, buffer)
-        if (firstRead > 0) digest.update(buffer, 0, firstRead)
-        val remainingBytes = countRemainingBytes(input, buffer)
-        digest.update("CONTENT_URI_VIDEO:$remainingBytes".toByteArray())
-        return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-    }
-
-    private fun readInitialChunk(input: InputStream, buffer: ByteArray): Int {
-        var bytesRead = 0
-        while (bytesRead < buffer.size) {
-            val read = input.read(buffer, bytesRead, buffer.size - bytesRead)
-            if (read <= 0) break
-            bytesRead += read
-        }
-        return bytesRead
-    }
-
-    private fun countRemainingBytes(input: InputStream, buffer: ByteArray): Long {
-        var total = 0L
-        while (true) {
-            val read = input.read(buffer)
-            if (read <= 0) return total
-            total += read
-        }
-    }
+    suspend fun computeContentUriVideoFingerprint(uri: Uri): VideoFingerprint? =
+        videoFingerprintEngine.computeContentUriFingerprint(uri)
 
     suspend fun computeContentUriHash(uri: Uri): String = withContext(Dispatchers.IO) {
         val input = try { context.contentResolver.openInputStream(uri) } catch (_: Exception) { null }
@@ -615,110 +527,11 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         }
     }
 
-    suspend fun computeVideoFingerprint(file: File): VideoFingerprint? = withContext(Dispatchers.IO) {
-        if (!file.exists() || !file.canRead() || !isVideoFile(file.name)) return@withContext null
-        ensureActive()
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(file.absolutePath)
-            val durationMs = retriever.extractMetadata(
-                MediaMetadataRetriever.METADATA_KEY_DURATION
-            )?.toLongOrNull() ?: 0L
-            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
-            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
-            val hasAudio = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO).orEmpty()
-            val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE).orEmpty()
-            val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE).orEmpty()
-            val audioSignature = "$hasAudio|$mime|$bitrate"
-            val durationUs = durationMs.coerceAtLeast(MIN_VIDEO_DURATION_MS) * MICROSECONDS_PER_MILLISECOND
-            val sampleTimes = VIDEO_SAMPLE_RATIOS.map { (durationUs * it).toLong() }
-            val sampleHashes = sampleTimes.mapNotNull { sampleUs ->
-                ensureActive()
-                val bitmap = retriever.getFrameAtTime(sampleUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    ?: retriever.frameAtTime
-                bitmap?.let {
-                    try { computeDHashFromBitmap(it) } finally { it.recycle() }
-                }?.takeIf { it.length == DHASH_HEX_LENGTH }
-            }
-            if (sampleHashes.size < MIN_VIDEO_FINGERPRINT_SAMPLES) return@withContext null
-            VideoFingerprint(
-                sampleHashes = sampleHashes,
-                durationMs = durationMs,
-                width = width,
-                height = height,
-                audioSignature = audioSignature,
-                chunkHash = computeVideoChunkHash(file)
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Video multi-sample fingerprint failed for ${file.name}: ${e.message}")
-            null
-        } finally {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release()
-            } catch (_: Exception) {
-                // Best-effort resource cleanup.
-            }
-        }
-    }
+    suspend fun computeVideoFingerprint(file: File): VideoFingerprint? =
+        videoFingerprintEngine.computeFileFingerprint(file)
 
-    private fun computeVideoChunkHash(file: File): String =
-        runCatching {
-            val length = file.length()
-            if (length <= 0L) return@runCatching ""
-            val digest = MessageDigest.getInstance("SHA-256")
-            digest.update("VIDEO_CHUNKS:$length".toByteArray())
-            java.io.RandomAccessFile(file, "r").use { reader ->
-                updateDigestFromVideoChunks(reader, digest, length)
-            }
-            digest.digest().joinToString("") { "%02x".format(it) }
-        }.onFailure { error ->
-            Log.w(TAG, "Video chunk fingerprint failed for ${file.name}: ${error.message}")
-        }.getOrDefault("")
-
-    private fun updateDigestFromVideoChunks(
-        reader: java.io.RandomAccessFile,
-        digest: MessageDigest,
-        length: Long
-    ) {
-        val chunkSize = FINGERPRINT_CHUNK_BYTES
-        val midpoint = (length / MIDPOINT_DIVISOR - chunkSize / MIDPOINT_DIVISOR).coerceAtLeast(0L)
-        listOf(0L, midpoint, (length - chunkSize).coerceAtLeast(0L)).distinct().forEach { offset ->
-            reader.seek(offset)
-            val buffer = ByteArray(chunkSize)
-            val read = reader.read(buffer)
-            if (read > 0) digest.update(buffer, 0, read)
-        }
-    }
-
-    suspend fun computeVideoDHash(
-        file: File,
-        timeUs: Long = DEFAULT_VIDEO_KEYFRAME_TIME_US
-    ): String = withContext(Dispatchers.IO) {
-        if (!file.exists() || !file.canRead() || !isVideoFile(file.name)) return@withContext ""
-        ensureActive()
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(file.absolutePath)
-            val keyframeBitmap = retriever.getFrameAtTime(
-                timeUs,
-                MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-            ) ?: retriever.frameAtTime
-            if (keyframeBitmap != null) {
-                val hash = computeDHashFromBitmap(keyframeBitmap)
-                keyframeBitmap.recycle()
-                hash
-            } else ""
-        } catch (e: Exception) {
-            Log.e(TAG, "Video keyframe dHash failed for ${file.name}: ${e.message}")
-            ""
-        } finally {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) retriever.close() else retriever.release()
-            } catch (_: Exception) {
-                // Best-effort resource cleanup.
-            }
-        }
-    }
+    suspend fun computeVideoDHash(file: File, timeUs: Long = 1_000_000L): String =
+        videoFingerprintEngine.computeKeyframeDHash(file, timeUs)
 
     fun isVideoFile(fileName: String): Boolean =
         fileName.substringAfterLast('.', "").lowercase() in listOf(
