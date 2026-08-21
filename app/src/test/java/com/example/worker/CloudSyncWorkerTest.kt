@@ -157,21 +157,28 @@ private class FakeCloudSyncOperationStore(
 
     override suspend fun claim(operationId: String, leaseOwner: String, nowMs: Long, leaseExpiresAtMs: Long): Int {
         val index = indexFor(operationId)
-        if (index < 0) return 0
-        val item = items[index]
-        if (item.status !in setOf("PENDING", "QUEUED") ||
-            (item.leaseOwner != null && item.leaseExpiresAtMs > nowMs)
-        ) return 0
-        items[index] = item.copy(
-            operationId = operationId,
-            status = "UPLOADING",
-            leaseOwner = leaseOwner,
-            leaseExpiresAtMs = leaseExpiresAtMs,
-            heartbeatAtMs = nowMs,
-            startedAtMs = if (item.startedAtMs == 0L) nowMs else item.startedAtMs,
-            attemptCount = item.attemptCount + 1
-        )
-        return 1
+        return if (index < 0) {
+            0
+        } else {
+            val item = items[index]
+            if (
+                item.status !in setOf("PENDING", "QUEUED") ||
+                (item.leaseOwner != null && item.leaseExpiresAtMs > nowMs)
+            ) {
+                0
+            } else {
+                items[index] = item.copy(
+                    operationId = operationId,
+                    status = "UPLOADING",
+                    leaseOwner = leaseOwner,
+                    leaseExpiresAtMs = leaseExpiresAtMs,
+                    heartbeatAtMs = nowMs,
+                    startedAtMs = if (item.startedAtMs == 0L) nowMs else item.startedAtMs,
+                    attemptCount = item.attemptCount + 1
+                )
+                1
+            }
+        }
     }
 
     override suspend fun heartbeat(operationId: String, leaseOwner: String, nowMs: Long, leaseExpiresAtMs: Long): Int {
