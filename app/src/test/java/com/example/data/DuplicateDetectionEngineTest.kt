@@ -294,7 +294,12 @@ class DuplicateDetectionEngineTest {
         val second = first.copy(id = 2002L, name = "clip-two.mp4", path = "/videos/clip-two.mp4")
         val vaultCopy = first.copy(id = 2003L, name = "vault.mp4", isVault = true)
         val recycledCopy = first.copy(id = 2004L, name = "recycled.mp4", isRecycleBin = true)
-        val malformed = first.copy(id = 2005L, name = "malformed.mp4", visualSimilarityHash = "short")
+        val malformed = first.copy(
+            id = 2005L,
+            name = "malformed.mp4",
+            visualSimilarityHash = "short",
+            videoSampleHashes = "short"
+        )
 
         val groups = duplicateDetectionEngine.getVideoDuplicates(
             flowOf(listOf(first, second, vaultCopy, recycledCopy, malformed)),

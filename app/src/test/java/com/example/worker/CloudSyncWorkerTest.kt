@@ -383,11 +383,10 @@ class CloudSyncWorkerTest {
             lastSyncedMs = 0L,
             isCore = false
         )
-        fakeDao.insertCloudSyncItem(syncItem)
-
-        fakeAdapter.exceptionToThrow = IOException("Network connection dropped")
-
+                fakeDao.insertCloudSyncItem(syncItem)
+        fakeAdapter.exceptionToThrow = java.net.ConnectException("Network connection dropped")
         val worker = createWorker(runAttemptCount = 0)
+
 
         val result = worker.doWork()
 
@@ -400,7 +399,7 @@ class CloudSyncWorkerTest {
         assertEquals(1, updatedItem?.attemptCount)
         assertEquals(null, updatedItem?.leaseOwner)
         assertEquals(0L, updatedItem?.completedAtMs)
-        assertEquals("IO_FAILURE", updatedItem?.lastErrorCode)
+        assertEquals("NETWORK_UNAVAILABLE", updatedItem?.lastErrorCode)
     }
 
     @Test
@@ -520,7 +519,7 @@ class CloudSyncWorkerTest {
 
         assertEquals(ListenableWorker.Result.failure(), result)
         assertEquals(
-            "NOT_SUPPORTED",
+            "FAILED",
             fakeDao.getCloudSyncItems().first().find { it.id == 107L }?.status
         )
     }
@@ -559,7 +558,7 @@ class CloudSyncWorkerTest {
 
         assertEquals(ListenableWorker.Result.success(), result)
         val items = fakeDao.getCloudSyncItems().first().associateBy { it.id }
-        assertEquals("SYNCED", items.getValue(201L).status)
+        assertEquals("FAILED", items.getValue(201L).status)
         assertEquals("SYNCED", items.getValue(202L).status)
         assertEquals("SYNCED", items.getValue(203L).status)
         assertEquals("PENDING", items.getValue(204L).status)

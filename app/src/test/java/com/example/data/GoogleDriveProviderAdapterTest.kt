@@ -277,7 +277,7 @@ class GoogleDriveProviderAdapterTest {
         assertTrue(result is CloudSyncResult.Error)
         val error = result as CloudSyncResult.Error
         assertTrue(error.isRetryable)
-        assertEquals("offline", error.message)
+        assertEquals("Network connection is unavailable.", error.message)
     }
 
     @Test
@@ -335,7 +335,7 @@ class GoogleDriveProviderAdapterTest {
         val result = kotlinx.coroutines.runBlocking { adapter.downloadFile("remote.txt", destination) }
 
         assertTrue(result is CloudSyncResult.Error)
-        assertTrue((result as CloudSyncResult.Error).message.contains("File not found"))
+        assertEquals("The requested cloud file was not found.", (result as CloudSyncResult.Error).message)
     }
 
     @Test
