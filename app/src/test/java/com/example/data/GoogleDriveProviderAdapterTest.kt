@@ -459,6 +459,7 @@ class GoogleDriveProviderAdapterTest {
             ) { progress += it }
         }
 
+        assertTrue("Unexpected resumable upload result: $result", result is CloudSyncResult.Success)
         assertEquals("remote-resumed", (result as CloudSyncResult.Success).remoteFileId)
         assertEquals("Unexpected resumable request ranges: $ranges", listOf("bytes */10", "bytes 3-9/10"), ranges)
         assertEquals(10L, progress.last().bytesCommitted)
