@@ -29,10 +29,11 @@ GitHub run `32421178517` (Android CI/CD #355) remained in progress at the time o
 | `32432388146` | `af6d2c0` | Cancelled after the completed JVM build had already failed coverage and Detekt. | Aggregate 49.45%, security 71.55%, data 67.65%, vault 85.63%, cloud 81.31%. | Cancelled as obsolete after the build job reached its terminal failure. |
 | `32433776245` | `7a94c10` | Failed: JVM coverage and Detekt. | Aggregate 49.90%, security 76.22%, data 68.46%, vault 89.57%, cloud 84.54%. | Skipped by the new job dependency; no emulator was provisioned. |
 | `32434615029` | `c12bc5e` | Failed: JVM coverage and Detekt. | Aggregate 50.01%, security 76.22%, data 68.65%, vault 90.21%, cloud 85.18%. | Skipped by the new job dependency; no emulator was provisioned. |
+| `32438766220` | `bccf9bc` | Failed: JVM coverage and Detekt. | Artifact-verified: aggregate 50.12%, security 76.22%, data 68.64%, vault 90.21%, cloud 85.18%. | Skipped by the successful-build dependency; no emulator was provisioned. |
 
 The `Run Instrumented Android Tests` job now declares a successful `Build & Test Android App` dependency. This changes the prior failure mode: a JVM coverage failure prevents emulator allocation rather than requiring a later cancellation. The earlier cancellation used the workflow-run operation because GitHub documents cancellation at run scope rather than as a per-job REST operation.[1]
 
-The latest run completed **all JVM unit tests successfully** before coverage enforcement failed. Its coverage artifact could not be downloaded locally because both available download paths hit a transient Azure Blob TLS-handshake timeout; the exact policy percentages above were therefore recovered from the completed `Enforce JVM Unit Test Coverage Policy` step log, not estimated.
+Run `32438766220` completed **all JVM unit tests successfully** before coverage enforcement failed. Its `jvm-unit-test-coverage` artifact was downloaded and checked locally with `scripts/check_coverage_floor.py`; the latest table row is therefore artifact-derived rather than inferred from a workflow log. The report contained 42,312 covered and 84,422 total instructions for aggregate coverage, and all five configured JVM package floors remained below target.
 
 ## References
 

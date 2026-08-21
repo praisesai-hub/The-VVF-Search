@@ -258,6 +258,29 @@ class EntityJsonAdapterCoverageTest {
     }
 
     @Test
+    fun generatedCloudAdapter_reusesCachedDefaultsConstructor() {
+        val adapter = directCloudAdapter()
+        val defaultsPayload = """{
+            "provider":"GOOGLE_DRIVE",
+            "fileName":"legacy.txt",
+            "fileSize":12,
+            "status":"QUEUED"
+        }"""
+
+        val first = requireNotNull(adapter.fromJson(defaultsPayload))
+        val second = requireNotNull(adapter.fromJson(defaultsPayload))
+
+        assertEquals("GOOGLE_DRIVE", first.provider)
+        assertEquals("legacy.txt", second.fileName)
+        assertEquals(12L, second.fileSize)
+        assertEquals("QUEUED", second.status)
+        assertEquals(first.filePath, second.filePath)
+        assertEquals(first.isCore, second.isCore)
+        assertEquals(first.leaseExpiresAtMs, second.leaseExpiresAtMs)
+        assertEquals(first.resumableBytesCommitted, second.resumableBytesCommitted)
+    }
+
+    @Test
     fun generatedCloudAdapter_rejectsNullForEveryNonNullableCloudField() {
         val adapter = moshi.adapter(CloudSyncItemEntity::class.java)
         val validJson = FULL_CLOUD_JSON

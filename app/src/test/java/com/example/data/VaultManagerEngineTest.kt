@@ -122,6 +122,21 @@ class VaultManagerEngineTest {
     }
 
     @Test
+    fun verifyVaultPin_rejectsInvalidInputAndHonorsExplicitStoredHash() {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "persisted-hash")
+        }
+        every { keystore.verifyPin("12345678", "provided-hash") } returns true
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertFalse(engine.verifyVaultPin("1234", "provided-hash"))
+        assertTrue(engine.verifyVaultPin("12345678", "provided-hash"))
+
+        verify(exactly = 1) { keystore.verifyPin("12345678", "provided-hash") }
+        verify(exactly = 0) { keystore.verifyPin(any(), "persisted-hash") }
+    }
+
+    @Test
     fun changeVaultPin_failsWhenOldPinDoesNotVerifyAndDoesNotDeriveNewHash() {
         val prefs = CommitControlledPreferences(commitResult = true).apply {
             putPersistedValue("vault_pin_hash", "stored-hash")
