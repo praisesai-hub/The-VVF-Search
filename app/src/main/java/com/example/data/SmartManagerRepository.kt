@@ -205,15 +205,21 @@ open class SmartManagerRepository(
                         if (updated.category == FileCategory.DOCUMENTS.name && updated.documentCandidateFingerprint.isBlank()) {
                             val docCandidateFp = if (updated.path.startsWith("content://")) {
                                 withContext(Dispatchers.IO) {
-                                    storageScanner.computeContentUriDocumentCandidateFingerprint(Uri.parse(updated.path))
+                                    storageScanner.computeContentUriDocumentCandidateFingerprint(
+                                        Uri.parse(updated.path)
+                                    )
                                 }
                             } else {
                                 val javaFile = File(updated.path)
                                 if (javaFile.exists() && javaFile.canRead()) {
-                                    withContext(Dispatchers.IO) { storageScanner.computeDocumentCandidateFingerprint(javaFile) }
+                                    withContext(Dispatchers.IO) {
+                                        storageScanner.computeDocumentCandidateFingerprint(javaFile)
+                                    }
                                 } else ""
                             }
-                            if (docCandidateFp.isNotBlank()) updated = updated.copy(documentCandidateFingerprint = docCandidateFp)
+                            if (docCandidateFp.isNotBlank()) {
+                                updated = updated.copy(documentCandidateFingerprint = docCandidateFp)
+                            }
                         }
                         if (!updated.semanticIndexed) {
                             val textContent = "${updated.name} ${updated.ocrText} ${updated.tags}".trim()
@@ -306,7 +312,9 @@ open class SmartManagerRepository(
         val decision = RetryPolicy.classify(operation, error)
         Log.w(
             "SmartManagerRepository",
-            "Retry decision operation=$operation attempt=${attempt + 1} reason=${decision.reasonCode} retryable=${decision.retryable}"
+            "Retry decision operation=$operation " +
+                "attempt=${attempt + 1} reason=${decision.reasonCode} " +
+                "retryable=${decision.retryable}"
         )
         if (!RetryPolicy.shouldRetry(operation, error, attempt)) throw error
         kotlinx.coroutines.delay(
@@ -357,7 +365,11 @@ open class SmartManagerRepository(
                 type = FILE_OPERATION_MOVE_TO_TRASH,
                 fileId = currentFile.id,
                 sourcePath = currentFile.path,
-                targetPath = PhysicalStorageManager.trashPathForOperation(context, currentFile.path, operationId(currentFile.id, FILE_OPERATION_MOVE_TO_TRASH))
+                targetPath = PhysicalStorageManager.trashPathForOperation(
+                    context,
+                    currentFile.path,
+                    operationId(currentFile.id, FILE_OPERATION_MOVE_TO_TRASH)
+                )
             )
             val operationId = operation.operationId
             val trashResult = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
@@ -382,7 +394,14 @@ open class SmartManagerRepository(
             ))
             val latest = dao.getFileById(currentFile.id) ?: return@withRetry
             val originalPathToKeep = if (latest.originalPath.isNotBlank()) latest.originalPath else operation.sourcePath
-            dao.updateFile(latest.copy(path = newPath, originalPath = originalPathToKeep, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
+            dao.updateFile(
+                latest.copy(
+                    path = newPath,
+                    originalPath = originalPathToKeep,
+                    isRecycleBin = true,
+                    deletedTimestampMs = System.currentTimeMillis()
+                )
+            )
             fileOperationStore.update(operation.copy(
                 status = FILE_OPERATION_COMMITTED,
                 targetPath = newPath,
@@ -421,7 +440,14 @@ open class SmartManagerRepository(
                 lastErrorCode = null
             ))
             val latest = dao.getFileById(currentFile.id) ?: return@withRetry
-            dao.updateFile(latest.copy(path = restoredPath, originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
+            dao.updateFile(
+                latest.copy(
+                    path = restoredPath,
+                    originalPath = "",
+                    isRecycleBin = false,
+                    deletedTimestampMs = 0L
+                )
+            )
             fileOperationStore.update(operation.copy(
                 status = FILE_OPERATION_COMMITTED,
                 targetPath = restoredPath,
@@ -494,7 +520,11 @@ open class SmartManagerRepository(
         }
         val result = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
             Result.success(operation.targetPath)
-        } else if (!operation.sourcePath.startsWith("content://") && !File(operation.sourcePath).exists() && File(operation.targetPath).exists()) {
+        } else if (
+            !operation.sourcePath.startsWith("content://") &&
+            !File(operation.sourcePath).exists() &&
+            File(operation.targetPath).exists()
+        ) {
             Result.success(operation.targetPath)
         } else {
             PhysicalStorageManager.moveToTrash(context, operation.sourcePath, operation.operationId)
@@ -507,7 +537,14 @@ open class SmartManagerRepository(
                 updatedAtMs = System.currentTimeMillis(),
                 lastErrorCode = null
             ))
-            dao.updateFile(current.copy(path = path, originalPath = operation.sourcePath, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
+            dao.updateFile(
+                current.copy(
+                    path = path,
+                    originalPath = operation.sourcePath,
+                    isRecycleBin = true,
+                    deletedTimestampMs = System.currentTimeMillis()
+                )
+            )
             fileOperationStore.delete(operation.operationId)
         }
     }
@@ -552,12 +589,26 @@ open class SmartManagerRepository(
         }
     }
 
-    private suspend fun prepareFileOperation(type: String, fileId: Long, sourcePath: String, targetPath: String): FileOperationEntity {
+    private suspend fun prepareFileOperation(
+        type: String,
+        fileId: Long,
+        sourcePath: String,
+        targetPath: String
+    ): FileOperationEntity {
         val operationId = operationId(fileId, type)
         val existing = fileOperationStore.findOpenOperation(fileId, type)
         if (existing != null) return existing
         val now = System.currentTimeMillis()
-        return FileOperationEntity(operationId, type, fileId, sourcePath, targetPath, FILE_OPERATION_PREPARED, now, now).also {
+        return FileOperationEntity(
+            operationId,
+            type,
+            fileId,
+            sourcePath,
+            targetPath,
+            FILE_OPERATION_PREPARED,
+            now,
+            now
+        ).also {
             fileOperationStore.insert(it)
         }
     }
