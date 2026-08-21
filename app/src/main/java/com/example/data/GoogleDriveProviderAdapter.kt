@@ -44,33 +44,20 @@ class GoogleDriveProviderAdapter(
             "Upload failed: user is not authenticated with Google Drive.", false
         )
         return try {
-            if (operationId.isNotBlank()) {
-                val operationQuery =
-                    "appProperties has { key='vvf_operation_id' " +
-                        "and value='${escapeDriveQueryValue(operationId)}' } and trashed = false"
-                val existing = findFileIds(
-                    authorization,
-                    operationQuery
-                ).firstOrNull()
-                if (existing != null) return CloudSyncResult.Success(file.length(), existing)
+            findExistingOperationFileId(authorization, operationId)?.let { existing ->
+                return CloudSyncResult.Success(file.length(), existing)
             }
 
-            val mimeType = determineMimeType(file)
-            val metadata = mutableMapOf<String, Any>(
-                "name" to remotePath,
-                "description" to "Uploaded via Smart Vault Engine"
+            val sessionUri = resolveResumableSessionUri(
+                authorization,
+                file,
+                remotePath,
+                operationId,
+                transferState
+            ) ?: return CloudSyncResult.Error(
+                "Cloud upload could not be initialized: Missing 'Location' header.",
+                false
             )
-            if (operationId.isNotBlank()) metadata["appProperties"] = mapOf("vvf_operation_id" to operationId)
-            val metadataJson = Gson().toJson(metadata)
-            val sessionUri = if (transferState.resumableSessionUri.isNotBlank()) {
-                transferState.resumableSessionUri
-            } else {
-                initiateResumableUpload(authorization, mimeType, file.length(), metadataJson)
-                    ?: return CloudSyncResult.Error(
-                        "Cloud upload could not be initialized: Missing 'Location' header.",
-                        false
-                    )
-            }
 
             onProgress(
                 CloudTransferProgress(
@@ -89,62 +76,13 @@ class GoogleDriveProviderAdapter(
                 }
             }
 
-            while (offset < file.length()) {
-                val endExclusive = minOf(offset + UPLOAD_CHUNK_BYTES, file.length())
-                val request = Request.Builder()
-                    .url(sessionUri)
-                    .header("Authorization", authorization)
-                    .header("Content-Length", (endExclusive - offset).toString())
-                    .header("Content-Range", "bytes $offset-${endExclusive - 1}/${file.length()}")
-                    .put(FileSliceRequestBody(file, offset, endExclusive - offset, mimeType.toMediaTypeOrNull()))
-                    .build()
-                httpClient.newCall(request).execute().use { response ->
-                    when {
-                        response.code == HTTP_RESUME_INCOMPLETE -> {
-                            offset = parseCommittedOffset(
-                                response.header("Content-Range") ?: response.header("Range"),
-                                offset,
-                                endExclusive
-                            )
-                            onProgress(CloudTransferProgress(resumableSessionUri = sessionUri, bytesCommitted = offset))
-                        }
-                        response.isSuccessful -> {
-                            val remoteId = extractFileIdFromJson(response.body?.string().orEmpty())
-                                ?: return CloudSyncResult.Error(
-                                    "Failed to parse remote file ID from response",
-                                    false,
-                                    resumableSessionUri = sessionUri,
-                                    bytesCommitted = endExclusive
-                                )
-                            val completedBytes = file.length()
-                            onProgress(
-                                CloudTransferProgress(
-                                    remoteFileId = remoteId,
-                                    resumableSessionUri = sessionUri,
-                                    bytesCommitted = completedBytes
-                                )
-                            )
-                            return CloudSyncResult.Success(
-                                bytesTransferred = completedBytes,
-                                remoteFileId = remoteId,
-                                resumableSessionUri = sessionUri,
-                                bytesCommitted = completedBytes
-                            )
-                        }
-                        else -> return classifyHttpError(
-                            "File upload failed",
-                            response.code,
-                            sessionUri,
-                            offset
-                        )
-                    }
-                }
-            }
-            CloudSyncResult.Error(
-                "Cloud upload ended without a completion response.",
-                true,
-                resumableSessionUri = sessionUri,
-                bytesCommitted = offset
+            uploadRemainingChunks(
+                authorization,
+                file,
+                sessionUri,
+                offset,
+                determineMimeType(file).toMediaTypeOrNull(),
+                onProgress
             )
         } catch (e: DriveHttpException) {
             classifyHttpError(
@@ -158,6 +96,110 @@ class GoogleDriveProviderAdapter(
         } catch (e: Exception) {
             classifyException(e, transferState.resumableSessionUri, transferState.bytesCommitted)
         }
+    }
+
+    private fun findExistingOperationFileId(authorization: String, operationId: String): String? {
+        if (operationId.isBlank()) return null
+        val operationQuery =
+            "appProperties has { key='vvf_operation_id' " +
+                "and value='${escapeDriveQueryValue(operationId)}' } and trashed = false"
+        return findFileIds(authorization, operationQuery).firstOrNull()
+    }
+
+    private fun resolveResumableSessionUri(
+        authorization: String,
+        file: File,
+        remotePath: String,
+        operationId: String,
+        transferState: CloudTransferState
+    ): String? {
+        if (transferState.resumableSessionUri.isNotBlank()) return transferState.resumableSessionUri
+        val metadata = mutableMapOf<String, Any>(
+            "name" to remotePath,
+            "description" to "Uploaded via Smart Vault Engine"
+        )
+        if (operationId.isNotBlank()) {
+            metadata["appProperties"] = mapOf("vvf_operation_id" to operationId)
+        }
+        return initiateResumableUpload(
+            authorization,
+            determineMimeType(file),
+            file.length(),
+            Gson().toJson(metadata)
+        )
+    }
+
+    private suspend fun uploadRemainingChunks(
+        authorization: String,
+        file: File,
+        sessionUri: String,
+        initialOffset: Long,
+        mimeType: MediaType?,
+        onProgress: suspend (CloudTransferProgress) -> Unit
+    ): CloudSyncResult {
+        var offset = initialOffset
+        while (offset < file.length()) {
+            val endExclusive = minOf(offset + UPLOAD_CHUNK_BYTES, file.length())
+            val request = Request.Builder()
+                .url(sessionUri)
+                .header("Authorization", authorization)
+                .header("Content-Length", (endExclusive - offset).toString())
+                .header("Content-Range", "bytes $offset-${endExclusive - 1}/${file.length()}")
+                .put(FileSliceRequestBody(file, offset, endExclusive - offset, mimeType))
+                .build()
+            httpClient.newCall(request).execute().use { response ->
+                when {
+                    response.code == HTTP_RESUME_INCOMPLETE -> {
+                        offset = parseCommittedOffset(
+                            response.header("Content-Range") ?: response.header("Range"),
+                            offset,
+                            endExclusive
+                        )
+                        onProgress(
+                            CloudTransferProgress(
+                                resumableSessionUri = sessionUri,
+                                bytesCommitted = offset
+                            )
+                        )
+                    }
+                    response.isSuccessful -> {
+                        val remoteId = extractFileIdFromJson(response.body?.string().orEmpty())
+                            ?: return CloudSyncResult.Error(
+                                "Failed to parse remote file ID from response",
+                                false,
+                                resumableSessionUri = sessionUri,
+                                bytesCommitted = endExclusive
+                            )
+                        val completedBytes = file.length()
+                        onProgress(
+                            CloudTransferProgress(
+                                remoteFileId = remoteId,
+                                resumableSessionUri = sessionUri,
+                                bytesCommitted = completedBytes
+                            )
+                        )
+                        return CloudSyncResult.Success(
+                            bytesTransferred = completedBytes,
+                            remoteFileId = remoteId,
+                            resumableSessionUri = sessionUri,
+                            bytesCommitted = completedBytes
+                        )
+                    }
+                    else -> return classifyHttpError(
+                        "File upload failed",
+                        response.code,
+                        sessionUri,
+                        offset
+                    )
+                }
+            }
+        }
+        return CloudSyncResult.Error(
+            "Cloud upload ended without a completion response.",
+            true,
+            resumableSessionUri = sessionUri,
+            bytesCommitted = offset
+        )
     }
 
     @Suppress("NestedBlockDepth", "ReturnCount")
