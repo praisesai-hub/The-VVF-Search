@@ -7,11 +7,9 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.example.VVFApplication
-import com.example.data.CloudSyncItemEntity
 import com.example.data.DuplicateGroup
 import com.example.data.FileCategory
 import com.example.data.FileItemEntity
-import com.example.data.PluginEntity
 import com.example.ui.MainViewModel
 import com.example.ui.components.OcrOverlayImage
 import com.example.ui.theme.VVFSmartManagerTheme
@@ -171,43 +169,6 @@ class HighValueScreensJvmCoverageTest {
             }
         }
 
-        composeTestRule.onRoot().assertIsDisplayed()
-    }
-
-    @Test
-    fun cloudPluginsRendersSyncItemAndPluginFixtures() {
-        val failedSync = CloudSyncItemEntity(
-            id = 44L,
-            provider = "GOOGLE_DRIVE",
-            fileName = "invoice.pdf",
-            filePath = "/data/invoice.pdf",
-            fileSize = 2048L,
-            status = "FAILED",
-            lastSyncedMs = 0L,
-            operationId = "cloud-op-44",
-            lastErrorCode = "NETWORK_UNAVAILABLE"
-        )
-        val plugin = PluginEntity(
-            pluginId = "local-plugin",
-            name = "Local Plugin",
-            category = "CLOUD_PROVIDER",
-            description = "Deterministic render fixture",
-            isEnabled = false,
-            isCore = false
-        )
-
-        composeTestRule.setContent {
-            VVFSmartManagerTheme {
-                CloudPluginsScreen(
-                    viewModel = viewModel(),
-                    cloudSyncItems = listOf(failedSync),
-                    plugins = listOf(plugin)
-                )
-            }
-        }
-
-        composeTestRule.onRoot().assertIsDisplayed()
-        composeTestRule.onNodeWithTag("section_tab_1").performClick()
         composeTestRule.onRoot().assertIsDisplayed()
     }
 

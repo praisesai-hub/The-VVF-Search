@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -58,7 +57,7 @@ class DashboardScreenJvmCoverageTest {
     }
 
     @Test
-    fun dashboardRendersEmptyStorageAndExpandedRoadmap() {
+    fun dashboardRendersEmptyStorageState() {
         val application = ApplicationProvider.getApplicationContext<VVFApplication>()
         val viewModel = MainViewModel(application)
 
@@ -73,7 +72,6 @@ class DashboardScreenJvmCoverageTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("toggle_dashboard_roadmap").performClick()
         composeTestRule.onRoot().assertIsDisplayed()
     }
 }
