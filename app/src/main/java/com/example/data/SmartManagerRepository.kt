@@ -292,7 +292,8 @@ open class SmartManagerRepository(
                 retryExpectedFailure(operation, error, attempt, initialDelayMs, factor)
             }
         }
-        throw lastException ?: IllegalStateException("Operation failed without an exception")
+        val failure = lastException ?: error("Operation failed without an exception")
+        throw failure
     }
 
     private suspend fun retryExpectedFailure(
