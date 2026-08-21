@@ -4,7 +4,9 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Log
+import java.security.KeyFactory
 import java.security.KeyStore
+import android.security.keystore.KeyInfo
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -58,6 +60,14 @@ class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
         }
         throw IllegalStateException("Android Keystore is unavailable; refusing to create a non-persistent vault key")
     }
+
+    /** Returns whether the persistent Keystore key is inside secure hardware, when reported by the device. */
+    fun isMainKeyInsideSecureHardware(): Boolean? = runCatching {
+        val key = getSecretKey(keyAlias)
+        val keyInfo = KeyFactory.getInstance(key.algorithm, ANDROID_KEYSTORE)
+            .getKeySpec(key, KeyInfo::class.java) as KeyInfo
+        keyInfo.isInsideSecureHardware
+    }.getOrNull()
 
     private fun getSecretKey(alias: String): SecretKey {
         val store = checkNotNull(keyStore) { "Android Keystore is unavailable" }
