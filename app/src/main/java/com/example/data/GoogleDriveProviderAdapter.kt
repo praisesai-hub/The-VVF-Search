@@ -157,14 +157,25 @@ class GoogleDriveProviderAdapter(
                 val body = response.body ?: return CloudSyncResult.Error(
                     "Media download response body was empty.", false
                 )
-                val bytes = body.byteStream().use { input ->
-                    destinationFile.outputStream().use { output -> input.copyTo(output) }
+                destinationFile.parentFile?.mkdirs()
+                val temporaryFile = File(destinationFile.parentFile ?: File("."), ".${destinationFile.name}.part")
+                try {
+                    val bytes = body.byteStream().use { input ->
+                        temporaryFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    if (bytes <= 0L) {
+                        return CloudSyncResult.Error("Media download response body was empty.", false)
+                    }
+                    if (destinationFile.exists() && !destinationFile.delete()) {
+                        return CloudSyncResult.Error("Unable to replace the local download safely.", false)
+                    }
+                    if (!temporaryFile.renameTo(destinationFile)) {
+                        return CloudSyncResult.Error("Unable to finalize the local download safely.", false)
+                    }
+                    CloudSyncResult.Success(bytes, fileId, bytesCommitted = bytes)
+                } finally {
+                    if (temporaryFile.exists()) temporaryFile.delete()
                 }
-                if (bytes <= 0L) {
-                    destinationFile.delete()
-                    return CloudSyncResult.Error("Media download response body was empty.", false)
-                }
-                CloudSyncResult.Success(bytes, fileId, bytesCommitted = bytes)
             }
         } catch (e: DriveHttpException) {
             classifyHttpError("File search failed", e.code, null)
