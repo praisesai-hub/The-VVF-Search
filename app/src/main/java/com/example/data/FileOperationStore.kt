@@ -36,7 +36,15 @@ interface FileOperationStore {
     @Query("SELECT * FROM file_operations WHERE status IN ('PREPARED', 'PHYSICAL_COMPLETED') ORDER BY createdAtMs ASC")
     suspend fun getOpenOperations(): List<FileOperationEntity>
 
-    @Query("SELECT * FROM file_operations WHERE fileId = :fileId AND operationType = :operationType AND status IN ('PREPARED', 'PHYSICAL_COMPLETED') ORDER BY createdAtMs DESC LIMIT 1")
+    @Query(
+        """
+        SELECT * FROM file_operations
+        WHERE fileId = :fileId AND operationType = :operationType
+            AND status IN ('PREPARED', 'PHYSICAL_COMPLETED')
+        ORDER BY createdAtMs DESC
+        LIMIT 1
+        """
+    )
     suspend fun findOpenOperation(fileId: Long, operationType: String): FileOperationEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

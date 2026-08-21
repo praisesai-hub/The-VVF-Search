@@ -148,7 +148,12 @@ private class FakeCloudSyncOperationStore(
         var released = 0
         items.forEachIndexed { index, item ->
             if (item.status == "UPLOADING" && (item.leaseExpiresAtMs == 0L || item.leaseExpiresAtMs <= nowMs)) {
-                items[index] = item.copy(status = "QUEUED", leaseOwner = null, leaseExpiresAtMs = 0L, heartbeatAtMs = 0L)
+                items[index] = item.copy(
+                    status = "QUEUED",
+                    leaseOwner = null,
+                    leaseExpiresAtMs = 0L,
+                    heartbeatAtMs = 0L
+                )
                 released++
             }
         }
