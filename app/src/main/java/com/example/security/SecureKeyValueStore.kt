@@ -48,8 +48,10 @@ interface SecureStoreCrypto {
     fun decrypt(payload: EncryptedPayload): ByteArray
 }
 
-class AndroidKeystoreCrypto(keyAlias: String) : SecureStoreCrypto {
-    private val keystore = KeystoreVaultManager(keyAlias)
+class AndroidKeystoreCrypto internal constructor(
+    private val keystore: KeystoreVaultManager
+) : SecureStoreCrypto {
+    constructor(keyAlias: String) : this(KeystoreVaultManager(keyAlias))
 
     override fun encrypt(plaintext: ByteArray): EncryptedPayload =
         keystore.encryptBytes(plaintext).let { EncryptedPayload(it.ciphertext, it.iv) }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import io.mockk.verifyOrder
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
@@ -79,6 +80,22 @@ class SecureKeyValueStoreTest {
             editor.putString("active", "value")
             editor.commit()
         }
+    }
+
+    @Test
+    fun `android keystore crypto delegates encrypted payload conversion`() {
+        val manager = mockk<KeystoreVaultManager>()
+        val plaintext = "secure value".encodeToByteArray()
+        val ciphertext = byteArrayOf(8, 7, 6)
+        val iv = byteArrayOf(1, 2, 3, 4)
+        every { manager.encryptBytes(plaintext) } returns KeystoreVaultManager.EncryptedResult(ciphertext, iv)
+        every { manager.decryptBytes(ciphertext, iv) } returns plaintext
+        val crypto = AndroidKeystoreCrypto(manager)
+
+        assertEquals(EncryptedPayload(ciphertext, iv), crypto.encrypt(plaintext))
+        assertEquals(plaintext.toList(), crypto.decrypt(EncryptedPayload(ciphertext, iv)).toList())
+        verify(exactly = 1) { manager.encryptBytes(plaintext) }
+        verify(exactly = 1) { manager.decryptBytes(ciphertext, iv) }
     }
 
     @Test
