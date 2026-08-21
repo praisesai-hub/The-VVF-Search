@@ -208,6 +208,14 @@ class EntityJsonAdapterCoverageTest {
     }
 
     @Test
+    fun generatedVaultAdapter_describesItselfAndRejectsNullSerialization() {
+        val adapter = directVaultAdapter()
+
+        assertEquals("GeneratedJsonAdapter(VaultItemEntity)", adapter.toString())
+        assertThrows(NullPointerException::class.java) { adapter.toJson(null) }
+    }
+
+    @Test
     fun generatedCloudAdapter_appliesDefaultsAndSkipsUnknownFields() {
         val adapter = moshi.adapter(CloudSyncItemEntity::class.java)
         val beforeDecode = System.currentTimeMillis()
@@ -276,6 +284,14 @@ class EntityJsonAdapterCoverageTest {
         }
     }
 
+    @Test
+    fun generatedCloudAdapter_describesItselfAndRejectsNullSerialization() {
+        val adapter = directCloudAdapter()
+
+        assertEquals("GeneratedJsonAdapter(CloudSyncItemEntity)", adapter.toString())
+        assertThrows(NullPointerException::class.java) { adapter.toJson(null) }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun directVaultAdapter(): JsonAdapter<VaultItemEntity> {
         val adapterClass = Class.forName("com.example.data.VaultItemEntityJsonAdapter")
@@ -285,6 +301,17 @@ class EntityJsonAdapterCoverageTest {
             adapterClass.getDeclaredConstructor().newInstance()
         }
         return adapter as JsonAdapter<VaultItemEntity>
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun directCloudAdapter(): JsonAdapter<CloudSyncItemEntity> {
+        val adapterClass = Class.forName("com.example.data.CloudSyncItemEntityJsonAdapter")
+        val adapter = runCatching {
+            adapterClass.getDeclaredConstructor(Moshi::class.java).newInstance(moshi)
+        }.getOrElse {
+            adapterClass.getDeclaredConstructor().newInstance()
+        }
+        return adapter as JsonAdapter<CloudSyncItemEntity>
     }
 
     private fun fullVaultJson(): String = """{
