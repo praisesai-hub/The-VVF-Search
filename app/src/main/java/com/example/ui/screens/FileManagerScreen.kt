@@ -247,7 +247,11 @@ fun FileManagerScreen(
                     )
                 }
                 Text(
-                    text = if (showRecycleBin) stringResource(R.string.hide_trash) else stringResource(R.string.view_trash),
+                    text = if (showRecycleBin) {
+                        stringResource(R.string.hide_trash)
+                    } else {
+                        stringResource(R.string.view_trash)
+                    },
                     color = BhagwaOrange,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp
@@ -303,7 +307,13 @@ fun FileManagerScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(text = file.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                    Text(text = formatFileSize(file.sizeBytes, stringResource(R.string.unknown_size)), fontSize = 11.sp)
+                                    Text(
+                                        text = formatFileSize(
+                                            file.sizeBytes,
+                                            stringResource(R.string.unknown_size)
+                                        ),
+                                        fontSize = 11.sp
+                                    )
                                 }
                                 Row {
                                     IconButton(onClick = { viewModel.restoreFromRecycleBin(file) }) {
@@ -930,4 +940,3 @@ fun SafDirectoryPickerCard(
         }
     }
 }
-
