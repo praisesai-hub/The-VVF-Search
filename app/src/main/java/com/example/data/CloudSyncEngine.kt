@@ -27,41 +27,49 @@ class CloudSyncEngine(
 
     /**
      * Synchronizes a single [CloudSyncItemEntity].
-     * Resolves the appropriate provider, performs the upload/sync, and returns the result.
+    * Resolves the appropriate provider, performs the upload/sync, and returns the result.
      */
     suspend fun syncItem(item: CloudSyncItemEntity): CloudSyncResult {
-        val file = File(item.filePath)
-        if (!file.exists() || !file.isFile) {
-            val error = DomainErrorMapper.fromThrowable(
-                operation = "CLOUD_TRANSFER",
-                cause = java.io.IOException("source file unavailable"),
-                fileId = item.id,
-                provider = item.provider
-            )
-            return CloudSyncResult.Error(
-                message = error.userMessage.value,
-                isRetryable = false,
-                domainError = error
-            )
-        }
-
+        val file = sourceFileOrNull(item)
+            ?: return nonRetryableError("CLOUD_TRANSFER", java.io.IOException("source file unavailable"), item)
         val adapter = getAdapterForProvider(item.provider)
-            ?: run {
-                val error = DomainErrorMapper.fromThrowable(
-                    operation = "CLOUD_PROVIDER_RESOLUTION",
-                    cause = IllegalArgumentException("unsupported provider"),
-                    fileId = item.id,
-                    provider = item.provider
-                )
-                return CloudSyncResult.Error(
-                    message = error.userMessage.value,
-                    isRetryable = false,
-                    domainError = error
-                )
-            }
+            ?: return nonRetryableError(
+                "CLOUD_PROVIDER_RESOLUTION",
+                IllegalArgumentException("unsupported provider"),
+                item
+            )
 
         Log.i(TAG, "Starting sync for item ${item.id} (${item.fileName}) with provider ${item.provider}...")
-        return try {
+        return uploadItem(adapter, file, item)
+    }
+
+    private fun sourceFileOrNull(item: CloudSyncItemEntity): File? =
+        File(item.filePath).takeIf { it.exists() && it.isFile }
+
+    private fun nonRetryableError(
+        operation: String,
+        cause: Throwable,
+        item: CloudSyncItemEntity
+    ): CloudSyncResult.Error {
+        val error = DomainErrorMapper.fromThrowable(
+            operation = operation,
+            cause = cause,
+            fileId = item.id,
+            provider = item.provider
+        )
+        return CloudSyncResult.Error(
+            message = error.userMessage.value,
+            isRetryable = false,
+            domainError = error
+        )
+    }
+
+    private suspend fun uploadItem(
+        adapter: CloudProviderAdapter,
+        file: File,
+        item: CloudSyncItemEntity
+    ): CloudSyncResult =
+        runCatching {
             adapter.uploadFile(
                 file = file,
                 remotePath = item.fileName,
@@ -71,33 +79,42 @@ class CloudSyncEngine(
                     resumableSessionUri = item.resumableSessionUri,
                     bytesCommitted = item.resumableBytesCommitted
                 )
-            ) { progress ->
-                val leaseOwner = item.leaseOwner.orEmpty()
-                if (leaseOwner.isNotBlank()) {
-                    operationStore?.updateTransferState(
-                        operationId = item.operationId,
-                        leaseOwner = leaseOwner,
-                        remoteFileId = progress.remoteFileId.orEmpty(),
-                        resumableSessionUri = progress.resumableSessionUri.orEmpty(),
-                        bytesCommitted = progress.bytesCommitted
-                    )
-                }
+            ) { progress -> persistTransferProgress(item, progress) }
+        }.fold(
+            onSuccess = { it },
+            onFailure = { cause ->
+                if (cause !is Exception) throw cause
+                transferFailure(item, cause)
             }
-        } catch (e: Exception) {
-            val error = DomainErrorMapper.fromThrowable(
-                operation = "CLOUD_TRANSFER",
-                cause = e,
-                fileId = item.id,
-                provider = item.provider
-            )
-            com.example.domain.error.DiagnosticLogger.log(TAG, error)
-            CloudSyncResult.Error(
-                message = error.userMessage.value,
-                isRetryable = isExceptionRetryable(e),
-                cause = e,
-                domainError = error
+        )
+
+    private suspend fun persistTransferProgress(item: CloudSyncItemEntity, progress: CloudTransferProgress) {
+        val leaseOwner = item.leaseOwner.orEmpty()
+        if (leaseOwner.isNotBlank()) {
+            operationStore?.updateTransferState(
+                operationId = item.operationId,
+                leaseOwner = leaseOwner,
+                remoteFileId = progress.remoteFileId.orEmpty(),
+                resumableSessionUri = progress.resumableSessionUri.orEmpty(),
+                bytesCommitted = progress.bytesCommitted
             )
         }
+    }
+
+    private fun transferFailure(item: CloudSyncItemEntity, cause: Exception): CloudSyncResult.Error {
+        val error = DomainErrorMapper.fromThrowable(
+            operation = "CLOUD_TRANSFER",
+            cause = cause,
+            fileId = item.id,
+            provider = item.provider
+        )
+        com.example.domain.error.DiagnosticLogger.log(TAG, error)
+        return CloudSyncResult.Error(
+            message = error.userMessage.value,
+            isRetryable = isExceptionRetryable(cause),
+            cause = cause,
+            domainError = error
+        )
     }
 
     /**
