@@ -149,7 +149,10 @@ object PhysicalStorageManager {
                     if (context.contentResolver.update(uri, values, null, null) > 0) {
                         Result.success(uri.toString())
                     } else if (doc == null || !doc.exists()) {
-                        sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.FileNotFoundException("document unavailable"))
+                        sanitizedFailure(
+                            "PHYSICAL_STORAGE_RENAME",
+                            java.io.FileNotFoundException("document unavailable")
+                        )
                     } else {
                         sanitizedFailure("PHYSICAL_STORAGE_RENAME", java.io.IOException("rename failed"))
                     }
@@ -265,10 +268,20 @@ object PhysicalStorageManager {
 
     private fun moveFileToTrash(context: Context, path: String, operationId: String): Result<String> {
         val srcFile = File(path)
-        if (!srcFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.FileNotFoundException("source unavailable"))
+        if (!srcFile.exists()) {
+            return sanitizedFailure(
+                "PHYSICAL_STORAGE_TRASH",
+                java.io.FileNotFoundException("source unavailable")
+            )
+        }
         val trashFile = File(trashPathForOperation(context, path, operationId))
         val moved = renameToTrash(srcFile, trashFile) || copyAndDeleteSource(context, srcFile, trashFile, path)
-        return if (moved && trashFile.exists()) { notifyMediaStoreFileDeleted(context, path); Result.success(trashFile.absolutePath) } else sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("move failed"))
+        return if (moved && trashFile.exists()) {
+            notifyMediaStoreFileDeleted(context, path)
+            Result.success(trashFile.absolutePath)
+        } else {
+            sanitizedFailure("PHYSICAL_STORAGE_TRASH", java.io.IOException("move failed"))
+        }
     }
 
     private fun renameToTrash(source: File, trash: File): Boolean =
@@ -298,7 +311,12 @@ object PhysicalStorageManager {
     fun restoreFromTrash(context: Context, trashPath: String, originalPath: String): Result<String> {
         if (originalPath.startsWith("content://")) {
             val trashFile = File(trashPath)
-            if (!trashFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.FileNotFoundException("trash file unavailable"))
+            if (!trashFile.exists()) {
+                return sanitizedFailure(
+                    "PHYSICAL_STORAGE_RESTORE",
+                    java.io.FileNotFoundException("trash file unavailable")
+                )
+            }
             return try {
                 val uri = originalPath.toUri()
                 var writtenToOriginal = false
@@ -309,14 +327,28 @@ object PhysicalStorageManager {
                 }
                 val restoredFile = File(getRestoredDir(context), getFileNameFromTrashPathOrUri(context, trashFile.name, uri))
                 trashFile.copyTo(restoredFile, overwrite = true)
-                if (!restoredFile.exists() || restoredFile.length() == 0L) { try { restoredFile.delete() } catch (_: Exception) {}; return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.IOException("write failed")) }
+                if (!restoredFile.exists() || restoredFile.length() == 0L) {
+                    try {
+                        restoredFile.delete()
+                    } catch (_: Exception) {
+                    }
+                    return sanitizedFailure(
+                        "PHYSICAL_STORAGE_RESTORE",
+                        java.io.IOException("write failed")
+                    )
+                }
                 if (!trashFile.delete() && trashFile.exists()) { try { restoredFile.delete() } catch (_: Exception) {}; return Result.failure(IllegalStateException("Failed to delete trash file after restoration.")) }
                 notifyMediaStoreFileChanged(context, "", restoredFile.absolutePath)
                 Result.success(restoredFile.absolutePath)
             } catch (e: Exception) { sanitizedFailure("PHYSICAL_STORAGE", e) }
         }
         val trashFile = File(trashPath)
-        if (!trashFile.exists()) return sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.FileNotFoundException("trash file unavailable"))
+        if (!trashFile.exists()) {
+            return sanitizedFailure(
+                "PHYSICAL_STORAGE_RESTORE",
+                java.io.FileNotFoundException("trash file unavailable")
+            )
+        }
         val targetFile = File(originalPath)
         targetFile.parentFile?.let { if (!it.exists()) it.mkdirs() }
         var restored = false
@@ -324,7 +356,12 @@ object PhysicalStorageManager {
         if (!restored) {
             try { trashFile.copyTo(targetFile, overwrite = true); if (trashFile.delete()) restored = true else try { targetFile.delete() } catch (_: Exception) {} } catch (e: Exception) { Log.e(TAG, "Restore copy from trash failed: ${e.message}"); try { targetFile.delete() } catch (_: Exception) {} }
         }
-        return if (restored && targetFile.exists()) { notifyMediaStoreFileChanged(context, "", targetFile.absolutePath); Result.success(targetFile.absolutePath) } else sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.IOException("restore failed"))
+        return if (restored && targetFile.exists()) {
+            notifyMediaStoreFileChanged(context, "", targetFile.absolutePath)
+            Result.success(targetFile.absolutePath)
+        } else {
+            sanitizedFailure("PHYSICAL_STORAGE_RESTORE", java.io.IOException("restore failed"))
+        }
     }
 
     fun decryptAndRestore(context: Context, vaultFilePath: String, originalPath: String, decryptAction: (ByteArray) -> ByteArray): Result<String> {
