@@ -77,3 +77,4 @@
 - [ ] Diagnose and, if safely feasible, stabilize local resource-constrained full JVM/Lint validation; do not treat daemon interruption as quality-gate evidence.
 - [x] Collect one terminal evidence snapshot for CI run 32432388146, cancel emulator only if the JVM job has already failed, and do not dispatch a second run.
 - [x] Gate the instrumented Android job on successful completion of Build & Test Android App so a proven JVM coverage failure never starts or continues emulator work.
+- [ ] Continue Option B evidence-driven coverage and Detekt hardening on `fix/restore-ci-compile` until enforced release gates pass; keep `main` untouched and run only one CI validation at a time.

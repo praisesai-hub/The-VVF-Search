@@ -38,7 +38,7 @@ internal class AndroidVaultKeyStorePort private constructor(
         )
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
+            .setKeySize(AES_KEY_SIZE_BITS)
             .build()
         keyGenerator.init(spec)
         keyGenerator.generateKey()
@@ -52,7 +52,7 @@ internal class AndroidVaultKeyStorePort private constructor(
         )
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
+            .setKeySize(AES_KEY_SIZE_BITS)
             .setUserAuthenticationRequired(true)
             .setInvalidatedByBiometricEnrollment(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -71,6 +71,7 @@ internal class AndroidVaultKeyStorePort private constructor(
 
     companion object {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        private const val AES_KEY_SIZE_BITS = 256
 
         fun open(): AndroidVaultKeyStorePort = AndroidVaultKeyStorePort(
             KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
