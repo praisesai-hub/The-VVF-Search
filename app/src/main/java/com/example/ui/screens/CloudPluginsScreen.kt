@@ -326,14 +326,23 @@ fun CloudSyncSection(
                                 onClick = { viewModel.retryCloudSyncItem(item.id) },
                                 modifier = Modifier.testTag("retry_sync_${item.id}")
                             ) {
-                                Text(stringResource(R.string.retry), fontSize = 12.sp, color = BhagwaOrange, fontWeight = FontWeight.Bold)
+                                Text(
+                                    stringResource(R.string.retry),
+                                    fontSize = 12.sp,
+                                    color = BhagwaOrange,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         } else if (item.status == "PENDING" || item.status == "QUEUED") {
                             TextButton(
                                 onClick = { viewModel.cancelCloudSyncItem(item.id) },
                                 modifier = Modifier.testTag("cancel_sync_${item.id}")
                             ) {
-                                Text(stringResource(R.string.cancel), fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                Text(
+                                    stringResource(R.string.cancel),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                     }
@@ -450,5 +459,4 @@ private fun SectionChip(
         )
     }
 }
-
 
