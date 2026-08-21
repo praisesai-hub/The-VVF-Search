@@ -88,15 +88,19 @@ object VideoDuplicateEvidence {
     }
 
     private fun resolutionCompatible(first: FileItemEntity, second: FileItemEntity): Boolean {
-        if (first.videoWidth <= 0 || first.videoHeight <= 0 || second.videoWidth <= 0 || second.videoHeight <= 0) return false
+        if (!hasPositiveVideoDimensions(first) || !hasPositiveVideoDimensions(second)) return false
         val firstRatio = first.videoWidth.toDouble() / first.videoHeight.toDouble()
         val secondRatio = second.videoWidth.toDouble() / second.videoHeight.toDouble()
-        return abs(firstRatio - secondRatio) <= ASPECT_RATIO_TOLERANCE &&
-            abs(first.videoWidth - second.videoWidth).toDouble() <=
-            max(first.videoWidth, second.videoWidth).toDouble() * DIMENSION_TOLERANCE_RATIO &&
-            abs(first.videoHeight - second.videoHeight).toDouble() <=
+        val aspectRatioCompatible = abs(firstRatio - secondRatio) <= ASPECT_RATIO_TOLERANCE
+        val widthCompatible = abs(first.videoWidth - second.videoWidth).toDouble() <=
+            max(first.videoWidth, second.videoWidth).toDouble() * DIMENSION_TOLERANCE_RATIO
+        val heightCompatible = abs(first.videoHeight - second.videoHeight).toDouble() <=
             max(first.videoHeight, second.videoHeight).toDouble() * DIMENSION_TOLERANCE_RATIO
+        return aspectRatioCompatible && widthCompatible && heightCompatible
     }
+
+    private fun hasPositiveVideoDimensions(file: FileItemEntity): Boolean =
+        file.videoWidth > 0 && file.videoHeight > 0
 
     private fun hammingDistance(first: String, second: String): Int {
         if (first.length != DHASH_HEX_LENGTH || second.length != DHASH_HEX_LENGTH) return DHASH_BIT_LENGTH
