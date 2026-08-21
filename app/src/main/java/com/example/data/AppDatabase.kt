@@ -113,7 +113,12 @@ abstract class AppDatabase : RoomDatabase() {
                 addColumnIfNotExists(db, "cloud_sync", "completedAtMs", "INTEGER NOT NULL DEFAULT 0")
                 addColumnIfNotExists(db, "cloud_sync", "lastErrorCode", "TEXT")
                 db.execSQL("UPDATE cloud_sync SET operationId = 'legacy-' || id WHERE operationId = ''")
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_cloud_sync_operationId` ON `cloud_sync` (`operationId`)")
+                db.execSQL(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS `index_cloud_sync_operationId`
+                    ON `cloud_sync` (`operationId`)
+                    """.trimIndent()
+                )
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS `work_operations` (
                         `operationId` TEXT NOT NULL,
@@ -153,7 +158,15 @@ abstract class AppDatabase : RoomDatabase() {
         ) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "files", "documentCandidateFingerprint", "TEXT NOT NULL DEFAULT ''")
-                db.execSQL("UPDATE files SET documentCandidateFingerprint = visualSimilarityHash WHERE category = 'DOCUMENTS' AND documentCandidateFingerprint = '' AND visualSimilarityHash IS NOT NULL AND visualSimilarityHash <> ''")
+                db.execSQL(
+                    """
+                    UPDATE files SET documentCandidateFingerprint = visualSimilarityHash
+                    WHERE category = 'DOCUMENTS'
+                        AND documentCandidateFingerprint = ''
+                        AND visualSimilarityHash IS NOT NULL
+                        AND visualSimilarityHash <> ''
+                    """.trimIndent()
+                )
             }
         }
 
@@ -239,7 +252,17 @@ abstract class AppDatabase : RoomDatabase() {
                     "vvf_smart_manager_db"
                 )
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8,
+                    MIGRATION_8_9,
+                    MIGRATION_9_10
+                )
 
                 val instance = builder.build()
                 INSTANCE = instance
@@ -248,4 +271,3 @@ abstract class AppDatabase : RoomDatabase() {
         }
     }
 }
-
