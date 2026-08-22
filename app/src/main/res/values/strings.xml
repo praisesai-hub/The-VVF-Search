@@ -150,7 +150,7 @@
     <string name="keep_local">Keep Local</string>
     <string name="keep_cloud">Keep Cloud</string>
     <string name="dashboard_title">%1$s v2.0</string>
-    <string name="system_health">System Health: 94%% Excellent</string>
+    <string name="system_health" formatted="false">System Health: 94% Excellent</string>
     <string name="start_benchmark">Start &lt;10s</string>
     <string name="storage_used">Storage Used: %1$s</string>
     <string name="free_storage">18.5 GB Free of 128 GB</string>
