@@ -8,9 +8,13 @@
 
 **Current evidence captured:** 2026-08-22 00:37 UTC
 
+**Latest fix commit:** `53d776e99fa8554939c41ca050b36300cfcf95f8` (`test: isolate file operation store in repository fixture`)
+
+**Latest verification state captured:** PR #47 checks queued after the fix commit; terminal results not yet available.
+
 ## Executive conclusion
 
-The earlier `123dd32` snapshot is a historical freeze, not new post-freeze evidence. The authoritative current evidence is PR #47 at head `dfee303fec84394dd60f2f0bed953d1365b447a8`. Its Android build/unit job and instrumentation job both reached terminal **FAILURE** results. CodeQL and Kotlin/Java analysis are successful. Therefore the release verdict remains:
+The earlier `123dd32` snapshot is a historical freeze, not new post-freeze evidence. Before the latest fix, PR #47 at head `dfee303fec84394dd60f2f0bed953d1365b447a8` had terminal Android build/unit and instrumentation failures. The Fake DAO isolation fix is now applied in `53d776e`, and the resulting PR checks are queued. No terminal post-fix result is available yet. CodeQL and Kotlin/Java analysis are successful. Therefore the release verdict remains:
 
 > **Overall release: NO-GO.**
 
@@ -33,7 +37,9 @@ No new production-code change is justified by the historical freeze itself. The 
 
 ## Current PR #47 evidence
 
-PR #47 is open at [PR #47](https://github.com/praisesai-hub/The-VVF-Search/pull/47), on branch `docs/record-ruleset-evidence`. The current head is `dfee303fec84394dd60f2f0bed953d1365b447a8`.
+The preceding terminal evidence for `dfee303` is retained below for audit history. After commit `53d776e`, GitHub re-queued analysis, Android build/unit, and instrumentation checks. The queued state is not evidence of success.
+
+PR #47 is open at [PR #47](https://github.com/praisesai-hub/The-VVF-Search/pull/47), on branch `docs/record-ruleset-evidence`. The previous analyzed head was `dfee303fec84394dd60f2f0bed953d1365b447a8`; the current head is `53d776e99fa8554939c41ca050b36300cfcf95f8`.
 
 | Required check | Status | Conclusion | Evidence |
 |---|---|---|---|
@@ -107,6 +113,8 @@ gh api repos/praisesai-hub/The-VVF-Search/branches/main/protection
 ```
 
 ## References
+
+[11]: https://github.com/praisesai-hub/The-VVF-Search/commit/53d776e99fa8554939c41ca050b36300cfcf95f8 "Fake DAO isolation fix commit"
 
 [1]: https://github.com/praisesai-hub/The-VVF-Search/pull/47 "PR #47"
 [2]: https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32535993914 "Android CI/CD run 32535993914"
