@@ -1,7 +1,7 @@
 # The-VVF-Search Production Release Gate Report
 
 **Repository:** [praisesai-hub/The-VVF-Search](https://github.com/praisesai-hub/The-VVF-Search)
-**Latest reviewed commit:** `c348c61`
+**Latest reviewed commit:** `b2e2c9c` (PR #47 head)
 **Review date:** 22 August 2026
 **Review mode:** Devil’s-advocate production hardening review
 
@@ -9,9 +9,9 @@
 
 > **Release Candidate: NOT PASSED.**
 
-The repository contains substantial source-level remediation, and the previously blocking Kotlin compilation defects were addressed. Nevertheless, the evidence does not support a production-ready claim. The decisive blockers are **Room database encryption**, **merge-blocking branch enforcement**, and **clean Android release and instrumentation evidence**.
+The repository contains substantial source-level remediation, and the previously blocking Kotlin compilation defects were addressed. Nevertheless, the evidence does not support a production-ready claim. The decisive blockers are **Room database encryption**, **terminally green Android build and instrumentation evidence**, and **clean Android release artifacts**.
 
-At the latest verification, Android CI/CD for `c348c61` had a failed unit-test job while the emulator job remained in progress. The run is therefore **not green**. The sandbox also cannot run Gradle Android tests because no Android SDK is configured. These limitations are evidence gaps, not successful validations.
+At the latest post-freeze verification, PR #47 at `b2e2c9c` had CodeQL successful, while `Build & Test Android App` was failed and `Run Instrumented Android Tests` was still in progress. The PR is therefore **not green**. The sandbox also cannot run Gradle Android tests because no Android SDK is configured. These limitations are evidence gaps, not successful validations.
 
 The review deliberately distinguishes **configured** from **enforced**. A Gradle flag, workflow step, manifest declaration, or test file demonstrates configuration or intended behavior. It does not prove a successful signed artifact, a protected merge path, or real-device behavior.
 
@@ -37,8 +37,8 @@ The local command `./gradlew testDebugUnitTest --console=plain` failed before te
 |---|---|---|
 | **Room database encryption** | The reviewed source shows standard Room construction. No verified SQLCipher integration, `SupportFactory`, encrypted Room builder, or database-passphrase lifecycle was found. | **BLOCKED** |
 | **R8 and resource shrinking** | `app/build.gradle.kts` contains `isMinifyEnabled = true` and `isShrinkResources = true`. A clean release artifact, mapping-file review, and missing-class review are still required. | Configured, not artifact-proven |
-| **Merge-blocking CI** | CodeQL and dependency-submission jobs have completed successfully on recent commits. The GitHub API reports `Branch not protected` for `main`. | **BLOCKED** |
-| **Clean Android validation** | Remote emulator validation is configured. The latest c348c61 emulator job was still non-terminal at the last bounded check, and the local environment lacks Android SDK/device support. | **BLOCKED** |
+| **Merge-blocking CI** | Classic branch-protection API is unavailable on this personal repository, but active repository ruleset `main-release-gates` (`21172655`) targets `refs/heads/main`, has no bypass, and requires Android build, instrumentation, CodeQL, and dependency checks. | **VERIFIED VIA ACTIVE RULESET** |
+| **Clean Android validation** | Remote emulator validation is configured, but PR #47 at `b2e2c9c` has not produced a terminal green Android build and instrumentation result; the local environment lacks Android SDK/device support. | **BLOCKED** |
 
 ## Consolidated finding disposition
 
@@ -53,8 +53,8 @@ The local command `./gradlew testDebugUnitTest --console=plain` failed before te
 | 14 | The manifest declares `allowBackup=false` and `dataExtractionRules`. Merged-artifact, legacy-rule, device-transfer, and exclusion checks remain required. | HIGH | Pending artifact validation |
 | 15 | Release configuration enables R8 and resource shrinking. Successful release build and mapping inspection are not yet evidenced. | HIGH | Pending clean build |
 | 16 | Gradle wrapper files and validation exist. Clean wrapper execution and dependency provenance remain required. | MEDIUM | Pending clean build |
-| 17 | Workflow gates exist, but repository branch protection is absent. | CRITICAL | **Blocker** |
-| 18 | Emulator validation is configured, but the c348c61 device job was non-terminal at the last bounded check; the preceding device report exposed and prompted a production MediaScanner null-URI fix. | CRITICAL | **Blocker** |
+| 17 | Classic branch-protection API is unavailable on this personal repository, but active repository ruleset `main-release-gates` (`21172655`) is API-verified and demonstrably enforced with no bypass. | CLOSED | **Verified via active repository ruleset** |
+| 18 | Emulator validation is configured, but PR #47 still requires terminal post-fix device evidence. The earlier device report exposed and prompted a production MediaScanner null-URI fix. | CRITICAL | **Blocker** |
 | 19 | Test counts do not prove the complete MASVS storage, crypto, authentication, network, platform, resilience, and privacy model. | HIGH | Pending matrix and coverage evidence |
 
 ## Controls verified in source
@@ -67,24 +67,25 @@ These controls materially improve the security posture, but they must not be ove
 
 1. **Establish the Room encryption boundary.** Classify sensitive Room fields, decide whether database-at-rest encryption is required, implement the selected design if required, define passphrase lifecycle and wiping semantics, and add open-failure and migration tests. Documentation must not claim encrypted Room until this is evidenced.
 
-2. **Complete the final Android CI/CD run.** The `c348c61` run must reach a terminal result. If it fails, retrieve JUnit and instrumentation reports, fix the underlying behavior or contract, and repeat until both unit and device jobs are green.
+2. **Complete PR #47 Android CI/CD verification.** The current head `b2e2c9c` must reach terminal green unit/build and instrumentation results. If it fails, retrieve JUnit and instrumentation reports, fix the underlying behavior or contract, and repeat until both jobs are green.
 
-3. **Protect `main`.** Configure repository rules requiring Android CI/CD, CodeQL, dependency, security-scan, coverage, and release-validation checks before merge. Record the ruleset/API response as evidence.
+3. **Maintain the active `main-release-gates` ruleset.** It is active, API-verified, has no bypass, and blocks direct updates without the configured required checks. Review required contexts whenever workflow job names change.
 
 4. **Run clean release validation.** In an Android SDK-enabled environment, execute wrapper validation, lint, Detekt, unit tests, instrumentation tests, release assembly, R8 mapping inspection, merged-manifest inspection, backup-rule validation, SBOM/dependency/license checks, and signed-AAB/provenance checks.
 
 5. **Complete the platform matrix.** Validate representative Android 12–16 behavior for scoped storage, SAF, MediaStore, Keystore, biometric lockout, WorkManager, large files, low memory, and recovery/reconciliation windows.
 
-6. **Close the remaining resumable-upload contract.** The duplicate-cleanup failure has been resolved, while the resumable-upload range test still requires a green CI confirmation. Assertions must continue to verify server-offset resume semantics rather than being weakened.
+6. **Complete post-fix Android verification.** The recycle-bin fixture and CloudSyncWorker instrumentation contract fixes are applied in PR #47, but the PR requires terminal green unit/build and device results with JUnit artifacts. Assertions must continue to verify server-offset resume semantics and explicit retry taxonomy rather than being weakened.
 
 ## Final audit wording
 
-> **Source-level remediation is substantially advanced and a real MediaScanner production crash was found and fixed through instrumentation evidence. Production readiness is not established. Release Candidate PASS remains blocked by Room encryption status, absent merge-blocking branch protection, the remaining c348c61 unit failure, and incomplete clean Android release evidence.**
+> **Source-level remediation is substantially advanced and a real MediaScanner production crash was found and fixed through instrumentation evidence. Production readiness is not established. Release Candidate PASS remains blocked by unresolved Android CI/device verification, Room encryption status, and incomplete clean Android release evidence. Main merge protection is closed through the active API-verified repository ruleset.**
 
 ## Evidence links
 
 - [Repository](https://github.com/praisesai-hub/The-VVF-Search)
-- [Latest Android CI/CD run for `c348c61`](https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32531025058)
+- [PR #47](https://github.com/praisesai-hub/The-VVF-Search/pull/47)
+- [PR #47 Android CI/CD run for `b2e2c9c`](https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32535486975)
 - [Previous Android CI/CD run for `39d5635`](https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32530366612)
 - [Previous Android CI/CD run for `9b088a9`](https://github.com/praisesai-hub/The-VVF-Search/actions/runs/32527375408)
 - [GitHub Actions](https://github.com/praisesai-hub/The-VVF-Search/actions)

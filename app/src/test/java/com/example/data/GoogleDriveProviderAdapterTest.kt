@@ -430,6 +430,10 @@ class GoogleDriveProviderAdapterTest {
         val progress = mutableListOf<CloudTransferProgress>()
         fakeInterceptor.responseProvider = { request ->
             val range = request.header("Content-Range").orEmpty()
+            val requestBodyLength = request.body?.contentLength() ?: -1L
+            val trace = "request method=${request.method} range=$range contentLength=$requestBodyLength url=${request.url}"
+            println("RESUMABLE_TRACE $trace")
+            System.err.println("RESUMABLE_TRACE $trace")
             ranges += range
             if (range.startsWith("bytes */")) {
                 Response.Builder()
@@ -438,6 +442,10 @@ class GoogleDriveProviderAdapterTest {
                     .code(308)
                     .message("Resume Incomplete")
                     .header("Range", "bytes=0-2")
+                    .also {
+                        println("RESUMABLE_TRACE response code=308 range=bytes=0-2")
+                        System.err.println("RESUMABLE_TRACE response code=308 range=bytes=0-2")
+                    }
                     .build()
             } else {
                 Response.Builder()
@@ -446,6 +454,10 @@ class GoogleDriveProviderAdapterTest {
                     .code(200)
                     .message("OK")
                     .body("{\"id\":\"remote-resumed\"}".toResponseBody("application/json".toMediaTypeOrNull()))
+                    .also {
+                        println("RESUMABLE_TRACE response code=200 range=<none>")
+                        System.err.println("RESUMABLE_TRACE response code=200 range=<none>")
+                    }
                     .build()
             }
         }

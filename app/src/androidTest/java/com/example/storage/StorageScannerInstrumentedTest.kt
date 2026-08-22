@@ -34,7 +34,7 @@ class StorageScannerInstrumentedTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         scanner = StorageScanner(context)
-        testRoot = File(context.cacheDir, "scanner-instrumented-${System.nanoTime()}")
+        testRoot = File(context.filesDir, "scanner-instrumented-${System.nanoTime()}")
         assertTrue(testRoot.mkdirs())
     }
 
@@ -109,7 +109,7 @@ class StorageScannerInstrumentedTest {
         }
         File(testRoot, "empty.txt").createNewFile()
         val visible = File(testRoot, "visible.txt").apply { writeText("visible") }
-        val androidRoot = File(context.cacheDir, "Android")
+        val androidRoot = File(testRoot, "Android")
         val createdAndroidRoot = !androidRoot.exists()
         if (createdAndroidRoot) assertTrue(androidRoot.mkdirs())
         assertTrue(androidRoot.isDirectory)

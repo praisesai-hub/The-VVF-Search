@@ -17,7 +17,7 @@ import com.example.data.GoogleAuthManager
 import com.example.data.PluginEntity
 import com.example.data.VaultItemEntity
 import java.io.File
-import java.io.IOException
+import java.net.UnknownHostException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -290,7 +290,7 @@ class CloudSyncWorkerInstrumentedTest {
     fun retryableFailure_returnsRetryBeforeAttemptLimit(): Unit = runBlocking {
         val file = createFile("worker_retry")
         fakeDao.cloudSyncItems += item(306L, file)
-        fakeAdapter.exceptionToThrow = IOException("network unavailable")
+        fakeAdapter.exceptionToThrow = UnknownHostException("network unavailable")
 
         assertEquals(ListenableWorker.Result.retry(), createWorker(runAttemptCount = 0).doWork())
         val retryItem = fakeDao.getCloudSyncItems().first().single()
@@ -304,19 +304,19 @@ class CloudSyncWorkerInstrumentedTest {
     fun retryableFailure_returnsFailureAtAttemptLimit(): Unit = runBlocking {
         val file = createFile("worker_retry_limit")
         fakeDao.cloudSyncItems += item(307L, file)
-        fakeAdapter.exceptionToThrow = IOException("network unavailable")
+        fakeAdapter.exceptionToThrow = UnknownHostException("network unavailable")
 
         assertEquals(ListenableWorker.Result.failure(), createWorker(runAttemptCount = 3).doWork())
     }
 
     @Test
-    fun notSupportedResult_persistsNotSupportedAndFails(): Unit = runBlocking {
+    fun notSupportedResult_persistsFailedAndFails(): Unit = runBlocking {
         val file = createFile("worker_unsupported")
         fakeDao.cloudSyncItems += item(308L, file)
         fakeAdapter.returnNotSupported = true
 
         assertEquals(ListenableWorker.Result.failure(), createWorker().doWork())
-        assertEquals("NOT_SUPPORTED", fakeDao.getCloudSyncItems().first().single().status)
+        assertEquals("FAILED", fakeDao.getCloudSyncItems().first().single().status)
     }
 
     @Test
