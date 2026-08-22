@@ -39,7 +39,9 @@ class OcrOverlayImageInstrumentedTest {
         try {
             Bitmap.createBitmap(80, 40, Bitmap.Config.ARGB_8888).apply {
                 eraseColor(android.graphics.Color.WHITE)
-                compress(Bitmap.CompressFormat.PNG, 100, imageFile.outputStream())
+                imageFile.outputStream().use { output ->
+                    check(compress(Bitmap.CompressFormat.PNG, 100, output))
+                }
                 recycle()
             }
 
@@ -65,7 +67,7 @@ class OcrOverlayImageInstrumentedTest {
                 }
             }
 
-            composeTestRule.onNodeWithContentDescription("OCR Image Preview").assertIsDisplayed()
+            composeTestRule.onNodeWithContentDescription("OCR image preview").assertIsDisplayed()
         } finally {
             imageFile.delete()
         }
