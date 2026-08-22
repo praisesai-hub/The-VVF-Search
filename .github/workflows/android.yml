@@ -109,6 +109,13 @@ jobs:
         PYTHONPATH=scripts python3 -m unittest scripts/test_verify_release_runtime_security.py
     - name: Run Unit Tests
       run: ./gradlew :app:testDebugUnitTest
+    - name: Upload Resumable Upload Diagnostic
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: resumable-upload-diagnostic
+        path: app/build/reports/resumable-upload-trace.txt
+        if-no-files-found: ignore
     - name: Generate JVM Unit Test Coverage Report
       run: ./gradlew :app:createDebugUnitTestCoverageReport
     - name: Test JVM coverage policy checker

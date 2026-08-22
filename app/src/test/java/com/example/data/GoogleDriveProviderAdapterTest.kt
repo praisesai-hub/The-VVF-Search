@@ -427,6 +427,7 @@ class GoogleDriveProviderAdapterTest {
         }
         authManager.saveSession("access_123", "refresh_123", "user@test.com", "Test")
         val ranges = mutableListOf<String>()
+        val traceLines = mutableListOf<String>()
         val progress = mutableListOf<CloudTransferProgress>()
         fakeInterceptor.responseProvider = { request ->
             val range = request.header("Content-Range").orEmpty()
@@ -434,6 +435,7 @@ class GoogleDriveProviderAdapterTest {
             val trace = "request method=${request.method} range=$range contentLength=$requestBodyLength url=${request.url}"
             println("RESUMABLE_TRACE $trace")
             System.err.println("RESUMABLE_TRACE $trace")
+            traceLines += trace
             ranges += range
             if (range.startsWith("bytes */")) {
                 Response.Builder()
@@ -445,6 +447,7 @@ class GoogleDriveProviderAdapterTest {
                     .also {
                         println("RESUMABLE_TRACE response code=308 range=bytes=0-2")
                         System.err.println("RESUMABLE_TRACE response code=308 range=bytes=0-2")
+                        traceLines += "response code=308 range=bytes=0-2"
                     }
                     .build()
             } else {
@@ -457,6 +460,7 @@ class GoogleDriveProviderAdapterTest {
                     .also {
                         println("RESUMABLE_TRACE response code=200 range=<none>")
                         System.err.println("RESUMABLE_TRACE response code=200 range=<none>")
+                        traceLines += "response code=200 range=<none>"
                     }
                     .build()
             }
@@ -469,6 +473,11 @@ class GoogleDriveProviderAdapterTest {
                 "",
                 CloudTransferState("", "https://upload.googleapis.com/session-1", 0L)
             ) { progress += it }
+        }
+
+        File("build/reports/resumable-upload-trace.txt").apply {
+            parentFile?.mkdirs()
+            writeText((traceLines + "result=$result" + "ranges=$ranges" + "progress=$progress").joinToString("\n"))
         }
 
         assertTrue("Unexpected resumable upload result: $result", result is CloudSyncResult.Success)
