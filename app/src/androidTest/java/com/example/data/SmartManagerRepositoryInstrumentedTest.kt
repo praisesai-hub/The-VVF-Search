@@ -25,6 +25,7 @@ class SmartManagerRepositoryInstrumentedTest {
     private lateinit var context: Context
     private lateinit var fakeDao: TestFileDao
     private lateinit var fakeOcr: TestOcrEngine
+    private lateinit var fakeOperationStore: TestFileOperationStore
     private lateinit var repository: SmartManagerRepository
 
     private class TestFileDao : FileDao {
@@ -104,6 +105,56 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun insertPlugins(plugins: List<PluginEntity>) = Unit
     }
 
+    private class TestFileOperationStore : FileOperationStore {
+        private val operations = linkedMapOf<String, FileOperationEntity>()
+        val transitions = mutableListOf<FileOperationEntity>()
+
+        override suspend fun getOpenOperations(): List<FileOperationEntity> = operations.values
+            .filter { it.status == FileOperationStatus.PREPARED || it.status == FileOperationStatus.PHYSICAL_COMPLETED }
+            .sortedBy { it.createdAtMs }
+
+        override suspend fun findOpenOperation(fileId: Long, operationType: String): FileOperationEntity? = operations.values
+            .filter {
+                it.fileId == fileId &&
+                    it.operationType == operationType &&
+                    (it.status == FileOperationStatus.PREPARED || it.status == FileOperationStatus.PHYSICAL_COMPLETED)
+            }
+            .maxByOrNull { it.createdAtMs }
+
+        override suspend fun insert(operation: FileOperationEntity) {
+            operations[operation.operationId] = operation
+            transitions += operation
+        }
+
+        override suspend fun transition(
+            operationId: String,
+            status: String,
+            sourcePath: String,
+            targetPath: String,
+            nowMs: Long,
+            errorCode: String?
+        ): Int {
+            val current = operations[operationId] ?: return 0
+            val updated = current.copy(
+                status = status,
+                sourcePath = sourcePath,
+                targetPath = targetPath,
+                updatedAtMs = nowMs,
+                lastErrorCode = errorCode
+            )
+            operations[operationId] = updated
+            transitions += updated
+            return 1
+        }
+
+        override suspend fun delete(operationId: String): Int =
+            if (operations.remove(operationId) != null) 1 else 0
+
+        fun hasOpenOperations(): Boolean = operations.values.any {
+            it.status == FileOperationStatus.PREPARED || it.status == FileOperationStatus.PHYSICAL_COMPLETED
+        }
+    }
+
     private class TestOcrEngine : OcrEngine {
         var text: String = ""
 
@@ -117,7 +168,13 @@ class SmartManagerRepositoryInstrumentedTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
         fakeDao = TestFileDao()
         fakeOcr = TestOcrEngine()
-        repository = SmartManagerRepository(context, fakeDao, fakeOcr)
+        fakeOperationStore = TestFileOperationStore()
+        repository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            ocrEngine = fakeOcr,
+            fileOperationStoreOverride = fakeOperationStore,
+        )
     }
 
     @Test
@@ -296,6 +353,8 @@ class SmartManagerRepositoryInstrumentedTest {
             assertFalse(restored.isRecycleBin)
             assertEquals(source.absolutePath, restored.path)
             assertTrue(restored.originalPath.isBlank())
+            assertFalse(fakeOperationStore.hasOpenOperations())
+            assertTrue(fakeOperationStore.transitions.any { it.status == FileOperationStatus.COMMITTED })
         } finally {
             source.delete()
             fakeDao.updatedSingleFiles.map { it.path }.distinct().forEach { File(it).delete() }
