@@ -97,12 +97,16 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun getFileByName(name: String): FileItemEntity? = rows().firstOrNull { it.name == name }
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flow { emit(activeFiles.toList()) }
+        override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flow {
+            emit(rows().filter { !it.isVault && !it.isRecycleBin })
+        }
         override fun getRecentFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getCategoryStats(): Flow<List<CategoryStat>> = flowOf(emptyList())
         override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = emptyList()
         override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flow { emit(recycleBinFiles.toList()) }
+        override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flow {
+            emit(rows().filter { it.isRecycleBin })
+        }
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flow { emit(duplicateFiles.toList()) }
@@ -206,6 +210,8 @@ class SmartManagerRepositoryInstrumentedTest {
         fun hasOpenOperations(): Boolean = operations.values.any {
             it.status == FileOperationStatus.PREPARED || it.status == FileOperationStatus.PHYSICAL_COMPLETED
         }
+
+        fun statusFor(operationId: String): String? = operations[operationId]?.status
     }
 
     private class TestOcrEngine : OcrEngine {
@@ -390,6 +396,7 @@ class SmartManagerRepositoryInstrumentedTest {
         } catch (_: Exception) {
             assertEquals(missing, fakeDao.getFileById(missing.id))
             assertTrue(fakeDao.updatedSingleFiles.isEmpty())
+            assertEquals(FileOperationStatus.FAILED, fakeOperationStore.statusFor("file-MOVE_TO_TRASH-${missing.id}"))
             assertFalse(fakeOperationStore.hasOpenOperations())
         }
     }
@@ -409,6 +416,8 @@ class SmartManagerRepositoryInstrumentedTest {
             assertTrue(recycled.isRecycleBin)
             assertEquals(source.absolutePath, recycled.originalPath)
             assertTrue(File(recycled.path).exists())
+            assertTrue(fakeDao.getRecycleBinFiles().first().any { it.id == ordinary.id && it.isRecycleBin })
+            assertTrue(fakeDao.getAllActiveFiles().first().none { it.id == ordinary.id })
 
             fakeDao.updatedSingleFiles.clear()
             fakeDao.activeFiles.clear()
@@ -420,6 +429,8 @@ class SmartManagerRepositoryInstrumentedTest {
             assertFalse(restored.isRecycleBin)
             assertEquals(source.absolutePath, restored.path)
             assertTrue(restored.originalPath.isBlank())
+            assertTrue(fakeDao.getAllActiveFiles().first().any { it.id == ordinary.id && !it.isRecycleBin })
+            assertTrue(fakeDao.getRecycleBinFiles().first().none { it.id == ordinary.id })
             assertFalse(fakeOperationStore.hasOpenOperations())
             assertTrue(fakeOperationStore.transitions.any { it.status == FileOperationStatus.COMMITTED })
         } finally {
