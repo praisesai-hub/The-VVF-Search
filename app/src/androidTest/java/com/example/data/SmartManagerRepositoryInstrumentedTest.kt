@@ -41,19 +41,60 @@ class SmartManagerRepositoryInstrumentedTest {
         val updatedSingleFiles = mutableListOf<FileItemEntity>()
         var onUpdate: (() -> Unit)? = null
 
-        override suspend fun getUnhashedFiles(): List<FileItemEntity> = unhashedFiles.toList()
+        private fun rows(): List<FileItemEntity> =
+            (activeFiles + unhashedFiles + recycleBinFiles).distinctBy { it.id }
+
+        private fun replaceRow(file: FileItemEntity) {
+            activeFiles.removeAll { it.id == file.id }
+            unhashedFiles.removeAll { it.id == file.id }
+            recycleBinFiles.removeAll { it.id == file.id }
+            when {
+                file.isRecycleBin -> recycleBinFiles += file
+                else -> activeFiles += file
+            }
+        }
+
+        private fun merge(existing: FileItemEntity?, incoming: FileItemEntity): FileItemEntity =
+            if (existing == null) incoming else existing.copy(
+                name = incoming.name,
+                category = incoming.category,
+                sizeBytes = incoming.sizeBytes,
+                dateModifiedMs = incoming.dateModifiedMs,
+                md5Hash = incoming.md5Hash.ifBlank { existing.md5Hash },
+                ocrText = incoming.ocrText.ifBlank { existing.ocrText },
+                tags = incoming.tags.ifBlank { existing.tags },
+                originalPath = incoming.originalPath.ifBlank { existing.originalPath },
+                visualSimilarityHash = incoming.visualSimilarityHash.ifBlank { existing.visualSimilarityHash },
+                semanticEmbeddingVersion = if (incoming.semanticEmbeddingVersion > 0) incoming.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
+                semanticIndexed = incoming.semanticIndexed || existing.semanticIndexed,
+                semanticEmbeddingString = incoming.semanticEmbeddingString.ifBlank { existing.semanticEmbeddingString },
+                videoFingerprintVersion = if (incoming.videoFingerprintVersion > 0) incoming.videoFingerprintVersion else existing.videoFingerprintVersion,
+                videoSampleHashes = incoming.videoSampleHashes.ifBlank { existing.videoSampleHashes },
+                videoDurationMs = if (incoming.videoDurationMs > 0) incoming.videoDurationMs else existing.videoDurationMs,
+                videoWidth = if (incoming.videoWidth > 0) incoming.videoWidth else existing.videoWidth,
+                videoHeight = if (incoming.videoHeight > 0) incoming.videoHeight else existing.videoHeight,
+                videoAudioSignature = incoming.videoAudioSignature.ifBlank { existing.videoAudioSignature },
+                videoChunkHash = incoming.videoChunkHash.ifBlank { existing.videoChunkHash },
+                documentCandidateFingerprint = incoming.documentCandidateFingerprint.ifBlank { existing.documentCandidateFingerprint },
+                isVault = existing.isVault,
+                isRecycleBin = existing.isRecycleBin,
+                deletedTimestampMs = existing.deletedTimestampMs,
+            )
+
+        override suspend fun getUnhashedFiles(): List<FileItemEntity> = rows()
+            .filter { !it.isVault && !it.isRecycleBin && (it.md5Hash.isBlank() || !it.semanticIndexed) }
         override fun getAllPlugins(): Flow<List<PluginEntity>> = flow { emit(plugins.toList()) }
         override suspend fun updateFiles(files: List<FileItemEntity>) {
+            files.forEach { replaceRow(it) }
             updatedFiles += files
             onUpdate?.invoke()
         }
 
-        override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null
+        override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? =
+            recycleBinFiles.firstOrNull { it.md5Hash == hash }
         override suspend fun moveFilesToRecycleBinAtomic(files: List<FileItemEntity>) = updateFiles(files)
-        override suspend fun getFileById(id: Long): FileItemEntity? =
-            (activeFiles + unhashedFiles + recycleBinFiles).firstOrNull { it.id == id }
-        override suspend fun getFileByName(name: String): FileItemEntity? =
-            (activeFiles + unhashedFiles + recycleBinFiles).firstOrNull { it.name == name }
+        override suspend fun getFileById(id: Long): FileItemEntity? = rows().firstOrNull { it.id == id }
+        override suspend fun getFileByName(name: String): FileItemEntity? = rows().firstOrNull { it.name == name }
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flow { emit(activeFiles.toList()) }
@@ -65,19 +106,29 @@ class SmartManagerRepositoryInstrumentedTest {
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flow { emit(duplicateFiles.toList()) }
-        override suspend fun insertFile(file: FileItemEntity): Long = file.id
-        override suspend fun insertFiles(files: List<FileItemEntity>) = Unit
+        override suspend fun insertFile(file: FileItemEntity): Long {
+            val existing = getFileByPath(file.path)
+            val persisted = merge(existing, file)
+            replaceRow(persisted)
+            return existing?.id ?: file.id
+        }
+        override suspend fun insertFiles(files: List<FileItemEntity>) {
+            files.forEach { insertFile(it) }
+        }
         override suspend fun updateFile(file: FileItemEntity) {
-            activeFiles.removeAll { it.id == file.id }
-            unhashedFiles.removeAll { it.id == file.id }
-            recycleBinFiles.removeAll { it.id == file.id }
-            if (file.isRecycleBin) recycleBinFiles += file else activeFiles += file
+            replaceRow(file)
             updatedSingleFiles += file
         }
-        override suspend fun getFileByPath(path: String): FileItemEntity? = null
-        override suspend fun insertFileDirect(file: FileItemEntity): Long = file.id
-        override suspend fun getAllOrdinaryFilesDirect(): List<FileItemEntity> = emptyList()
-        override suspend fun deleteFilesByIds(ids: List<Long>) = Unit
+        override suspend fun getFileByPath(path: String): FileItemEntity? = rows().firstOrNull { it.path == path }
+        override suspend fun insertFileDirect(file: FileItemEntity): Long {
+            replaceRow(file)
+            return file.id
+        }
+        override suspend fun getAllOrdinaryFilesDirect(): List<FileItemEntity> = rows()
+            .filter { !it.isVault && !it.isRecycleBin }
+        override suspend fun deleteFilesByIds(ids: List<Long>) {
+            ids.forEach { deleteFileById(it) }
+        }
         override suspend fun deleteFileById(id: Long) {
             activeFiles.removeAll { it.id == id }
             unhashedFiles.removeAll { it.id == id }
@@ -85,7 +136,9 @@ class SmartManagerRepositoryInstrumentedTest {
             deletedFileIds += id
         }
         override suspend fun emptyRecycleBin() {
+            val ids = recycleBinFiles.map { it.id }
             recycleBinFiles.clear()
+            deletedFileIds += ids
         }
         override suspend fun getVaultFileByName(name: String): FileItemEntity? = null
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
@@ -325,6 +378,20 @@ class SmartManagerRepositoryInstrumentedTest {
         repository.enqueueCloudSyncWork()
         repository.enqueueCacheCleanupWork()
         repository.enqueueBackgroundIndexWork()
+    }
+
+    @Test
+    fun recycleBinOperations_failedPhysicalMoveDoesNotMutateDao(): Unit = runBlocking {
+        val missing = document(304L, "missing-physical-file.txt")
+        fakeDao.activeFiles += missing
+        try {
+            repository.moveToRecycleBin(missing)
+            throw AssertionError("moveToRecycleBin should fail when the source file is missing")
+        } catch (_: Exception) {
+            assertEquals(missing, fakeDao.getFileById(missing.id))
+            assertTrue(fakeDao.updatedSingleFiles.isEmpty())
+            assertFalse(fakeOperationStore.hasOpenOperations())
+        }
     }
 
     @Test
