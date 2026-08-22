@@ -444,6 +444,7 @@ class GoogleDriveProviderAdapterTest {
                     .code(308)
                     .message("Resume Incomplete")
                     .header("Range", "bytes=0-2")
+                    .body("".toResponseBody("application/octet-stream".toMediaTypeOrNull()))
                     .also {
                         println("RESUMABLE_TRACE response code=308 range=bytes=0-2")
                         System.err.println("RESUMABLE_TRACE response code=308 range=bytes=0-2")
