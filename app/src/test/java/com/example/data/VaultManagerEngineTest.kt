@@ -4,11 +4,13 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
 import com.example.security.KeystoreVaultManager
+import com.example.security.VaultKeyEnvelope
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertFalse
@@ -176,6 +178,131 @@ class VaultManagerEngineTest {
             reopened.unlockWithPin("00000000")
         }
         assertTrue(reopened.getVaultLockoutState().lockedUntilMs > now)
+    }
+
+
+    @Test
+    fun unlockWithPin_existingEnvelope_returnsDekAndResetsFailedState(): Unit {
+        val prefs = CommitControlledPreferences(commitResult = true)
+        val pin = "12345678"
+        val dek = ByteArray(32) { index -> (index + 7).toByte() }
+        val wrapped = VaultKeyEnvelope.wrapWithPin(dek, pin)
+        prefs.putPersistedValue("vault_pin_hash", "stored-hash")
+        prefs.putPersistedValue("vault_pin_wrap_salt", java.util.Base64.getEncoder().encodeToString(wrapped.salt))
+        prefs.putPersistedValue("vault_pin_wrap_iv", java.util.Base64.getEncoder().encodeToString(wrapped.iv))
+        prefs.putPersistedValue("vault_pin_wrap_ciphertext", java.util.Base64.getEncoder().encodeToString(wrapped.ciphertext))
+        prefs.putPersistedValue("vault_failed_attempts", "2")
+        prefs.putPersistedValue("vault_locked_until_ms", "0")
+        every { keystore.verifyPin(pin, "stored-hash") } returns true
+        val engine = VaultManagerEngine(context, keystore, prefs, nowMs = { 1000L })
+
+        val session = engine.unlockWithPin(pin)
+
+        assertArrayEquals(dek, session.copyKeyBytes())
+        assertEquals(0, engine.getVaultLockoutState().failedAttempts)
+        assertEquals(0L, engine.getVaultLockoutState().lockedUntilMs)
+        session.close()
+    }
+
+    @Test
+    fun unlockWithPin_legacyHashMigratesEnvelopeBeforeReturningSession(): Unit {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "legacy-hash")
+        }
+        val pin = "87654321"
+        val dek = ByteArray(32) { index -> (index + 11).toByte() }
+        every { keystore.verifyPin(pin, "legacy-hash") } returns true
+        every { keystore.randomVaultDek() } returns dek.copyOf()
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        val session = engine.unlockWithPin(pin)
+
+        assertArrayEquals(dek, session.copyKeyBytes())
+        assertTrue(prefs.getString("vault_pin_wrap_salt", null).orEmpty().isNotBlank())
+        assertTrue(prefs.getString("vault_pin_wrap_iv", null).orEmpty().isNotBlank())
+        assertTrue(prefs.getString("vault_pin_wrap_ciphertext", null).orEmpty().isNotBlank())
+        session.close()
+    }
+
+    @Test
+    fun changeVaultPin_existingEnvelopeRewrapsSameDekAndPersistsNewHash(): Unit {
+        val prefs = CommitControlledPreferences(commitResult = true)
+        val oldPin = "11112222"
+        val newPin = "33334444"
+        val dek = ByteArray(32) { index -> (index + 19).toByte() }
+        val wrapped = VaultKeyEnvelope.wrapWithPin(dek, oldPin)
+        prefs.putPersistedValue("vault_pin_hash", "old-hash")
+        prefs.putPersistedValue("vault_pin_wrap_salt", java.util.Base64.getEncoder().encodeToString(wrapped.salt))
+        prefs.putPersistedValue("vault_pin_wrap_iv", java.util.Base64.getEncoder().encodeToString(wrapped.iv))
+        prefs.putPersistedValue("vault_pin_wrap_ciphertext", java.util.Base64.getEncoder().encodeToString(wrapped.ciphertext))
+        every { keystore.verifyPin(oldPin, "old-hash") } returns true
+        every { keystore.hashPin(newPin) } returns "new-hash"
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertTrue(engine.changeVaultPin(oldPin, newPin))
+
+        assertEquals("new-hash", engine.getStoredVaultPinHash())
+        val newWrap = VaultKeyEnvelope.PinWrap(
+            salt = java.util.Base64.getDecoder().decode(prefs.getString("vault_pin_wrap_salt", "").orEmpty()),
+            iv = java.util.Base64.getDecoder().decode(prefs.getString("vault_pin_wrap_iv", "").orEmpty()),
+            ciphertext = java.util.Base64.getDecoder().decode(prefs.getString("vault_pin_wrap_ciphertext", "").orEmpty()),
+        )
+        assertArrayEquals(dek, VaultKeyEnvelope.unwrapWithPin(newWrap, newPin))
+    }
+
+    @Test
+    fun malformedLockoutValues_failClosedToZeroState(): Unit {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_failed_attempts", "not-a-number")
+            putPersistedValue("vault_locked_until_ms", "-5")
+        }
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertEquals(0, engine.getVaultLockoutState().failedAttempts)
+        assertEquals(0L, engine.getVaultLockoutState().lockedUntilMs)
+    }
+
+    @Test
+    fun disableBiometricEnrollment_clearsStoredWrapAndDeletesKeystoreWrapOnlyAfterCommit(): Unit {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("biometric_wrap_iv", "iv")
+            putPersistedValue("biometric_wrap_ciphertext", "ciphertext")
+        }
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertTrue(engine.disableBiometricEnrollment())
+
+        assertFalse(engine.hasBiometricEnrollment)
+        verify(exactly = 1) { keystore.deleteBiometricWrapKey() }
+    }
+
+    @Test
+    fun disableBiometricEnrollment_commitFailure_preservesEnrollmentAndKeystoreWrap(): Unit {
+        val prefs = CommitControlledPreferences(commitResult = false).apply {
+            putPersistedValue("biometric_wrap_iv", "iv")
+            putPersistedValue("biometric_wrap_ciphertext", "ciphertext")
+        }
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertFalse(engine.disableBiometricEnrollment())
+
+        assertTrue(engine.hasBiometricEnrollment)
+        verify(exactly = 0) { keystore.deleteBiometricWrapKey() }
+    }
+
+    @Test
+    fun changeVaultPin_corruptExistingEnvelope_failsClosedAndPreservesHash(): Unit {
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", "old-hash")
+            putPersistedValue("vault_pin_wrap_salt", "not-base64")
+            putPersistedValue("vault_pin_wrap_iv", "not-base64")
+            putPersistedValue("vault_pin_wrap_ciphertext", "not-base64")
+        }
+        every { keystore.verifyPin("11112222", "old-hash") } returns true
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertFalse(engine.changeVaultPin("11112222", "33334444"))
+        assertEquals("old-hash", engine.getStoredVaultPinHash())
     }
 
     private class CommitControlledPreferences(

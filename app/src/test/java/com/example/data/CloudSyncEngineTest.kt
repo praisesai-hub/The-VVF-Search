@@ -1,8 +1,12 @@
 package com.example.data
 
 import android.content.Context
+import io.mockk.coEvery
 import java.io.File
 import java.net.UnknownHostException
+import io.mockk.coVerify
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -34,6 +38,41 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     override suspend fun uploadFile(file: File, remotePath: String, operationId: String): CloudSyncResult {
         uploadedOperationId = operationId
         return uploadFile(file, remotePath)
+    }
+
+    override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult =
+        CloudSyncResult.NotSupported
+}
+
+private class ProgressRecordingCloudProviderAdapter(
+    private val progress: CloudTransferProgress,
+) : CloudProviderAdapter {
+    override val providerId: String = "TEST_PROVIDER"
+    var receivedTransferState: CloudTransferState? = null
+
+    override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult =
+        CloudSyncResult.Success(
+            bytesTransferred = file.length(),
+            remoteFileId = progress.remoteFileId,
+            resumableSessionUri = progress.resumableSessionUri,
+            bytesCommitted = progress.bytesCommitted,
+        )
+
+    override suspend fun uploadFile(
+        file: File,
+        remotePath: String,
+        operationId: String,
+        transferState: CloudTransferState,
+        onProgress: suspend (CloudTransferProgress) -> Unit,
+    ): CloudSyncResult {
+        receivedTransferState = transferState
+        onProgress(progress)
+        return CloudSyncResult.Success(
+            bytesTransferred = file.length(),
+            remoteFileId = progress.remoteFileId,
+            resumableSessionUri = progress.resumableSessionUri,
+            bytesCommitted = progress.bytesCommitted,
+        )
     }
 
     override suspend fun downloadFile(remotePath: String, destinationFile: File): CloudSyncResult =
@@ -183,6 +222,92 @@ class CloudSyncEngineTest {
         assertEquals("Network connection is unavailable.", result.message)
         assertFalse(result.message.contains("storage.example"))
     }
+
+    @Test
+    fun syncItem_persistsProgressWhenLeaseOwnerIsPresent(): Unit = runTest {
+        val file = createFile()
+        val progress = CloudTransferProgress(
+            remoteFileId = "remote-41",
+            resumableSessionUri = "https://upload.example/session-41",
+            bytesCommitted = 3L,
+        )
+        val adapter = ProgressRecordingCloudProviderAdapter(progress)
+        val store = mockk<CloudSyncOperationStore>()
+        coEvery {
+            store.updateTransferState(
+                operationId = "op-progress",
+                leaseOwner = "lease-owner",
+                remoteFileId = "remote-41",
+                resumableSessionUri = "https://upload.example/session-41",
+                bytesCommitted = 3L,
+            )
+        } returns 1
+        val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager, adapter, store)
+
+        val result = engine.syncItem(
+            item(file = file, operationId = "op-progress").copy(leaseOwner = "lease-owner"),
+        )
+
+        assertTrue(result is CloudSyncResult.Success)
+        coVerify(exactly = 1) {
+            store.updateTransferState(
+                operationId = "op-progress",
+                leaseOwner = "lease-owner",
+                remoteFileId = "remote-41",
+                resumableSessionUri = "https://upload.example/session-41",
+                bytesCommitted = 3L,
+            )
+        }
+    }
+
+    @Test
+    fun syncItem_passesPersistedTransferStateToProvider(): Unit = runTest {
+        val file = createFile()
+        val adapter = ProgressRecordingCloudProviderAdapter(
+            CloudTransferProgress(remoteFileId = "remote-new", bytesCommitted = 8L),
+        )
+        val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager, adapter)
+
+        val result = engine.syncItem(
+            item(file = file, operationId = "op-resume").copy(
+                remoteFileId = "remote-old",
+                resumableSessionUri = "https://upload.example/old-session",
+                resumableBytesCommitted = 5L,
+            ),
+        )
+
+        assertTrue(result is CloudSyncResult.Success)
+        assertEquals(
+            CloudTransferState(
+                remoteFileId = "remote-old",
+                resumableSessionUri = "https://upload.example/old-session",
+                bytesCommitted = 5L,
+            ),
+            adapter.receivedTransferState,
+        )
+    }
+
+    @Test
+    fun syncItem_doesNotPersistProgressWithoutLeaseOwner(): Unit = runTest {
+        val file = createFile()
+        val adapter = ProgressRecordingCloudProviderAdapter(
+            CloudTransferProgress(
+                remoteFileId = "remote-no-lease",
+                resumableSessionUri = "https://upload.example/session-no-lease",
+                bytesCommitted = 2L,
+            ),
+        )
+        val store = mockk<CloudSyncOperationStore>(relaxed = true)
+        val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager, adapter, store)
+
+        val result = engine.syncItem(item(file = file, operationId = "op-no-lease"))
+
+        assertTrue(result is CloudSyncResult.Success)
+        coVerify(exactly = 0) {
+            store.updateTransferState(any(), any(), any(), any(), any())
+        }
+    }
+
 }
 
 private class FakeFileDaoForCloudSyncEngine : FileDao {

@@ -182,6 +182,22 @@ class StorageScannerInstrumentedTest {
     }
 
     @Test
+    fun contentUriDocumentAndVideoFingerprints_failClosedForUnavailableUris(): Unit = runBlocking {
+        val missing = File(testRoot, "missing-content-uri.bin").toUri()
+
+        assertEquals("", scanner.computeContentUriDocumentCandidateFingerprint(missing))
+        assertEquals(null, scanner.computeContentUriVideoFingerprint(missing))
+    }
+
+    @Test
+    fun localVideoFingerprint_invalidMediaFailsClosed(): Unit = runBlocking {
+        val invalid = File(testRoot, "invalid-video.mp4").apply { writeText("not a video stream") }
+
+        assertEquals(null, scanner.computeVideoFingerprint(invalid))
+        assertEquals(null, scanner.computeVideoFingerprint(File(testRoot, "missing-video.mp4")))
+    }
+
+    @Test
     fun sampledBitmapAndUnsupportedImagePaths_failSafely(): Unit {
         runBlocking {
             val invalid = File(testRoot, "invalid.png").apply { writeText("not an image") }
