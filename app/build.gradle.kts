@@ -10,6 +10,7 @@ plugins {
   alias(libs.plugins.detekt)
   alias(libs.plugins.google.services)
   alias(libs.plugins.firebase.crashlytics)
+  id("jacoco")
 }
 
 val googleServicesConfigPresent = listOf(
