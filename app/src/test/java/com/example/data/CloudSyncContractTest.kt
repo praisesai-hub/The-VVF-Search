@@ -5,7 +5,6 @@ import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
 import android.provider.OpenableColumns
-import io.mockk.any
 import io.mockk.every
 import io.mockk.mockk
 import java.io.File
