@@ -26,17 +26,28 @@ data class OcrTextBlock(
     val imageHeight: Int
 )
 
-interface OcrEngine {
+interface OcrEngine : AutoCloseable {
     suspend fun extractRealOcrText(filePath: String): String
     suspend fun extractOcrBlocks(filePath: String): List<OcrTextBlock>
 }
 
 class MLKitOcrEngine(private val context: Context) : OcrEngine {
-    private val recognizers by lazy {
-        listOf<TextRecognizer>(
+    private val recognizerLock = Any()
+    @Volatile
+    private var recognizers: List<TextRecognizer>? = null
+
+    private fun getRecognizers(): List<TextRecognizer> = synchronized(recognizerLock) {
+        recognizers ?: listOf<TextRecognizer>(
             TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS),
             TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build()),
-        )
+        ).also { recognizers = it }
+    }
+
+    override fun close() {
+        synchronized(recognizerLock) {
+            recognizers?.forEach(TextRecognizer::close)
+            recognizers = null
+        }
     }
 
     override suspend fun extractOcrBlocks(filePath: String): List<OcrTextBlock> = withContext(Dispatchers.IO) {
@@ -147,7 +158,7 @@ class MLKitOcrEngine(private val context: Context) : OcrEngine {
         }
 
     private suspend fun recognize(image: InputImage, filePath: String): List<Text> =
-        recognizers.mapNotNull { recognizer ->
+        getRecognizers().mapNotNull { recognizer ->
             suspendCancellableCoroutine { continuation ->
                 recognizer.process(image)
                     .addOnSuccessListener { visionText ->

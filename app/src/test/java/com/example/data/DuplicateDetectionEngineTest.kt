@@ -9,6 +9,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.util.Locale
 
 class DuplicateDetectionEngineTest {
 
@@ -173,7 +174,7 @@ class DuplicateDetectionEngineTest {
         // Generate 5000 realistic files distributed over 1000 base buckets
         for (i in 0 until count) {
             val groupKey = i % 1000
-            val hexPart = String.format("%04x", groupKey)
+            val hexPart = String.format(Locale.ROOT, "%04x", groupKey)
             val hash = "${hexPart}111122223333"
             files.add(createImageFile(i.toLong(), "img_scale_$i.jpg", hash))
         }

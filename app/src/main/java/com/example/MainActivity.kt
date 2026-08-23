@@ -45,9 +45,9 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    /** Opens Android settings only when the restricted full-device permission is unavailable. */
-    fun requestFullDeviceStorageAccess() {
-        StoragePermissionManager.settingsIntent(this)?.let(::startActivity)
+    /** Opens restricted settings only after the user explicitly enables advanced file access. */
+    fun requestFullDeviceStorageAccess(advancedModeEnabled: Boolean = false) {
+        StoragePermissionManager.settingsIntent(this, advancedModeEnabled)?.let(::startActivity)
     }
 
     /** Opens the Android Storage Access Framework folder picker. */

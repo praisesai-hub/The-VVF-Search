@@ -112,7 +112,11 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNodeWithTag("dashboard_health_card").assertIsDisplayed()
         composeTestRule.onNodeWithText("VVF Smart Manager v2.0").assertIsDisplayed()
         composeTestRule.onNodeWithText("System Health: 94% Excellent").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Storage Used: 3.0 KB").assertIsDisplayed()
+        val expectedStorageSize = formatFileSize(
+            categoryStats.sumOf { it.totalSize },
+            app.getString(com.example.R.string.unknown_size),
+        )
+        composeTestRule.onNodeWithText("Storage Used: $expectedStorageSize").assertIsDisplayed()
         val dashboardList = composeTestRule.onNode(hasScrollToIndexAction())
         dashboardList.performScrollToNode(hasText("Recent Storage Files"))
         composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()

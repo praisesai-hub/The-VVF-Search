@@ -9,6 +9,7 @@ import java.security.KeyStore
 import android.security.keystore.KeyInfo
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -172,8 +173,8 @@ class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val hash = pbkdf2(pin, salt, PBKDF2_ITERATIONS)
             ?: throw IllegalStateException("PBKDF2 derivation failed")
-        val saltHex = salt.joinToString("") { "%02x".format(it) }
-        val hashHex = hash.joinToString("") { "%02x".format(it) }
+        val saltHex = salt.joinToString("") { "%02x".format(Locale.ROOT, it) }
+        val hashHex = hash.joinToString("") { "%02x".format(Locale.ROOT, it) }
         return "$PBKDF2_ITERATIONS:$saltHex:$hashHex"
     }
 
@@ -205,7 +206,7 @@ class KeystoreVaultManager(private val keyAlias: String = DEFAULT_KEY_ALIAS) {
 
     private fun hashLegacySha256(pin: String, salt: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest("$salt:$pin".toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        return digest.digest("$salt:$pin".toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(Locale.ROOT, it) }
     }
 
     private fun hexToByteArray(hex: String): ByteArray? {

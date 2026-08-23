@@ -13,7 +13,7 @@ fun formatFileSize(size: Long, unknownLabel: String): String {
         s /= 1024
         i++
     }
-    return "%.2f %s".format(s, units[i])
+    return "%.2f %s".format(Locale.US, s, units[i])
 }
 
 fun formatDate(timestamp: Long): String {

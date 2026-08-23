@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 private const val LEGACY_VAULT_FORMAT_VERSION = 1
 private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
@@ -233,19 +234,44 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val builder = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "vvf_smart_manager_db"
-                )
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
-
-                val instance = builder.build()
-                INSTANCE = instance
-                instance
+                INSTANCE ?: run {
+                    val applicationContext = context.applicationContext
+                    val databaseFile = applicationContext.getDatabasePath(DATABASE_NAME)
+                    SqlCipherSupport.ensureLoaded()
+                    val passphrase = DatabasePassphraseProvider(applicationContext).getPassphrase()
+                    try {
+                        DatabaseEncryptionMigrator.migrateIfNeeded(
+                            applicationContext,
+                            databaseFile,
+                            passphrase,
+                        )
+                        val builder = Room.databaseBuilder(
+                            applicationContext,
+                            AppDatabase::class.java,
+                            DATABASE_NAME,
+                        )
+                            .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
+                            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                            .addMigrations(
+                                MIGRATION_1_2,
+                                MIGRATION_2_3,
+                                MIGRATION_3_4,
+                                MIGRATION_4_5,
+                                MIGRATION_5_6,
+                                MIGRATION_6_7,
+                                MIGRATION_7_8,
+                                MIGRATION_8_9,
+                                MIGRATION_9_10,
+                            )
+                        builder.build().also { INSTANCE = it }
+                    } finally {
+                        passphrase.fill(0)
+                    }
+                }
             }
         }
+
+        private const val DATABASE_NAME = "vvf_smart_manager_db"
     }
 }
 

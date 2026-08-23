@@ -3,6 +3,8 @@ package com.example.data
 import android.content.Context
 import android.database.sqlite.SQLiteDatabaseLockedException
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -216,10 +218,29 @@ class SmartManagerRepositoryInstrumentedTest {
 
     private class TestOcrEngine : OcrEngine {
         var text: String = ""
+        var closeCallCount = 0
+        var blockUntilCancelled = false
+        var cancellationObserved = false
+        val extractionStarted = CountDownLatch(1)
 
-        override suspend fun extractRealOcrText(filePath: String): String = text
+        override suspend fun extractRealOcrText(filePath: String): String {
+            if (blockUntilCancelled) {
+                extractionStarted.countDown()
+                try {
+                    awaitCancellation()
+                } catch (error: CancellationException) {
+                    cancellationObserved = true
+                    throw error
+                }
+            }
+            return text
+        }
 
         override suspend fun extractOcrBlocks(filePath: String): List<OcrTextBlock> = emptyList()
+
+        override fun close() {
+            closeCallCount++
+        }
     }
 
     @Before
@@ -375,6 +396,37 @@ class SmartManagerRepositoryInstrumentedTest {
         fakeDao.activeFiles += ordinary
         repository.restoreFromRecycleBin(ordinary)
         assertTrue(fakeDao.updatedSingleFiles.isEmpty())
+    }
+
+    @Test
+    fun trimMemory_closesInitializedOcrEngine(): Unit {
+        assertNotNull(repository.activeOcrEngine)
+
+        repository.trimMemory()
+
+        assertEquals(1, fakeOcr.closeCallCount)
+    }
+
+    @Test
+    fun cleanup_cancelsActiveScanAndClosesInitializedOcrEngine(): Unit = runBlocking {
+        fakeOcr.blockUntilCancelled = true
+        fakeDao.unhashedFiles += image(305L, "cleanup-blocked.png")
+        assertNotNull(repository.activeOcrEngine)
+        repository.startIncrementalDuplicateScan()
+
+        assertTrue(fakeOcr.extractionStarted.await(5, TimeUnit.SECONDS))
+        repository.cleanup()
+
+        withTimeout(5_000L) {
+            while (repository.isScanning.value) delay(10L)
+        }
+        assertTrue(fakeOcr.cancellationObserved)
+        assertEquals(1, fakeOcr.closeCallCount)
+        assertFalse(repository.isScanning.value)
+        assertEquals(1.0f, repository.scanProgress.value)
+
+        repository.cleanup()
+        assertEquals(1, fakeOcr.closeCallCount)
     }
 
     @Test

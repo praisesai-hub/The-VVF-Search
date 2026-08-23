@@ -337,7 +337,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     total += read
                 }
                 digest.update("CONTENT_URI_VIDEO:$total".toByteArray())
-                digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+                digest.digest().joinToString("") { byte -> "%02x".format(Locale.ROOT, byte) }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Content URI video chunk fingerprint failed: ${e.message}")
@@ -360,7 +360,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             if (bytesRead < 0) break
             if (bytesRead > 0) digest.update(buffer, 0, bytesRead)
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return digest.digest().joinToString("") { "%02x".format(Locale.ROOT, it) }
     }
 
     private suspend fun computeFileHashQuietly(file: File): String = try { computeFileHash(file) } catch (_: Exception) { "" }
@@ -416,7 +416,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     for (index in 0 until tail.size) digest.update(tail[(start + index) % tail.size])
                 }
             }
-            digest.digest().joinToString("") { "%02x".format(it) }.take(16)
+            digest.digest().joinToString("") { "%02x".format(Locale.ROOT, it) }.take(16)
         } catch (e: Exception) {
             Log.w(TAG, "Content URI document candidate fingerprint failed: ${e.message}")
             ""
@@ -553,7 +553,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     if (read > 0) digest.update(buffer, 0, read)
                 }
             }
-            digest.digest().joinToString("") { "%02x".format(it) }
+            digest.digest().joinToString("") { "%02x".format(Locale.ROOT, it) }
         } catch (e: Exception) {
             Log.w(TAG, "Video chunk fingerprint failed for ${file.name}: ${e.message}")
             ""
@@ -615,7 +615,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                 }
             }
             ensureActive()
-            digest.digest().joinToString("") { "%02x".format(it) }.take(16)
+            digest.digest().joinToString("") { "%02x".format(Locale.ROOT, it) }.take(16)
         } catch (e: Exception) {
             Log.w(TAG, "Document fingerprint calculation failed for ${file.name}: ${e.message}")
             ""

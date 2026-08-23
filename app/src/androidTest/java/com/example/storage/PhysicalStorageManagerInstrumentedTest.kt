@@ -17,6 +17,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 class PhysicalStorageManagerInstrumentedTest {
@@ -164,6 +165,24 @@ class PhysicalStorageManagerInstrumentedTest {
         assertTrue(restored.isSuccess)
         assertEquals("keystore-backed device data", File(restoredPath).readText())
         assertFalse(File(vaultPath).exists())
+    }
+
+    @Test
+    fun fsyncFailure_failsEncryptionAndPreservesSourcePresence(): Unit {
+        val source = File(testRoot, "fsync-failure.txt").apply { writeText("sensitive source") }
+        val originalSync = PhysicalStorageManager.fileDescriptorSyncForTesting
+        PhysicalStorageManager.fileDescriptorSyncForTesting = { throw IOException("simulated fsync failure") }
+        try {
+            val result = PhysicalStorageManager.encryptAndWipeSource(context, source.absolutePath) { bytes ->
+                bytes to byteArrayOf(1, 2, 3)
+            }
+
+            assertTrue(result.isFailure)
+            assertTrue(source.exists())
+        } finally {
+            PhysicalStorageManager.fileDescriptorSyncForTesting = originalSync
+            source.delete()
+        }
     }
 
     @Test

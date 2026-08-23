@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.documentfile.provider.DocumentFile
 import com.example.security.VaultCryptoSession
 import com.example.domain.error.DiagnosticContext
@@ -17,6 +18,7 @@ import com.example.domain.error.UserMessage
 import com.example.domain.error.UserSafeException
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
@@ -38,6 +40,9 @@ data class VaultRestoreRequest(
 @Suppress("LargeClass")
 object PhysicalStorageManager {
     private const val TAG = "PhysicalStorageManager"
+
+    @VisibleForTesting
+    var fileDescriptorSyncForTesting: (FileDescriptor) -> Unit = { it.sync() }
 
     private fun <T> sanitizedFailure(
         operation: String,
@@ -705,7 +710,7 @@ object PhysicalStorageManager {
                             raf.write(buffer, 0, toWrite)
                             remaining -= toWrite
                         }
-                        try { raf.fd.sync() } catch (_: Exception) {}
+                        fileDescriptorSyncForTesting(raf.fd)
                     }
                 }
             }

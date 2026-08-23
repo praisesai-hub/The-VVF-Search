@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.cancel
 import java.io.File
 import java.util.UUID
 
@@ -53,7 +54,9 @@ open class SmartManagerRepository(
     }
     val vaultRepository by lazy { VaultRepository(context, dao, keystoreVaultManager, vaultManagerEngine) }
     val pluginRepository by lazy { PluginRepository(dao) }
-    val activeOcrEngine: OcrEngine by lazy { ocrEngine ?: MLKitOcrEngine(context) }
+    private val activeOcrEngineLazy = lazy { ocrEngine ?: MLKitOcrEngine(context) }
+    val activeOcrEngine: OcrEngine
+        get() = activeOcrEngineLazy.value
 
     private fun isAssetExists(fileName: String): Boolean = try {
         context.assets.open(fileName).use { }
@@ -78,10 +81,13 @@ open class SmartManagerRepository(
         get() = tfliteProvider.isModelLoaded()
 
     private val duplicateDetectionEngine by lazy { DuplicateDetectionEngine(storageScanner, tfliteProvider) }
-    private val repositoryScope = CoroutineScope(Dispatchers.IO + Job() + kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+    private val repositoryJob = Job()
+    private val repositoryScope = CoroutineScope(Dispatchers.IO + repositoryJob + kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
         Log.e("SmartManagerRepository", "Unhandled exception in background repositoryScope", throwable)
     })
     private var activeScanJob: Job? = null
+    @Volatile
+    private var cleanedUp = false
     private val _scanProgress = MutableStateFlow(1.0f)
     val scanProgress: StateFlow<Float> = _scanProgress.asStateFlow()
     private val _isScanning = MutableStateFlow(false)
@@ -583,7 +589,29 @@ open class SmartManagerRepository(
             if (tfliteProvider is TFLiteSemanticEmbeddingProvider) {
                 (tfliteProvider as TFLiteSemanticEmbeddingProvider).close()
             }
+            if (activeOcrEngineLazy.isInitialized()) {
+                activeOcrEngineLazy.value.close()
+            }
         } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to trim memory", e) }
+    }
+
+    /** Cancels repository-owned work and releases initialized model/OCR resources. */
+    @Synchronized
+    fun cleanup() {
+        if (cleanedUp) return
+        cleanedUp = true
+        activeScanJob?.cancel()
+        activeScanJob = null
+        repositoryJob.cancel()
+        _scanProgress.value = 1.0f
+        _isScanning.value = false
+        try {
+            if (activeOcrEngineLazy.isInitialized()) {
+                activeOcrEngineLazy.value.close()
+            }
+        } catch (e: Exception) {
+            Log.e("SmartManagerRepository", "Failed to close OCR engine during cleanup", e)
+        }
     }
 
     /** @deprecated Use [workCoordinator] from the application/domain boundary. */

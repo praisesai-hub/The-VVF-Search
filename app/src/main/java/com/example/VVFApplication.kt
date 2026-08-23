@@ -26,7 +26,12 @@ class VVFApplication : Application(), Configuration.Provider {
     private var _repository: SmartManagerRepository? = null
     var repository: SmartManagerRepository
         get() = _repository ?: SmartManagerRepository(this, database.fileDao()).also { _repository = it }
-        set(value) { _repository = value }
+        set(value) {
+            if (_repository !== value) {
+                _repository?.cleanup()
+            }
+            _repository = value
+        }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

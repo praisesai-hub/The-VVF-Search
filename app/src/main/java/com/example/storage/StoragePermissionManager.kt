@@ -12,14 +12,15 @@ object StoragePermissionManager {
     fun hasFullDeviceAccess(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
 
-    fun settingsIntent(context: Context): Intent? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || hasFullDeviceAccess()) return null
+    fun settingsIntent(context: Context, advancedModeEnabled: Boolean = false): Intent? {
+        if (!advancedModeEnabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.R || hasFullDeviceAccess()) return null
         return Intent(
             Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
             Uri.parse("package:${context.packageName}")
         )
     }
 
-    /** SAF remains the supported fallback when restricted access is unavailable or denied. */
-    fun shouldUseSafFallback(): Boolean = !hasFullDeviceAccess()
+    /** SAF is the default; full-device access is available only from explicit advanced mode. */
+    fun shouldUseSafFallback(advancedModeEnabled: Boolean = false): Boolean =
+        !advancedModeEnabled || !hasFullDeviceAccess()
 }

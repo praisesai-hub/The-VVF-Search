@@ -126,6 +126,8 @@ class OcrEngineTest {
                 )
             } else emptyList()
         }
+
+        override fun close() = Unit
     }
 
     @Before

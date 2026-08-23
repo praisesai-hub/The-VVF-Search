@@ -9,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.util.Locale
 
 @RunWith(AndroidJUnit4::class)
 class KeystoreVaultManagerTest {
@@ -42,7 +43,7 @@ class KeystoreVaultManagerTest {
         // Generate a legacy SHA-256 hash: digest of combined "VVF_SMART_MANAGER_SALT:1234"
         val digest = java.security.MessageDigest.getInstance("SHA-256")
         val combined = "VVF_SMART_MANAGER_SALT:1234".toByteArray(Charsets.UTF_8)
-        val legacyHash = digest.digest(combined).joinToString("") { "%02x".format(it) }
+        val legacyHash = digest.digest(combined).joinToString("") { "%02x".format(Locale.ROOT, it) }
 
         // verifyPin should match the legacy SHA-256 hash correctly
         assertTrue(manager.verifyPin(pin, legacyHash))

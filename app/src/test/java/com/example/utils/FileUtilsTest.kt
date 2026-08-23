@@ -41,6 +41,17 @@ class FileUtilsTest {
     }
 
     @Test
+    fun `file size formatting remains stable outside the default locale`() {
+        val testLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.GERMANY)
+            assertEquals("1.00 KB", formatFileSize(1024, "अज्ञात साइज़"))
+        } finally {
+            Locale.setDefault(testLocale)
+        }
+    }
+
+    @Test
     fun `date uses day month year format`() {
         assertEquals("01 Jan 1970", formatDate(0L))
     }
