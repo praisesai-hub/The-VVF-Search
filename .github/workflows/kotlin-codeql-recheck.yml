@@ -1,0 +1,125 @@
+name: Kotlin CodeQL Compatibility Recheck
+
+on:
+  schedule:
+    - cron: "0 4 23 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  issues: write
+
+jobs:
+  recheck:
+    name: Recheck patched Kotlin with CodeQL
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: true
+
+      - name: Resolve latest patched Kotlin Gradle plugin
+        id: resolve
+        run: |
+          python3 scripts/resolve_patched_kotlin.py | tee kotlin-recheck-resolution.txt
+          candidate="$(sed -n 's/^version=//p' kotlin-recheck-resolution.txt)"
+          test -n "$candidate"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare candidate workspace
+        id: prepare
+        run: |
+          python3 scripts/prepare_codeql_compatibility.py \
+            --supported-version "${{ steps.resolve.outputs.candidate }}"
+
+      - name: Initialize CodeQL for candidate workspace
+        id: codeql_init
+        continue-on-error: true
+        uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      - name: Build candidate Kotlin graph
+        id: build
+        continue-on-error: true
+        run: |
+          ./gradlew --no-daemon --no-build-cache :app:clean :app:assembleDebug \
+            -Pkotlin.incremental=false \
+            -Dkotlin.caching.enabled=false
+
+      - name: Analyze candidate with CodeQL
+        id: codeql_analyze
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:java-kotlin-kotlin-recheck"
+
+      - name: Publish recheck summary
+        id: summary
+        if: always()
+        env:
+          CANDIDATE: ${{ steps.resolve.outputs.candidate }}
+          RESOLVE_OUTCOME: ${{ steps.resolve.outcome }}
+          PREPARE_OUTCOME: ${{ steps.prepare.outcome }}
+          CODEQL_INIT_OUTCOME: ${{ steps.codeql_init.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          CODEQL_ANALYZE_OUTCOME: ${{ steps.codeql_analyze.outcome }}
+        run: |
+          {
+            echo "## Kotlin/CodeQL compatibility recheck"
+            echo ""
+            echo "- Candidate Kotlin Gradle plugin: \\`$CANDIDATE\\`"
+            echo "- Resolver: \\`$RESOLVE_OUTCOME\\`"
+            echo "- Workspace preparation: \\`$PREPARE_OUTCOME\\`"
+            echo "- CodeQL initialization: \\`$CODEQL_INIT_OUTCOME\\`"
+            echo "- Candidate build: \\`$BUILD_OUTCOME\\`"
+            echo "- CodeQL analysis: \\`$CODEQL_ANALYZE_OUTCOME\\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "candidate=$CANDIDATE" >> "$GITHUB_OUTPUT"
+          echo "resolve_outcome=$RESOLVE_OUTCOME" >> "$GITHUB_OUTPUT"
+          echo "prepare_outcome=$PREPARE_OUTCOME" >> "$GITHUB_OUTPUT"
+          echo "codeql_init_outcome=$CODEQL_INIT_OUTCOME" >> "$GITHUB_OUTPUT"
+          echo "build_outcome=$BUILD_OUTCOME" >> "$GITHUB_OUTPUT"
+          echo "codeql_analyze_outcome=$CODEQL_ANALYZE_OUTCOME" >> "$GITHUB_OUTPUT"
+
+      - name: Report outcome on Issue 34
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE: ${{ steps.summary.outputs.candidate }}
+          RESOLVE_OUTCOME: ${{ steps.summary.outputs.resolve_outcome }}
+          PREPARE_OUTCOME: ${{ steps.summary.outputs.prepare_outcome }}
+          CODEQL_INIT_OUTCOME: ${{ steps.summary.outputs.codeql_init_outcome }}
+          BUILD_OUTCOME: ${{ steps.summary.outputs.build_outcome }}
+          CODEQL_ANALYZE_OUTCOME: ${{ steps.summary.outputs.codeql_analyze_outcome }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat > kotlin-recheck-comment.md <<EOF
+          Monthly Kotlin/CodeQL compatibility recheck
+
+          Candidate Kotlin Gradle plugin: \\`$CANDIDATE\\`
+          Resolver: \\`$RESOLVE_OUTCOME\\`
+          Workspace preparation: \\`$PREPARE_OUTCOME\\`
+          CodeQL initialization: \\`$CODEQL_INIT_OUTCOME\\`
+          Candidate build: \\`$BUILD_OUTCOME\\`
+          CodeQL analysis: \\`$CODEQL_ANALYZE_OUTCOME\\`
+
+          Run: $RUN_URL
+
+          This workflow does not change production configuration, disable CodeQL, or close the issue. A patched candidate is ready for normal review only when both the candidate build and CodeQL analysis are successful.
+          EOF
+          gh issue comment 34 --repo "${{ github.repository }}" --body-file kotlin-recheck-comment.md
