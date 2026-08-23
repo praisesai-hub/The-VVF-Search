@@ -75,7 +75,15 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             val appDirs = listOfNotNull(context.getExternalFilesDir(null), context.filesDir, context.cacheDir)
             for (appDir in appDirs) {
                 if (appDir.exists() && appDir.canRead()) {
-                    scanDirectoryRecursively(appDir, processedPaths, 0, Int.MAX_VALUE, computeHashes, emitItem)
+                    scanDirectoryRecursively(
+                        dir = appDir,
+                        processedPaths = processedPaths,
+                        depth = 0,
+                        maxDepth = Int.MAX_VALUE,
+                        computeHashes = computeHashes,
+                        canonicalRootPath = appDir.canonicalPath,
+                        onItemDiscovered = emitItem,
+                    )
                 }
             }
         } catch (e: Exception) {
@@ -165,6 +173,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         depth: Int,
         maxDepth: Int,
         computeHashes: Boolean,
+        canonicalRootPath: String,
         onItemDiscovered: suspend (FileItemEntity) -> Unit
     ) {
         currentCoroutineContext().ensureActive()
@@ -177,10 +186,18 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             if (processedPaths.size >= MAX_DISCOVERED_FILES) return
             if (file.name.startsWith(".")) continue
             val canonicalFile = runCatching { file.canonicalFile }.getOrNull() ?: continue
+            if (!isCanonicalDescendant(canonicalFile.path, canonicalRootPath)) continue
             if (file.isDirectory) {
-                if (canonicalFile.path != file.absoluteFile.path) continue
                 if (file.name.equals("Android", ignoreCase = true) && depth == 0) continue
-                scanDirectoryRecursively(file, processedPaths, depth + 1, maxDepth, computeHashes, onItemDiscovered)
+                scanDirectoryRecursively(
+                    dir = file,
+                    processedPaths = processedPaths,
+                    depth = depth + 1,
+                    maxDepth = maxDepth,
+                    computeHashes = computeHashes,
+                    canonicalRootPath = canonicalRootPath,
+                    onItemDiscovered = onItemDiscovered,
+                )
             } else if (file.isFile && file.length() > 0L) {
                 val path = file.absolutePath
                 if (processedPaths.add(path)) {
@@ -210,6 +227,9 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             }
         }
     }
+
+    private fun isCanonicalDescendant(path: String, canonicalRootPath: String): Boolean =
+        path == canonicalRootPath || path.startsWith("$canonicalRootPath${File.separator}")
 
     private suspend fun scanMediaStore(
         processedPaths: MutableSet<String>,
