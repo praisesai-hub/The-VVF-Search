@@ -13,7 +13,7 @@ permissions:
 jobs:
   submit-gradle-pr:
     name: submit-gradle
-    if: github.event_name == "pull_request" || (github.event_name == "workflow_dispatch" && github.ref != "refs/heads/main" && github.ref != "refs/heads/master")
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master')
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
 
   submit-gradle-main:
     name: submit-gradle-main
-    if: (github.event_name == "push" && (github.ref == "refs/heads/main" || github.ref == "refs/heads/master")) || (github.event_name == "workflow_dispatch" && (github.ref == "refs/heads/main" || github.ref == "refs/heads/master"))
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
     permissions:
       contents: write
     runs-on: ubuntu-latest
