@@ -107,7 +107,9 @@ class PluginRepositoryTest {
 
     @Test
     fun testTogglePlugin_fromEnabledToDisabled() = runBlocking {
-        val plugin = PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Syncs files", isEnabled = true, isCore = false)
+        val plugin = PluginEntity(
+            "gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Syncs files", isEnabled = true, isCore = false
+        )
         fakeDao.pluginsList.add(plugin)
 
         repository.togglePlugin("gdrive_sync", currentEnabled = true)
@@ -120,7 +122,9 @@ class PluginRepositoryTest {
 
     @Test
     fun testTogglePlugin_fromDisabledToEnabled() = runBlocking {
-        val plugin = PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false)
+        val plugin = PluginEntity(
+            "gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false
+        )
         fakeDao.pluginsList.add(plugin)
 
         repository.togglePlugin("gdrive_sync", currentEnabled = false)
@@ -133,7 +137,9 @@ class PluginRepositoryTest {
 
     @Test
     fun testTogglePlugin_unsupportedPluginIsFailClosed() = runBlocking {
-        val plugin = PluginEntity("s3_sync", "S3 Sync", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false)
+        val plugin = PluginEntity(
+            "s3_sync", "S3 Sync", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false
+        )
         fakeDao.pluginsList.add(plugin)
 
         repository.togglePlugin("s3_sync", currentEnabled = false)
