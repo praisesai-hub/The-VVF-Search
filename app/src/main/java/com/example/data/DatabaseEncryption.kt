@@ -109,7 +109,7 @@ object DatabaseEncryptionMigrator {
         try {
             openSqlCipherReadOnly(databaseFile, passphrase).use { database ->
                 database.rawQuery("SELECT name FROM sqlite_master LIMIT 1", null).use { }
-                check(database.isDatabaseIntegrityOk()) { "Encrypted database integrity check failed" }
+                check(database.isDatabaseIntegrityOk) { "Encrypted database integrity check failed" }
             }
         } catch (error: Exception) {
             throw IllegalStateException("Unable to open existing encrypted database", error)
