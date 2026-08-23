@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
   alias(libs.plugins.android.application)
@@ -184,6 +185,13 @@ detekt {
 // local or secret-free validation builds fail solely because telemetry is absent.
 tasks.withType<Test>().configureEach {
   systemProperty("vvf.test.database.mode", "in-memory")
+  // Robolectric loads Android application classes through a sandbox classloader. JaCoCo excludes
+  // classes without a source location by default, which otherwise turns exercised JVM paths into
+  // false-zero coverage. Keep JDK internals excluded to avoid instrumenting the host runtime.
+  extensions.configure(JacocoTaskExtension::class) {
+    isIncludeNoLocationClasses = true
+    excludes = listOf("jdk.internal.*")
+  }
 }
 
 tasks.configureEach {
