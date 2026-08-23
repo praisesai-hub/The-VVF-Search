@@ -3,6 +3,8 @@ package com.example.data
 import android.net.Uri
 import android.content.ContentResolver
 import android.content.Context
+import android.database.Cursor
+import io.mockk.any
 import io.mockk.every
 import io.mockk.mockk
 import java.io.File
@@ -78,6 +80,31 @@ class CloudSyncContractTest {
         } catch (_: IOException) {
             assertTrue(source.contentLength > 0L)
         }
+    }
+
+    @Test
+    fun contentUriSource_queriesDeclaredSizeAndUsesProviderMimeTypeWhenLengthIsUnknown(): Unit {
+        val uri = Uri.parse("content://documents.provider/report.pdf")
+        val resolver = mockk<ContentResolver>()
+        val cursor = mockk<Cursor>(relaxed = true)
+        val context = mockk<Context>()
+        every { context.contentResolver } returns resolver
+        every { resolver.query(uri, any(), any(), any(), any()) } returns cursor
+        every { resolver.getType(uri) } returns "application/pdf"
+        every { cursor.getColumnIndex(OpenableColumns.SIZE) } returns 0
+        every { cursor.moveToFirst() } returns true
+        every { cursor.isNull(0) } returns false
+        every { cursor.getLong(0) } returns 4096L
+
+        val source = CloudUploadSource.ContentUri(
+            context = context,
+            uri = uri,
+            displayName = "report.pdf",
+            declaredLength = 0L
+        )
+
+        assertEquals(4096L, source.contentLength)
+        assertEquals("application/pdf", source.mimeType)
     }
 
     @Test
