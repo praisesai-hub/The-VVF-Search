@@ -265,8 +265,8 @@ class VaultManagerEngineTest {
     @Test
     fun disableBiometricEnrollment_clearsStoredWrapAndDeletesKeystoreWrapOnlyAfterCommit(): Unit {
         val prefs = CommitControlledPreferences(commitResult = true).apply {
-            putPersistedValue("biometric_wrap_iv", "iv")
-            putPersistedValue("biometric_wrap_ciphertext", "ciphertext")
+            putPersistedValue("vault_biometric_wrap_iv", "iv")
+            putPersistedValue("vault_biometric_wrap_ciphertext", "ciphertext")
         }
         val engine = VaultManagerEngine(context, keystore, prefs)
 
@@ -279,8 +279,8 @@ class VaultManagerEngineTest {
     @Test
     fun disableBiometricEnrollment_commitFailure_preservesEnrollmentAndKeystoreWrap(): Unit {
         val prefs = CommitControlledPreferences(commitResult = false).apply {
-            putPersistedValue("biometric_wrap_iv", "iv")
-            putPersistedValue("biometric_wrap_ciphertext", "ciphertext")
+            putPersistedValue("vault_biometric_wrap_iv", "iv")
+            putPersistedValue("vault_biometric_wrap_ciphertext", "ciphertext")
         }
         val engine = VaultManagerEngine(context, keystore, prefs)
 
