@@ -109,7 +109,9 @@ class StorageScannerInstrumentedTest {
         }
         File(testRoot, "empty.txt").createNewFile()
         val visible = File(testRoot, "visible.txt").apply { writeText("visible") }
-        val androidRoot = File(testRoot, "Android")
+        // StorageScanner excludes Android only at the root of each configured app-private directory.
+        // Put this fixture at filesDir/Android so it exercises that supported root-level policy.
+        val androidRoot = File(context.filesDir, "Android")
         val createdAndroidRoot = !androidRoot.exists()
         if (createdAndroidRoot) assertTrue(androidRoot.mkdirs())
         assertTrue(androidRoot.isDirectory)
