@@ -84,12 +84,12 @@ jobs:
           {
             echo "## Kotlin/CodeQL compatibility recheck"
             echo ""
-            echo "- Candidate Kotlin Gradle plugin: \\`$CANDIDATE\\`"
-            echo "- Resolver: \\`$RESOLVE_OUTCOME\\`"
-            echo "- Workspace preparation: \\`$PREPARE_OUTCOME\\`"
-            echo "- CodeQL initialization: \\`$CODEQL_INIT_OUTCOME\\`"
-            echo "- Candidate build: \\`$BUILD_OUTCOME\\`"
-            echo "- CodeQL analysis: \\`$CODEQL_ANALYZE_OUTCOME\\`"
+            echo "- Candidate Kotlin Gradle plugin: $CANDIDATE"
+            echo "- Resolver: $RESOLVE_OUTCOME"
+            echo "- Workspace preparation: $PREPARE_OUTCOME"
+            echo "- CodeQL initialization: $CODEQL_INIT_OUTCOME"
+            echo "- Candidate build: $BUILD_OUTCOME"
+            echo "- CodeQL analysis: $CODEQL_ANALYZE_OUTCOME"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "candidate=$CANDIDATE" >> "$GITHUB_OUTPUT"
           echo "resolve_outcome=$RESOLVE_OUTCOME" >> "$GITHUB_OUTPUT"
@@ -113,15 +113,31 @@ jobs:
           cat > kotlin-recheck-comment.md <<EOF
           Monthly Kotlin/CodeQL compatibility recheck
 
-          Candidate Kotlin Gradle plugin: \\`$CANDIDATE\\`
-          Resolver: \\`$RESOLVE_OUTCOME\\`
-          Workspace preparation: \\`$PREPARE_OUTCOME\\`
-          CodeQL initialization: \\`$CODEQL_INIT_OUTCOME\\`
-          Candidate build: \\`$BUILD_OUTCOME\\`
-          CodeQL analysis: \\`$CODEQL_ANALYZE_OUTCOME\\`
+          Candidate Kotlin Gradle plugin: $CANDIDATE
+          Resolver: $RESOLVE_OUTCOME
+          Workspace preparation: $PREPARE_OUTCOME
+          CodeQL initialization: $CODEQL_INIT_OUTCOME
+          Candidate build: $BUILD_OUTCOME
+          CodeQL analysis: $CODEQL_ANALYZE_OUTCOME
 
           Run: $RUN_URL
 
           This workflow does not change production configuration, disable CodeQL, or close the issue. A patched candidate is ready for normal review only when both the candidate build and CodeQL analysis are successful.
           EOF
           gh issue comment 34 --repo "${{ github.repository }}" --body-file kotlin-recheck-comment.md
+
+      - name: Fail recheck when patched candidate is not supported
+        if: always()
+        env:
+          RESOLVE_OUTCOME: ${{ steps.resolve.outcome }}
+          PREPARE_OUTCOME: ${{ steps.prepare.outcome }}
+          CODEQL_INIT_OUTCOME: ${{ steps.codeql_init.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          CODEQL_ANALYZE_OUTCOME: ${{ steps.codeql_analyze.outcome }}
+        run: |
+          for outcome in "$RESOLVE_OUTCOME" "$PREPARE_OUTCOME" "$CODEQL_INIT_OUTCOME" "$BUILD_OUTCOME" "$CODEQL_ANALYZE_OUTCOME"; do
+            if [ "$outcome" != "success" ]; then
+              echo "Patched Kotlin/CodeQL compatibility is not ready: $outcome"
+              exit 1
+            fi
+          done
