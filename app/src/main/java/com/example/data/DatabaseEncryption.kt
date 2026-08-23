@@ -83,6 +83,9 @@ object DatabaseEncryptionMigrator {
     }
 
     @VisibleForTesting
+    fun isPlaintextDatabaseForTesting(databaseFile: File): Boolean = isPlaintextDatabase(databaseFile)
+
+    @VisibleForTesting
     fun openEncryptedReadOnlyForTesting(
         databaseFile: File,
         passphrase: ByteArray,
