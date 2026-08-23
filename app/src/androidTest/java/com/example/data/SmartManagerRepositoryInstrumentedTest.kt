@@ -418,7 +418,7 @@ class SmartManagerRepositoryInstrumentedTest {
         repository.cleanup()
 
         withTimeout(5_000L) {
-            while (repository.isScanning.value) delay(10L)
+            while (!fakeOcr.cancellationObserved || repository.isScanning.value) delay(10L)
         }
         assertTrue(fakeOcr.cancellationObserved)
         assertEquals(1, fakeOcr.closeCallCount)
