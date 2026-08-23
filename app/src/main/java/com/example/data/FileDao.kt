@@ -83,27 +83,30 @@ interface FileDao {
             if (existing == null) {
                 insertFileDirect(file)
             } else {
+                val contentChanged = existing.sizeBytes != file.sizeBytes ||
+                    file.dateModifiedMs > existing.dateModifiedMs + 1000L ||
+                    (file.md5Hash.isNotBlank() && existing.md5Hash.isNotBlank() && file.md5Hash != existing.md5Hash)
                 val updated = existing.copy(
                     name = file.name,
                     category = file.category,
                     sizeBytes = file.sizeBytes,
                     dateModifiedMs = file.dateModifiedMs,
-                    md5Hash = if (file.md5Hash.isNotBlank()) file.md5Hash else existing.md5Hash,
-                    ocrText = if (file.ocrText.isNotBlank()) file.ocrText else existing.ocrText,
+                    md5Hash = if (contentChanged) file.md5Hash else if (file.md5Hash.isNotBlank()) file.md5Hash else existing.md5Hash,
+                    ocrText = if (contentChanged) file.ocrText else if (file.ocrText.isNotBlank()) file.ocrText else existing.ocrText,
                     tags = if (file.tags.isNotBlank()) file.tags else existing.tags,
                     originalPath = if (file.originalPath.isNotBlank()) file.originalPath else existing.originalPath,
-                    visualSimilarityHash = if (file.visualSimilarityHash.isNotBlank()) file.visualSimilarityHash else existing.visualSimilarityHash,
-                    semanticEmbeddingVersion = if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
-                    semanticIndexed = file.semanticIndexed || existing.semanticIndexed,
-                    semanticEmbeddingString = if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
-                    videoFingerprintVersion = if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
-                    videoSampleHashes = if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
-                    videoDurationMs = if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
-                    videoWidth = if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
-                    videoHeight = if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
-                    videoAudioSignature = if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
-                    videoChunkHash = if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
-                    documentCandidateFingerprint = if (file.documentCandidateFingerprint.isNotBlank()) file.documentCandidateFingerprint else existing.documentCandidateFingerprint,
+                    visualSimilarityHash = if (contentChanged) file.visualSimilarityHash else if (file.visualSimilarityHash.isNotBlank()) file.visualSimilarityHash else existing.visualSimilarityHash,
+                    semanticEmbeddingVersion = if (contentChanged) file.semanticEmbeddingVersion else if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
+                    semanticIndexed = if (contentChanged) file.semanticIndexed else file.semanticIndexed || existing.semanticIndexed,
+                    semanticEmbeddingString = if (contentChanged) file.semanticEmbeddingString else if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
+                    videoFingerprintVersion = if (contentChanged) file.videoFingerprintVersion else if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
+                    videoSampleHashes = if (contentChanged) file.videoSampleHashes else if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
+                    videoDurationMs = if (contentChanged) file.videoDurationMs else if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
+                    videoWidth = if (contentChanged) file.videoWidth else if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
+                    videoHeight = if (contentChanged) file.videoHeight else if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
+                    videoAudioSignature = if (contentChanged) file.videoAudioSignature else if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
+                    videoChunkHash = if (contentChanged) file.videoChunkHash else if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
+                    documentCandidateFingerprint = if (contentChanged) file.documentCandidateFingerprint else if (file.documentCandidateFingerprint.isNotBlank()) file.documentCandidateFingerprint else existing.documentCandidateFingerprint,
                     isVault = existing.isVault,
                     isRecycleBin = existing.isRecycleBin,
                     deletedTimestampMs = existing.deletedTimestampMs
@@ -119,27 +122,30 @@ interface FileDao {
         return if (existing == null) {
             insertFileDirect(file)
         } else {
+            val contentChanged = existing.sizeBytes != file.sizeBytes ||
+                file.dateModifiedMs > existing.dateModifiedMs + 1000L ||
+                (file.md5Hash.isNotBlank() && existing.md5Hash.isNotBlank() && file.md5Hash != existing.md5Hash)
             val updated = existing.copy(
                 name = file.name,
                 category = file.category,
                 sizeBytes = file.sizeBytes,
                 dateModifiedMs = file.dateModifiedMs,
-                md5Hash = if (file.md5Hash.isNotBlank()) file.md5Hash else existing.md5Hash,
-                ocrText = if (file.ocrText.isNotBlank()) file.ocrText else existing.ocrText,
+                md5Hash = if (contentChanged) file.md5Hash else if (file.md5Hash.isNotBlank()) file.md5Hash else existing.md5Hash,
+                ocrText = if (contentChanged) file.ocrText else if (file.ocrText.isNotBlank()) file.ocrText else existing.ocrText,
                 tags = if (file.tags.isNotBlank()) file.tags else existing.tags,
                 originalPath = if (file.originalPath.isNotBlank()) file.originalPath else existing.originalPath,
-                visualSimilarityHash = if (file.visualSimilarityHash.isNotBlank()) file.visualSimilarityHash else existing.visualSimilarityHash,
-                semanticEmbeddingVersion = if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
-                semanticIndexed = file.semanticIndexed || existing.semanticIndexed,
-                semanticEmbeddingString = if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
-                videoFingerprintVersion = if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
-                videoSampleHashes = if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
-                videoDurationMs = if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
-                videoWidth = if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
-                videoHeight = if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
-                videoAudioSignature = if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
-                videoChunkHash = if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
-                documentCandidateFingerprint = if (file.documentCandidateFingerprint.isNotBlank()) file.documentCandidateFingerprint else existing.documentCandidateFingerprint,
+                visualSimilarityHash = if (contentChanged) file.visualSimilarityHash else if (file.visualSimilarityHash.isNotBlank()) file.visualSimilarityHash else existing.visualSimilarityHash,
+                semanticEmbeddingVersion = if (contentChanged) file.semanticEmbeddingVersion else if (file.semanticEmbeddingVersion > 0) file.semanticEmbeddingVersion else existing.semanticEmbeddingVersion,
+                semanticIndexed = if (contentChanged) file.semanticIndexed else file.semanticIndexed || existing.semanticIndexed,
+                semanticEmbeddingString = if (contentChanged) file.semanticEmbeddingString else if (file.semanticEmbeddingString.isNotBlank()) file.semanticEmbeddingString else existing.semanticEmbeddingString,
+                videoFingerprintVersion = if (contentChanged) file.videoFingerprintVersion else if (file.videoFingerprintVersion > 0) file.videoFingerprintVersion else existing.videoFingerprintVersion,
+                videoSampleHashes = if (contentChanged) file.videoSampleHashes else if (file.videoSampleHashes.isNotBlank()) file.videoSampleHashes else existing.videoSampleHashes,
+                videoDurationMs = if (contentChanged) file.videoDurationMs else if (file.videoDurationMs > 0) file.videoDurationMs else existing.videoDurationMs,
+                videoWidth = if (contentChanged) file.videoWidth else if (file.videoWidth > 0) file.videoWidth else existing.videoWidth,
+                videoHeight = if (contentChanged) file.videoHeight else if (file.videoHeight > 0) file.videoHeight else existing.videoHeight,
+                videoAudioSignature = if (contentChanged) file.videoAudioSignature else if (file.videoAudioSignature.isNotBlank()) file.videoAudioSignature else existing.videoAudioSignature,
+                videoChunkHash = if (contentChanged) file.videoChunkHash else if (file.videoChunkHash.isNotBlank()) file.videoChunkHash else existing.videoChunkHash,
+                documentCandidateFingerprint = if (contentChanged) file.documentCandidateFingerprint else if (file.documentCandidateFingerprint.isNotBlank()) file.documentCandidateFingerprint else existing.documentCandidateFingerprint,
                 isVault = existing.isVault,
                 isRecycleBin = existing.isRecycleBin,
                 deletedTimestampMs = existing.deletedTimestampMs

@@ -78,8 +78,16 @@ class VaultManagerEngine(
     fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean {
         if (!isValidVaultPin(inputPin)) return false
         val expectedHash = if (storedHash.isNotBlank()) storedHash else getStoredVaultPinHash()
-        return expectedHash.isNotBlank() && keystoreVaultManager.verifyPin(inputPin, expectedHash)
+        if (expectedHash.isBlank() || !keystoreVaultManager.verifyPin(inputPin, expectedHash)) return false
+        if (storedHash.isBlank() && isLegacySha256Hash(expectedHash)) {
+            val upgradedHash = keystoreVaultManager.hashPin(inputPin)
+            if (!vaultStore.commit(mapOf(VAULT_PIN_HASH_KEY to upgradedHash))) return false
+        }
+        return true
     }
+
+    private fun isLegacySha256Hash(value: String): Boolean =
+        value.length == 64 && value.all { it in "0123456789abcdefABCDEF" }
 
     fun unlockWithPin(pin: String): VaultCryptoSession {
         val now = nowMs()

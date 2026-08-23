@@ -124,6 +124,38 @@ class VaultManagerEngineTest {
     }
 
     @Test
+    fun verifyVaultPin_legacySha256HashIsUpgradedAfterSuccessfulDurableCommit() {
+        val pin = "12345678"
+        val legacyHash = legacySha256(pin)
+        val prefs = CommitControlledPreferences(commitResult = true).apply {
+            putPersistedValue("vault_pin_hash", legacyHash)
+        }
+        every { keystore.verifyPin(pin, legacyHash) } returns true
+        every { keystore.hashPin(pin) } returns "210000:0011:2233"
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertTrue(engine.verifyVaultPin(pin))
+        assertEquals("210000:0011:2233", engine.getStoredVaultPinHash())
+        verify(exactly = 1) { keystore.hashPin(pin) }
+    }
+
+    @Test
+    fun verifyVaultPin_legacySha256HashFailsClosedWhenUpgradeCommitFails() {
+        val pin = "12345678"
+        val legacyHash = legacySha256(pin)
+        val prefs = CommitControlledPreferences(commitResult = false).apply {
+            putPersistedValue("vault_pin_hash", legacyHash)
+        }
+        every { keystore.verifyPin(pin, legacyHash) } returns true
+        every { keystore.hashPin(pin) } returns "210000:0011:2233"
+        val engine = VaultManagerEngine(context, keystore, prefs)
+
+        assertFalse(engine.verifyVaultPin(pin))
+        assertEquals(legacyHash, engine.getStoredVaultPinHash())
+        verify(exactly = 1) { keystore.hashPin(pin) }
+    }
+
+    @Test
     fun changeVaultPin_failsWhenOldPinDoesNotVerifyAndDoesNotDeriveNewHash() {
         val prefs = CommitControlledPreferences(commitResult = true).apply {
             putPersistedValue("vault_pin_hash", "stored-hash")
@@ -304,6 +336,11 @@ class VaultManagerEngineTest {
         assertFalse(engine.changeVaultPin("11112222", "33334444"))
         assertEquals("old-hash", engine.getStoredVaultPinHash())
     }
+
+    private fun legacySha256(pin: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest("VVF_SMART_MANAGER_SALT:$pin".toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 
     private class CommitControlledPreferences(
         private val commitResult: Boolean

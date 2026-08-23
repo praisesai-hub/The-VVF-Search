@@ -6,6 +6,7 @@ import kotlinx.coroutines.CancellationException
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.data.AppDatabase
+import com.example.storage.StorageScanResult
 import com.example.storage.StorageScanner
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
@@ -13,9 +14,11 @@ import com.example.domain.retry.RetryOperation
 import com.example.domain.retry.RetryPolicy
 import com.example.domain.WorkCoordinator
 
-class BackgroundIndexWorker(
+class BackgroundIndexWorker @JvmOverloads constructor(
     appContext: Context,
-    params: WorkerParameters
+    params: WorkerParameters,
+    private val scannerOverride: StorageScanner? = null,
+    private val databaseOverride: AppDatabase? = null,
 ) : CoroutineWorker(appContext, params) {
 
     companion object {
@@ -37,27 +40,29 @@ class BackgroundIndexWorker(
     private suspend fun runWork(): androidx.work.ListenableWorker.Result {
         Log.i(TAG, "Starting background file storage indexing...")
         return try {
-            val scanner = StorageScanner(applicationContext)
-            val db = AppDatabase.getDatabase(applicationContext)
-            val discoveredPaths = mutableSetOf<String>()
-            var totalDiscovered = 0
-            scanner.scanDeviceStorageFlow().collect { batch ->
+            val scanner = scannerOverride ?: StorageScanner(applicationContext)
+            val db = databaseOverride ?: AppDatabase.getDatabase(applicationContext)
+            val scanResult = scanner.scanDeviceStorageWithResult { batch ->
                 if (batch.isNotEmpty()) {
                     db.fileDao().upsertFilesPreservingMetadata(batch)
-                    totalDiscovered += batch.size
-                    batch.forEach { item -> discoveredPaths.add(item.path) }
                 }
             }
 
-            if (!isStopped) {
-                db.fileDao().reconcileStaleRecords(discoveredPaths)
-                if (totalDiscovered > 0) {
-                    Log.i(TAG, "Successfully indexed and synced $totalDiscovered real storage files into database.")
-                } else {
-                    Log.w(TAG, "Background scan finished with 0 files discovered.")
+            when {
+                isStopped -> {
+                    Log.w(TAG, "Worker was stopped before stale record reconciliation could run.")
                 }
-            } else {
-                Log.w(TAG, "Worker was stopped before stale record reconciliation could run.")
+                scanResult is StorageScanResult.Complete -> {
+                    db.fileDao().reconcileStaleRecords(scanResult.paths)
+                    if (scanResult.totalDiscovered > 0) {
+                        Log.i(TAG, "Successfully indexed and synced ${scanResult.totalDiscovered} real storage files into database.")
+                    } else {
+                        Log.w(TAG, "Background scan completed with 0 files discovered.")
+                    }
+                }
+                scanResult is StorageScanResult.Partial -> {
+                    Log.w(TAG, "Background scan was partial; stale record reconciliation was skipped. reason=${scanResult.reason}")
+                }
             }
 
             androidx.work.ListenableWorker.Result.success()

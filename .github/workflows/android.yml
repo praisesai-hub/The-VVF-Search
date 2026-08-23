@@ -70,9 +70,12 @@ jobs:
     - name: Test weekly security health policy
       run: PYTHONPATH=scripts python3 -m unittest scripts/test_weekly_security_health.py
     - name: Write google-services.json from secret (if set)
+      env:
+        GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
       run: |
-        if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-          printf '%s' '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+        umask 077
+        if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
         fi
     - name: Verify google-services.json (optional for CI validation)
       run: |
@@ -82,13 +85,17 @@ jobs:
           echo "Notice: google-services.json is not available. Continuing because the Android project uses MissingGoogleServicesStrategy.WARN; Firebase configuration is not required for compile/test validation."
         fi
     - name: Create .env File
+      env:
+        ENV_FILE_CONTENT: ${{ secrets.ENV_FILE_CONTENT }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
-        if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
-          printf '%s' "${{ secrets.ENV_FILE_CONTENT }}" > .env
+        umask 077
+        if [ -n "$ENV_FILE_CONTENT" ]; then
+          printf '%s' "$ENV_FILE_CONTENT" > .env
         else
           : > .env
-          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
-            printf '%s\n' "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          if [ -n "$GEMINI_API_KEY" ]; then
+            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" >> .env
           fi
         fi
     - name: Resolve and validate runtime dependency graphs
@@ -190,9 +197,12 @@ jobs:
       - name: Enforce tracked-secret policy
         run: python3 scripts/check_no_secrets.py
       - name: Write google-services.json from secret (if set)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-            printf '%s' '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+          umask 077
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
           fi
       - name: Verify google-services.json (optional for CI validation)
         run: |
@@ -202,13 +212,17 @@ jobs:
             echo "Notice: google-services.json is not available. Continuing because the Android project uses MissingGoogleServicesStrategy.WARN; Firebase configuration is not required for compile/test validation."
           fi
       - name: Create .env File
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE_CONTENT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
-            printf '%s' "${{ secrets.ENV_FILE_CONTENT }}" > .env
+          umask 077
+          if [ -n "$ENV_FILE_CONTENT" ]; then
+            printf '%s' "$ENV_FILE_CONTENT" > .env
           else
             : > .env
-            if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
-              printf '%s\n' "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            if [ -n "$GEMINI_API_KEY" ]; then
+              printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" >> .env
             fi
           fi
       - name: Enable KVM

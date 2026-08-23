@@ -248,14 +248,13 @@ object PhysicalStorageManager {
             return try {
                 val uri = path.toUri()
                 val doc = DocumentFile.fromSingleUri(context, uri) ?: DocumentFile.fromTreeUri(context, uri)
-                if (doc != null && !doc.exists()) return true
+                if (doc != null && !doc.exists()) return false
                 if (doc?.delete() == true) return true
-                val rows = try { context.contentResolver.delete(uri, null, null) } catch (_: SecurityException) { throw java.security.GeneralSecurityException("Permission denied deleting $path") } catch (_: Exception) { 0 }
-                if (rows > 0) return true
-                val stillExists = try {
-                    if (doc != null) doc.exists() else context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
-                } catch (_: Exception) { false }
-                !stillExists
+                val rows = try { context.contentResolver.delete(uri, null, null) } catch (_: SecurityException) { throw java.security.GeneralSecurityException("Permission denied deleting content URI") } catch (_: Exception) { 0 }
+                // A provider returning zero rows has not confirmed deletion. Do not infer
+                // success from a best-effort post-delete existence probe, which may be stale
+                // or may throw when the provider is unavailable.
+                rows > 0
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to delete content URI; error=${e::class.simpleName}")
                 false

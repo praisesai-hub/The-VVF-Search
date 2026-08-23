@@ -387,11 +387,12 @@ open class SmartManagerRepository(
         withRetry(RetryOperation.FILE_STORAGE) {
             val operation = prepareFileOperation(FILE_OPERATION_DELETE, currentFile.id, currentFile.path, "")
             if (operation.status != FILE_OPERATION_PHYSICAL_COMPLETED) {
-                if (!PhysicalStorageManager.deleteFile(context, operation.sourcePath)) {
-                    if (File(operation.sourcePath).exists()) {
-                        fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, "", System.currentTimeMillis(), "PHYSICAL_DELETE_FAILED")
-                        throw java.io.IOException("Failed to physically delete file")
-                    }
+                val deleted = PhysicalStorageManager.deleteFile(context, operation.sourcePath)
+                val deleteConfirmed = deleted ||
+                    (!operation.sourcePath.startsWith("content://") && !File(operation.sourcePath).exists())
+                if (!deleteConfirmed) {
+                    fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, "", System.currentTimeMillis(), "PHYSICAL_DELETE_FAILED")
+                    throw java.io.IOException("Failed to physically delete file")
                 }
                 fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
             }
@@ -464,7 +465,10 @@ open class SmartManagerRepository(
     }
 
     private suspend fun recoverDelete(operation: FileOperationEntity) {
-        if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED || PhysicalStorageManager.deleteFile(context, operation.sourcePath) || !File(operation.sourcePath).exists()) {
+        val deleteConfirmed = operation.status == FILE_OPERATION_PHYSICAL_COMPLETED ||
+            PhysicalStorageManager.deleteFile(context, operation.sourcePath) ||
+            (!operation.sourcePath.startsWith("content://") && !File(operation.sourcePath).exists())
+        if (deleteConfirmed) {
             fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
             dao.deleteFileById(operation.fileId)
             fileOperationStore.delete(operation.operationId)

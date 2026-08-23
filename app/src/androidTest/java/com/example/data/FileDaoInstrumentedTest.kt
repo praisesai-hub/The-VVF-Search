@@ -180,13 +180,15 @@ class FileDaoInstrumentedTest {
         val merged = dao.getFileById(insertedId) ?: error("merged fixture missing")
         assertEquals(partial.name, merged.name)
         assertEquals(99L, merged.sizeBytes)
-        assertEquals("original-hash", merged.md5Hash)
-        assertEquals("original-ocr", merged.ocrText)
+        // The changed size is content evidence. Derived metadata must not survive a
+        // content change, while user-authored tags remain intact.
+        assertEquals("", merged.md5Hash)
+        assertEquals("", merged.ocrText)
         assertEquals("original-tags", merged.tags)
-        assertEquals("original-visual", merged.visualSimilarityHash)
-        assertEquals(2, merged.semanticEmbeddingVersion)
-        assertTrue(merged.semanticIndexed)
-        assertEquals("1.0,2.0", merged.semanticEmbeddingString)
+        assertEquals("", merged.visualSimilarityHash)
+        assertEquals(0, merged.semanticEmbeddingVersion)
+        assertFalse(merged.semanticIndexed)
+        assertEquals("", merged.semanticEmbeddingString)
 
         val newPath = "/data/${fixturePrefix}new.txt"
         val newFile = file("${fixturePrefix}new.txt", path = newPath, hash = "new-hash")

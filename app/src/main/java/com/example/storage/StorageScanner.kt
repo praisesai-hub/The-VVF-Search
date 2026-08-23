@@ -27,7 +27,23 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 
-class StorageScanner(private val context: Context) : HammingDistanceCalculator {
+sealed interface StorageScanResult {
+    val paths: Set<String>
+    val totalDiscovered: Int
+
+    data class Complete(
+        override val paths: Set<String>,
+        override val totalDiscovered: Int,
+    ) : StorageScanResult
+
+    data class Partial(
+        override val paths: Set<String>,
+        override val totalDiscovered: Int,
+        val reason: String,
+    ) : StorageScanResult
+}
+
+open class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     companion object {
         private const val TAG = "StorageScanner"
         private const val BATCH_SIZE = 100
@@ -35,21 +51,30 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     }
 
     fun scanDeviceStorageFlow(computeHashes: Boolean = false): Flow<List<FileItemEntity>> = channelFlow {
-        scanDeviceStorage(computeHashes) { send(it) }
+        scanDeviceStorageWithResult(computeHashes) { send(it) }
     }.flowOn(Dispatchers.IO)
 
     suspend fun scanDeviceStorage(computeHashes: Boolean = false): List<FileItemEntity> {
         val discovered = mutableListOf<FileItemEntity>()
-        scanDeviceStorage(computeHashes) { discovered.addAll(it) }
+        scanDeviceStorageWithResult(computeHashes) { discovered.addAll(it) }
         return discovered
     }
 
     suspend fun scanDeviceStorage(
         computeHashes: Boolean = false,
         onBatchDiscovered: suspend (List<FileItemEntity>) -> Unit
-    ): Int = withContext(Dispatchers.IO) {
+    ): Int = scanDeviceStorageWithResult(computeHashes, onBatchDiscovered).totalDiscovered
+
+    open suspend fun scanDeviceStorageWithResult(
+        computeHashes: Boolean = false,
+        onBatchDiscovered: suspend (List<FileItemEntity>) -> Unit = {},
+    ): StorageScanResult = withContext(Dispatchers.IO) {
         val processedPaths = mutableSetOf<String>()
         val currentBatch = mutableListOf<FileItemEntity>()
+        val failures = mutableListOf<String>()
+        if (!StoragePermissionManager.hasFullDeviceAccess()) {
+            failures += "Full device storage access is not available"
+        }
         var totalDiscovered = 0
 
         val emitItem: suspend (FileItemEntity) -> Unit = { item ->
@@ -65,28 +90,34 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         // Shared storage is represented by stable content:// URIs. MediaStore.DATA
         // is intentionally not used because it is restricted on modern Android.
         try {
-            scanMediaStore(processedPaths, computeHashes, emitItem)
+            if (!scanMediaStore(processedPaths, computeHashes, emitItem)) {
+                failures += "MediaStore query was unavailable"
+            }
         } catch (e: Exception) {
+            failures += "MediaStore scan failed: ${e::class.simpleName}"
             Log.e(TAG, "Error scanning MediaStore: ${e.message}", e)
         }
 
         // App-private directories remain directly accessible with java.io.File.
         try {
             val appDirs = listOfNotNull(context.getExternalFilesDir(null), context.filesDir, context.cacheDir)
-            for (appDir in appDirs) {
-                if (appDir.exists() && appDir.canRead()) {
-                    scanDirectoryRecursively(
-                        dir = appDir,
-                        processedPaths = processedPaths,
-                        depth = 0,
-                        maxDepth = Int.MAX_VALUE,
-                        computeHashes = computeHashes,
-                        canonicalRootPath = appDir.canonicalPath,
-                        onItemDiscovered = emitItem,
-                    )
-                }
+            val readableRoots = appDirs.filter { it.exists() && it.canRead() }
+            if (readableRoots.isEmpty()) {
+                failures += "No readable app-private storage root"
+            }
+            for (appDir in readableRoots) {
+                scanDirectoryRecursively(
+                    dir = appDir,
+                    processedPaths = processedPaths,
+                    depth = 0,
+                    maxDepth = Int.MAX_VALUE,
+                    computeHashes = computeHashes,
+                    canonicalRootPath = appDir.canonicalPath,
+                    onItemDiscovered = emitItem,
+                )
             }
         } catch (e: Exception) {
+            failures += "App-private scan failed: ${e::class.simpleName}"
             Log.e(TAG, "Error scanning app-private directory: ${e.message}", e)
         }
 
@@ -95,7 +126,11 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
             onBatchDiscovered(currentBatch.toList())
         }
         Log.i(TAG, "Storage scan completed. Total real files discovered: $totalDiscovered")
-        totalDiscovered
+        if (failures.isEmpty()) {
+            StorageScanResult.Complete(processedPaths.toSet(), totalDiscovered)
+        } else {
+            StorageScanResult.Partial(processedPaths.toSet(), totalDiscovered, failures.joinToString("; "))
+        }
     }
 
     /** Scans a user-granted SAF tree. The caller must persist the tree permission. */
@@ -235,7 +270,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         processedPaths: MutableSet<String>,
         computeHashes: Boolean,
         onItemDiscovered: suspend (FileItemEntity) -> Unit
-    ) {
+    ): Boolean {
         val projection = arrayOf(
             MediaStore.Files.FileColumns._ID,
             MediaStore.Files.FileColumns.DISPLAY_NAME,
@@ -247,7 +282,7 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         } else {
             MediaStore.Files.getContentUri("external")
         }
-        context.contentResolver.query(
+        return context.contentResolver.query(
             collectionUri,
             projection,
             null,
@@ -292,7 +327,8 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                     videoChunkHash = videoFingerprint?.chunkHash.orEmpty()
                 ))
             }
-        }
+            true
+        } ?: false
     }
 
     suspend fun computeFileHash(file: File): String = withContext(Dispatchers.IO) {

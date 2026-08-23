@@ -106,6 +106,13 @@ class PhysicalStorageManagerInstrumentedTest {
     }
 
     @Test
+    fun unavailableContentUriDelete_failsClosed() {
+        val unavailableUri = android.net.Uri.parse("content://missing.provider/rejected-delete.txt")
+
+        assertFalse(PhysicalStorageManager.deleteFile(context, unavailableUri.toString()))
+    }
+
+    @Test
     fun directoriesAndUriFallbacks_areDeterministic(): Unit {
         assertTrue(PhysicalStorageManager.getRecycleBinDir(context).isDirectory)
         assertTrue(PhysicalStorageManager.getVaultDir(context).isDirectory)

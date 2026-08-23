@@ -16,6 +16,7 @@ private const val DATABASE_VERSION_WITH_VIDEO_EVIDENCE = 7
 private const val DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT = 8
 private const val DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE = 9
 private const val DATABASE_VERSION_WITH_FILE_OPERATIONS = 10
+private const val DATABASE_VERSION_WITH_DOCUMENT_FINGERPRINT_REPAIR = 11
 
 @Database(
     entities = [
@@ -26,7 +27,7 @@ private const val DATABASE_VERSION_WITH_FILE_OPERATIONS = 10
         WorkOperationEntity::class,
         FileOperationEntity::class
     ],
-    version = DATABASE_VERSION_WITH_FILE_OPERATIONS,
+    version = DATABASE_VERSION_WITH_DOCUMENT_FINGERPRINT_REPAIR,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -154,7 +155,6 @@ abstract class AppDatabase : RoomDatabase() {
         ) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "files", "documentCandidateFingerprint", "TEXT NOT NULL DEFAULT ''")
-                db.execSQL("UPDATE files SET documentCandidateFingerprint = visualSimilarityHash WHERE category = 'DOCUMENTS' AND documentCandidateFingerprint = '' AND visualSimilarityHash IS NOT NULL AND visualSimilarityHash <> ''")
             }
         }
 
@@ -202,6 +202,17 @@ abstract class AppDatabase : RoomDatabase() {
                     "vaultFormatVersion",
                     "INTEGER NOT NULL DEFAULT $LEGACY_VAULT_FORMAT_VERSION"
                 )
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(
+            DATABASE_VERSION_WITH_FILE_OPERATIONS,
+            DATABASE_VERSION_WITH_DOCUMENT_FINGERPRINT_REPAIR
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Version 8 historically copied image dHash data into this document-only field.
+                // Clear that known-invalid value; the document scanner will recompute it.
+                db.execSQL("UPDATE files SET documentCandidateFingerprint = '' WHERE category = 'DOCUMENTS'")
             }
         }
 
@@ -279,6 +290,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_7_8,
             MIGRATION_8_9,
             MIGRATION_9_10,
+            MIGRATION_10_11,
         )
 
         private const val DATABASE_NAME = "vvf_smart_manager_db"
