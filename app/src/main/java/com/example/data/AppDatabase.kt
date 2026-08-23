@@ -155,6 +155,7 @@ abstract class AppDatabase : RoomDatabase() {
         ) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "files", "documentCandidateFingerprint", "TEXT NOT NULL DEFAULT ''")
+                db.execSQL("UPDATE files SET visualSimilarityHash = '' WHERE category = 'DOCUMENTS'")
             }
         }
 
@@ -212,7 +213,7 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Version 8 historically copied image dHash data into this document-only field.
                 // Clear that known-invalid value; the document scanner will recompute it.
-                db.execSQL("UPDATE files SET documentCandidateFingerprint = '' WHERE category = 'DOCUMENTS'")
+                db.execSQL("UPDATE files SET documentCandidateFingerprint = '', visualSimilarityHash = '' WHERE category = 'DOCUMENTS'")
             }
         }
 

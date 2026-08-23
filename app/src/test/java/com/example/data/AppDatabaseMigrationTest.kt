@@ -364,9 +364,10 @@ class AppDatabaseMigrationTest {
 
         AppDatabase.MIGRATION_7_8.migrate(db)
 
-        val cursor = db.query("SELECT documentCandidateFingerprint FROM files WHERE id = 801")
+        val cursor = db.query("SELECT documentCandidateFingerprint, visualSimilarityHash FROM files WHERE id = 801")
         assertTrue(cursor.moveToFirst())
         assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
+        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
         cursor.close()
         db.close()
     }
@@ -392,6 +393,7 @@ class AppDatabaseMigrationTest {
         assertTrue(cursor.moveToFirst())
         assertEquals(851L, cursor.getLong(cursor.getColumnIndexOrThrow("id")))
         assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
+        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
         assertTrue(cursor.moveToNext())
         assertEquals(852L, cursor.getLong(cursor.getColumnIndexOrThrow("id")))
         assertEquals("image-document-value", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
