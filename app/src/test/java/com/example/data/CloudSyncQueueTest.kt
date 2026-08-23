@@ -111,6 +111,42 @@ class CloudSyncQueueTest {
     }
 
     @Test
+    fun enqueueCloudSyncItem_authorizedProviderPersistsQueueItemAndRejectsPathDuplicate() = runBlocking {
+        val authorizedRepository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            cloudTransferAllowed = { true },
+        )
+
+        assertTrue(
+            authorizedRepository.enqueueCloudSyncItem(
+                provider = "GOOGLE_DRIVE",
+                fileName = "queued.pdf",
+                size = 1024L,
+                filePath = "/tmp/queued.pdf",
+                isCore = true,
+            ),
+        )
+        val queued = fakeDao.getCloudSyncItems().first().single { it.fileName == "queued.pdf" }
+        assertEquals("QUEUED", queued.status)
+        assertEquals("/tmp/queued.pdf", queued.filePath)
+        assertEquals(1024L, queued.fileSize)
+        assertTrue(queued.isCore)
+        assertTrue(queued.operationId.isNotBlank())
+
+        assertEquals(
+            false,
+            authorizedRepository.enqueueCloudSyncItem(
+                provider = "GOOGLE_DRIVE",
+                fileName = "queued-again.pdf",
+                size = 1024L,
+                filePath = "/tmp/queued.pdf",
+            ),
+        )
+        assertEquals(1, fakeDao.getCloudSyncItems().first().count { it.filePath == "/tmp/queued.pdf" })
+    }
+
+    @Test
     fun testRetryCloudSyncItem_failedToQueued() = runBlocking {
         val id = fakeDao.insertCloudSyncItem(
             CloudSyncItemEntity(

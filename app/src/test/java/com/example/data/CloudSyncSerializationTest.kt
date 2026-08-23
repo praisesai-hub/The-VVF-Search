@@ -10,6 +10,28 @@ class CloudSyncSerializationTest {
         .adapter(CloudSyncItemEntity::class.java)
 
     @Test
+    fun cloudSyncItem_readsLegacyPayloadWithDefaults() {
+        val decoded = adapter.fromJson(
+            """
+            {
+              "id": 18,
+              "provider": "GOOGLE_DRIVE",
+              "fileName": "legacy.pdf",
+              "fileSize": 128,
+              "status": "PENDING"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(18L, decoded?.id)
+        assertEquals("legacy.pdf", decoded?.fileName)
+        assertEquals("", decoded?.filePath)
+        assertEquals(false, decoded?.isCore)
+        assertEquals(null, decoded?.leaseOwner)
+        assertEquals(0L, decoded?.resumableBytesCommitted)
+    }
+
+    @Test
     fun cloudSyncItem_roundTripsDurableResumableStateAndNullableFields() {
         val expected = CloudSyncItemEntity(
             id = 17L,

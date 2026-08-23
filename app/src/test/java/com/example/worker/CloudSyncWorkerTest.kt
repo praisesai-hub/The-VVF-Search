@@ -15,10 +15,15 @@ import com.example.data.PluginEntity
 import com.example.data.VaultItemEntity
 import com.example.data.CloudProviderAdapter
 import com.example.data.CloudSyncResult
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -113,12 +118,16 @@ class FakeFileDao : FileDao {
 class FakeCloudProviderAdapter : CloudProviderAdapter {
     override val providerId: String = "GOOGLE_DRIVE"
     var shouldFail: Boolean = false
+    var uploadStarted: CompletableDeferred<Unit>? = null
+    var releaseUpload: CompletableDeferred<Unit>? = null
     var isRetryable: Boolean = true
     var returnNotSupported: Boolean = false
     var exceptionToThrow: Exception? = null
     val resultByRemotePath = mutableMapOf<String, CloudSyncResult>()
 
     override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
+        uploadStarted?.complete(Unit)
+        releaseUpload?.await()
         resultByRemotePath[remotePath]?.let { return it }
         exceptionToThrow?.let { throw it }
         return when {
@@ -139,6 +148,7 @@ class FakeCloudProviderAdapter : CloudProviderAdapter {
 private class FakeCloudSyncOperationStore(
     private val items: MutableList<CloudSyncItemEntity>
 ) : CloudSyncOperationStore {
+    var heartbeatCount = 0
     private fun indexFor(operationId: String): Int = items.indexOfFirst {
         it.operationId == operationId || (it.operationId.isBlank() && operationId == "legacy-${it.id}")
     }
@@ -177,6 +187,7 @@ private class FakeCloudSyncOperationStore(
         val index = indexFor(operationId)
         if (index < 0 || items[index].leaseOwner != leaseOwner || items[index].status != "UPLOADING") return 0
         items[index] = items[index].copy(heartbeatAtMs = nowMs, leaseExpiresAtMs = leaseExpiresAtMs)
+        heartbeatCount++
         return 1
     }
 
@@ -365,6 +376,40 @@ class CloudSyncWorkerTest {
         assertEquals("remote-101", updatedItem?.remoteFileId)
         assertEquals("session-101", updatedItem?.resumableSessionUri)
         assertEquals(tempFile.length(), updatedItem?.resumableBytesCommitted)
+    }
+
+    @Test
+    fun longUpload_heartbeatsCurrentLeaseBeforeCompletion() = runTest {
+        val tempFile = createTempSyncFile("sync_heartbeat", "heartbeat payload")
+        val syncItem = CloudSyncItemEntity(
+            id = 108L,
+            provider = "GOOGLE_DRIVE",
+            fileName = tempFile.name,
+            filePath = tempFile.absolutePath,
+            fileSize = tempFile.length(),
+            status = "PENDING",
+            lastSyncedMs = 0L,
+        )
+        fakeDao.insertCloudSyncItem(syncItem)
+        fakeAdapter.uploadStarted = CompletableDeferred()
+        fakeAdapter.releaseUpload = CompletableDeferred()
+        fakeAdapter.resultByRemotePath[tempFile.name] = CloudSyncResult.Success(
+            bytesTransferred = tempFile.length(),
+            bytesCommitted = tempFile.length(),
+        )
+
+        val workerResult = async { createWorker().doWork() }
+        fakeAdapter.uploadStarted?.await()
+        runCurrent()
+        assertEquals("UPLOADING", fakeDao.getCloudSyncItems().first().single { it.id == 108L }.status)
+
+        advanceTimeBy(CloudSyncWorker.HEARTBEAT_INTERVAL_MS)
+        runCurrent()
+
+        assertTrue(fakeOperationStore.heartbeatCount >= 1)
+        fakeAdapter.releaseUpload?.complete(Unit)
+        assertEquals(ListenableWorker.Result.success(), workerResult.await())
+        assertEquals("SYNCED", fakeDao.getCloudSyncItems().first().single { it.id == 108L }.status)
     }
 
     @Test
