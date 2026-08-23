@@ -107,12 +107,12 @@ class PluginRepositoryTest {
 
     @Test
     fun testTogglePlugin_fromEnabledToDisabled() = runBlocking {
-        val plugin = PluginEntity("ocr", "OCR Plugin", "OCR", "Extracts text", isEnabled = true, isCore = true)
+        val plugin = PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Syncs files", isEnabled = true, isCore = false)
         fakeDao.pluginsList.add(plugin)
 
-        repository.togglePlugin("ocr", currentEnabled = true)
+        repository.togglePlugin("gdrive_sync", currentEnabled = true)
 
-        assertEquals("ocr", fakeDao.lastToggledPluginId)
+        assertEquals("gdrive_sync", fakeDao.lastToggledPluginId)
         assertEquals(false, fakeDao.lastToggledEnabled)
         assertEquals(1, fakeDao.setPluginEnabledCallCount)
         assertFalse(fakeDao.pluginsList[0].isEnabled)
@@ -120,14 +120,27 @@ class PluginRepositoryTest {
 
     @Test
     fun testTogglePlugin_fromDisabledToEnabled() = runBlocking {
-        val plugin = PluginEntity("cloud", "S3 Sync", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false)
+        val plugin = PluginEntity("gdrive_sync", "Google Drive", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false)
         fakeDao.pluginsList.add(plugin)
 
-        repository.togglePlugin("cloud", currentEnabled = false)
+        repository.togglePlugin("gdrive_sync", currentEnabled = false)
 
-        assertEquals("cloud", fakeDao.lastToggledPluginId)
+        assertEquals("gdrive_sync", fakeDao.lastToggledPluginId)
         assertEquals(true, fakeDao.lastToggledEnabled)
         assertEquals(1, fakeDao.setPluginEnabledCallCount)
         assertTrue(fakeDao.pluginsList[0].isEnabled)
+    }
+
+    @Test
+    fun testTogglePlugin_unsupportedPluginIsFailClosed() = runBlocking {
+        val plugin = PluginEntity("s3_sync", "S3 Sync", "CLOUD_PROVIDER", "Syncs files", isEnabled = false, isCore = false)
+        fakeDao.pluginsList.add(plugin)
+
+        repository.togglePlugin("s3_sync", currentEnabled = false)
+
+        assertEquals(null, fakeDao.lastToggledPluginId)
+        assertEquals(null, fakeDao.lastToggledEnabled)
+        assertEquals(0, fakeDao.setPluginEnabledCallCount)
+        assertFalse(fakeDao.pluginsList[0].isEnabled)
     }
 }
