@@ -10,7 +10,11 @@ import android.provider.Settings
 /** Centralizes the restricted full-device storage permission lifecycle. */
 object StoragePermissionManager {
     fun hasFullDeviceAccess(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || try {
+            Environment.isExternalStorageManager()
+        } catch (_: RuntimeException) {
+            false
+        }
 
     fun settingsIntent(context: Context, advancedModeEnabled: Boolean = false): Intent? {
         if (!advancedModeEnabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.R || hasFullDeviceAccess()) return null
