@@ -122,15 +122,8 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("1.0 KB").assertCountEquals(2)
-        val fixtureNodes = composeTestRule
-            .onAllNodesWithText("fixture", substring = true)
-            .fetchSemanticsNodes()
-        println("DASHBOARD_FIXTURE_NODE_COUNT=${fixtureNodes.size}")
-        fixtureNodes.forEachIndexed { index, node ->
-            println("DASHBOARD_FIXTURE_NODE[$index]=$node")
-        }
-        composeTestRule.onNodeWithText(" • fixture").assertExists()
-        composeTestRule.onNodeWithText(" • fixture").assertIsDisplayed()
+        // Compose semantics trim layout-only leading whitespace from this inline tag Text.
+        composeTestRule.onNodeWithText("• fixture").assertIsDisplayed()
 
         dashboardList.performScrollToNode(hasText("View Report"))
         composeTestRule.onNodeWithText("View Report").performClick()
