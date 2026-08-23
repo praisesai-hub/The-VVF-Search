@@ -1,6 +1,8 @@
 name: Kotlin CodeQL Compatibility Recheck
 
 on:
+  push:
+    branches: ["docs/record-ruleset-evidence"]
   schedule:
     - cron: "0 4 23 * *"
   workflow_dispatch:
