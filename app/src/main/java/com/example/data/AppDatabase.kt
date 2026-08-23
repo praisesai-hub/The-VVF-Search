@@ -236,42 +236,54 @@ abstract class AppDatabase : RoomDatabase() {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
                     val applicationContext = context.applicationContext
-                    val databaseFile = applicationContext.getDatabasePath(DATABASE_NAME)
-                    SqlCipherSupport.ensureLoaded()
-                    val passphrase = DatabasePassphraseProvider(applicationContext).getPassphrase()
-                    try {
-                        DatabaseEncryptionMigrator.migrateIfNeeded(
-                            applicationContext,
-                            databaseFile,
-                            passphrase,
-                        )
-                        val builder = Room.databaseBuilder(
-                            applicationContext,
-                            AppDatabase::class.java,
-                            DATABASE_NAME,
-                        )
-                            .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
-                            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                            .addMigrations(
-                                MIGRATION_1_2,
-                                MIGRATION_2_3,
-                                MIGRATION_3_4,
-                                MIGRATION_4_5,
-                                MIGRATION_5_6,
-                                MIGRATION_6_7,
-                                MIGRATION_7_8,
-                                MIGRATION_8_9,
-                                MIGRATION_9_10,
+                    val instance = if (System.getProperty(JVM_TEST_DATABASE_MODE_PROPERTY) == JVM_TEST_DATABASE_MODE_IN_MEMORY) {
+                        Room.inMemoryDatabaseBuilder(applicationContext, AppDatabase::class.java)
+                            .allowMainThreadQueries()
+                            .addMigrations(*allMigrations())
+                            .build()
+                    } else {
+                        val databaseFile = applicationContext.getDatabasePath(DATABASE_NAME)
+                        SqlCipherSupport.ensureLoaded()
+                        val passphrase = DatabasePassphraseProvider(applicationContext).getPassphrase()
+                        try {
+                            DatabaseEncryptionMigrator.migrateIfNeeded(
+                                applicationContext,
+                                databaseFile,
+                                passphrase,
                             )
-                        builder.build().also { INSTANCE = it }
-                    } finally {
-                        passphrase.fill(0)
+                            Room.databaseBuilder(
+                                applicationContext,
+                                AppDatabase::class.java,
+                                DATABASE_NAME,
+                            )
+                                .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
+                                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                                .addMigrations(*allMigrations())
+                                .build()
+                        } finally {
+                            passphrase.fill(0)
+                        }
                     }
+                    instance.also { INSTANCE = it }
                 }
             }
         }
 
+        private fun allMigrations(): Array<Migration> = arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9,
+            MIGRATION_9_10,
+        )
+
         private const val DATABASE_NAME = "vvf_smart_manager_db"
+        private const val JVM_TEST_DATABASE_MODE_PROPERTY = "vvf.test.database.mode"
+        private const val JVM_TEST_DATABASE_MODE_IN_MEMORY = "in-memory"
     }
 }
 

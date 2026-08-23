@@ -182,6 +182,10 @@ detekt {
 // Crashlytics mapping upload requires the Google Services-generated app ID file.
 // Keep upload enabled when Firebase configuration is present, but do not make
 // local or secret-free validation builds fail solely because telemetry is absent.
+tasks.withType<Test>().configureEach {
+  systemProperty("vvf.test.database.mode", "in-memory")
+}
+
 tasks.configureEach {
   if (name.startsWith("uploadCrashlyticsMappingFile")) {
     enabled = file("google-services.json").isFile
