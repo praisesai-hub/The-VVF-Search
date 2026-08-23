@@ -160,8 +160,16 @@ open class StorageScanner(private val context: Context) : HammingDistanceCalcula
 
         suspend fun walk(directory: DocumentFile) {
             currentCoroutineContext().ensureActive()
+            if (processedUris.size >= MAX_DISCOVERED_FILES) {
+                Log.w(TAG, "SAF scan reached the maximum visited-entry limit")
+                return
+            }
             for (child in directory.listFiles()) {
                 currentCoroutineContext().ensureActive()
+                if (processedUris.size >= MAX_DISCOVERED_FILES) {
+                    Log.w(TAG, "SAF scan reached the maximum visited-entry limit")
+                    return
+                }
                 val uriString = child.uri.toString()
                 if (!processedUris.add(uriString)) continue
                 if (child.isDirectory) {

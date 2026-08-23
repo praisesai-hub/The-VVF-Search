@@ -50,7 +50,7 @@ class CloudSyncEngine(
             }
 
         val resolvedSource = try {
-            resolveUploadSource(item.filePath)
+            resolveUploadSource(item.filePath, item.fileSize)
         } catch (e: Exception) {
             val error = DomainErrorMapper.fromThrowable(
                 operation = "CLOUD_TRANSFER",
@@ -128,8 +128,18 @@ class CloudSyncEngine(
     private fun getAdapterForProvider(provider: String): CloudProviderAdapter? =
         providerRegistry.adapterFor(provider)
 
-    private suspend fun resolveUploadSource(path: String): UploadSource = withContext(Dispatchers.IO) {
+    private suspend fun resolveUploadSource(path: String, expectedSize: Long): UploadSource = withContext(Dispatchers.IO) {
         if (!path.startsWith("content://")) return@withContext UploadSource(File(path), false)
+        val minimumFreeSpace = if (expectedSize > 0L) {
+            val overhead = expectedSize / 10L
+            val required = expectedSize + overhead
+            if (required < expectedSize) Long.MAX_VALUE else required
+        } else {
+            0L
+        }
+        if (minimumFreeSpace > 0L && context.cacheDir.usableSpace < minimumFreeSpace) {
+            throw IOException("insufficient local space for upload")
+        }
         val temporaryFile = File.createTempFile("cloud-upload-", ".bin", context.cacheDir)
         try {
             val input = context.contentResolver.openInputStream(Uri.parse(path))
