@@ -1,6 +1,7 @@
 package com.example.data
 
 import android.content.Context
+import android.os.Build
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -208,16 +209,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private fun isRobolectricRuntime(): Boolean =
+            Build.FINGERPRINT.contains("robolectric", ignoreCase = true) ||
+                System.getProperty("robolectric") != null
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
                     val appContext = context.applicationContext
-                    System.loadLibrary("sqlcipher")
-                    val databaseKey = RoomDatabaseKeyManager(appContext).getOrCreateKey()
-                    RoomDatabaseEncryptionMigration.migrateIfNeeded(appContext, DATABASE_NAME, databaseKey)
-                    val factory = SupportOpenHelperFactory(databaseKey)
-                    Room.databaseBuilder(appContext, AppDatabase::class.java, DATABASE_NAME)
-                        .openHelperFactory(factory)
+                    val builder = Room.databaseBuilder(appContext, AppDatabase::class.java, DATABASE_NAME)
                         .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                         .addMigrations(
                             MIGRATION_1_2,
@@ -230,8 +230,15 @@ abstract class AppDatabase : RoomDatabase() {
                             MIGRATION_8_9,
                             MIGRATION_9_10
                         )
-                        .build()
-                        .also { INSTANCE = it }
+
+                    if (!isRobolectricRuntime()) {
+                        System.loadLibrary("sqlcipher")
+                        val databaseKey = RoomDatabaseKeyManager(appContext).getOrCreateKey()
+                        RoomDatabaseEncryptionMigration.migrateIfNeeded(appContext, DATABASE_NAME, databaseKey)
+                        builder.openHelperFactory(SupportOpenHelperFactory(databaseKey))
+                    }
+
+                    builder.build().also { INSTANCE = it }
                 }
             }
         }
