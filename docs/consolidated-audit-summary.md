@@ -49,6 +49,12 @@ Round 3 has started implementation work. In PR #50 the Room database is being mo
 | F-34 | Kotlin/CodeQL compatibility blocker | Production Kotlin 2.4.20-RC is newer than the currently supported CodeQL range used by the hosted extractor. | OPEN / UPSTREAM DEPENDENCY | HIGH | Do not downgrade below the security-fixed Kotlin line. Remove compatibility workaround when supported; keep security issue visible meanwhile. |
 | F-35 | Exact required-check list | Exact repository ruleset state is separate from YAML. | OPEN | CRITICAL | Obtain authoritative ruleset/branch-protection evidence before adding/removing required checks. |
 | F-36 | Documentation/security-language consistency | Earlier documentation referred to Room as secure/encrypted despite plaintext implementation. | **PARTIALLY REMEDIATED** | HIGH | Update all documentation to describe SQLCipher only after build/device evidence proves it. |
+| F-37 | Interrupted Room swap can create empty DB | Existing migration returned when the primary DB was absent, ignoring `.plaintext.backup`/`.encrypted.tmp`. | **FIX IMPLEMENTED; VERIFY** | CRITICAL | Recover a valid encrypted staging file first; otherwise restore the plaintext backup and retry migration before Room opens. Add crash-window tests. |
+| F-38 | Room DB key Base64 incompatible with minSdk 24 | `java.util.Base64` is API 26+, while the app declares minSdk 24 and has no desugaring. | **FIX IMPLEMENTED; VERIFY** | HIGH | Replaced with `android.util.Base64`; add API-24 runtime/build verification. |
+| F-39 | Room rollback could delete only surviving plaintext backup | Previous `finally` deleted the backup even if rollback failed. | **FIX IMPLEMENTED; VERIFY** | HIGH | Preserve backup when restoration cannot be confirmed; surface a fatal/recovery state instead of deleting the only copy. |
+| F-40 | CloudSync unsupported-provider status mismatch | Worker persisted `NOT_SUPPORTED`, while the established terminal failure contract/test expects `FAILED` plus a diagnostic code. | **FIX IMPLEMENTED; VERIFY** | MEDIUM | Persist `FAILED` with `PROVIDER_NOT_SUPPORTED`; retain terminal worker failure result. |
+| F-41 | Declared Gradle version drift | Workflow declares `GRADLE_VERSION=9.3.1`, while wrapper/runner evidence reports Gradle 9.7.0. | OPEN | LOW/MEDIUM | Remove unused misleading declaration or make it authoritative and test it against the wrapper. |
+| F-42 | Google OAuth generated-resource contract | `R.string.default_web_client_id` caused compile failure when the generated resource was absent even though Google Services processing itself succeeded. | **FIX IMPLEMENTED; VERIFY** | MEDIUM/HIGH | Resolve resource by name and fail closed at authentication time instead of failing compilation; verify configured and unconfigured Firebase builds. |
 
 ## 3. Round-3 changes already implemented
 
@@ -83,18 +89,32 @@ The application cannot simply switch Room to SQLCipher and abandon an existing p
 
 1. load SQLCipher native library;
 2. obtain Keystore-wrapped database key;
-3. detect whether the existing database already opens with the key;
-4. if not, verify that it is valid plaintext SQLite;
-5. create a temporary encrypted SQLCipher database;
-6. attach the plaintext database;
-7. execute `sqlcipher_export` into the encrypted database;
-8. preserve the Room schema version;
-9. stage the plaintext database as a backup during replacement;
-10. install the encrypted database;
-11. remove the plaintext staged copy;
-12. restore the original if replacement fails.
+3. recover any interrupted swap state before checking the primary path;
+4. detect whether the existing database already opens with the key;
+5. if not, verify that it is valid plaintext SQLite;
+6. create a temporary encrypted SQLCipher database;
+7. attach the plaintext database;
+8. execute `sqlcipher_export` into the encrypted database;
+9. preserve the Room schema version;
+10. stage the plaintext database as a backup during replacement;
+11. install the encrypted database;
+12. remove the plaintext staged copy only after successful installation;
+13. restore the original if replacement fails;
+14. retain the backup if rollback itself cannot be confirmed.
 
-This migration remains **unverified** until it is exercised on a real Android runner with representative existing database states.
+This migration remains **unverified** until it is exercised on a real Android runner with representative existing database states and crash-window tests.
+
+### 3.4 API-24 compatibility correction
+
+The Room key manager previously used `java.util.Base64`. Android's platform Base64 implementation is used instead so the declared `minSdk 24` contract does not fail at runtime on Android 7.x.
+
+### 3.5 CloudSync terminal-state correction
+
+`CloudSyncResult.NotSupported` is now persisted as the normal terminal `FAILED` state with `PROVIDER_NOT_SUPPORTED` as the diagnostic error code. This aligns persisted state with the worker's existing terminal failure contract and test expectations.
+
+### 3.6 Firebase OAuth compile-time dependency reduction
+
+The authentication manager no longer directly references generated `R.string.default_web_client_id`. It resolves the resource by name and fails closed if it is absent or blank. This keeps secret-free validation builds compilable while preserving explicit runtime failure when Google OAuth is not configured.
 
 ## 4. CodeQL finding — current external evidence
 
@@ -172,15 +192,16 @@ The following remain hard release gates:
 
 | Area | Required tests |
 |---|---|
-| Room | fresh install, encrypted reopen, wrong/missing key, Keystore failure, plaintext-to-encrypted upgrade, interrupted migration, corrupted temp file, rollback |
+| Room | fresh install, encrypted reopen, wrong/missing key, Keystore failure, plaintext-to-encrypted upgrade, interrupted migration, corrupted temp file, rollback failure with backup retention |
 | File operations | traversal, symlink, canonical path, rename race, delete race, recycle-bin consistency |
 | Scanner | cancellation, huge tree, low memory, inaccessible directories, symlink loops, file-count limits |
 | Vault | crash window, authentication failure, key invalidation, partial write, restore/export |
-| Cloud | disabled-by-default, auth failure, resumable upload, redirect handling, remote-ID reconciliation |
+| Cloud | disabled-by-default, auth failure, resumable upload, redirect handling, remote-ID reconciliation, unsupported-provider terminal state |
 | AI | model present, model missing, TFLite unavailable, fallback mode, malformed embedding, resource exhaustion |
 | Backup | merged manifest, Android backup, device transfer, vault exclusion, database exclusion |
 | Release | R8, mapping, missing classes, AAB signature, checksum, provenance, SBOM |
 | Platform | Android 11, 12, 13, 14, 15, 16; storage permissions; Keystore; WorkManager; large files |
+| Compatibility | Android API 24–25 database-key initialization and reopen if minSdk 24 remains supported |
 
 ## 8. UI/UX target
 
@@ -238,3 +259,34 @@ Every future audit finding or remediation must be added to this file rather than
 **Finding → Evidence → Root cause → Remediation → Regression test → CI/device evidence → Remaining risk → Final status.**
 
 No completion claim is accepted from source inspection alone when the finding requires runtime, artifact, device or repository-governance evidence.
+
+## 12. Round-3 live validation record
+
+### 12.1 Previous failed run
+
+The earlier failed Android CI run was blocked first by the generated Firebase `default_web_client_id` resource being referenced directly by production code. `google-services.json` itself was present and `processDebugGoogleServices` succeeded. The compile-time resource dependency was therefore the application/code contract failure, not a missing secret.
+
+### 12.2 Current remediation commits
+
+- `d474690fb64cdfe547742a49130ef156bc9bcdc6` — API-24-compatible Room key Base64.
+- `5970b42fe904130d8696dd0d415691b2a01bc89a` — interrupted Room encryption swap recovery and rollback preservation.
+- `8edff7be9bbfde1d7ae25cbf8dea1767e6b3abd2` — unsupported CloudSync provider terminal-state correction.
+
+A fresh Android CI run **#491** and CodeQL run **#399** were triggered from the latest remediation head. Their results are not yet evidence of success; they must be evaluated to completion.
+
+## 13. External reference policy used for remediation
+
+For current implementation decisions, use authoritative upstream documentation rather than stale snippets. Google documents that `default_web_client_id` is generated from an OAuth client with `client_type == 3`, and GitHub documents that Actions secrets are scope-dependent and unavailable to fork-triggered `pull_request` workflows. These references support the Firebase/secret-boundary diagnosis but do not substitute for repository runtime evidence.
+
+## 14. Next evidence-gated actions
+
+1. Complete CI #491 and CodeQL #399.
+2. If Unit tests fail, fix the production/test contract rather than weakening assertions.
+3. If instrumentation fails, inspect the actual test failure before changing artifact-upload behavior.
+4. Run Room migration/recovery tests covering all crash windows, including retained plaintext backup after rollback failure.
+5. Verify API-24 behavior if minSdk 24 remains declared; otherwise make an explicit product decision to raise minSdk.
+6. Audit Dependabot configuration and update state, including GitHub Actions dependencies and blocked/stale security updates.
+7. Audit secret names, scopes, permissions and workflow exposure without retrieving or exposing secret values.
+8. Verify repository Ruleset/Branch Protection required checks and remove only checks proven obsolete/duplicate/harmful; do not add arbitrary checks.
+9. Run clean release AAB/R8 validation and inspect mapping/missing-class output.
+10. Update this file with every resulting finding and evidence. Do not create a second consolidated audit summary.
