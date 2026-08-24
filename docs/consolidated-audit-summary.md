@@ -55,6 +55,10 @@ Round 3 has started implementation work. In PR #50 the Room database is being mo
 | F-40 | CloudSync unsupported-provider status mismatch | Worker persisted `NOT_SUPPORTED`, while the established terminal failure contract/test expects `FAILED` plus a diagnostic code. | **FIX IMPLEMENTED; VERIFY** | MEDIUM | Persist `FAILED` with `PROVIDER_NOT_SUPPORTED`; retain terminal worker failure result. |
 | F-41 | Declared Gradle version drift | Workflow declares `GRADLE_VERSION=9.3.1`, while wrapper/runner evidence reports Gradle 9.7.0. | OPEN | LOW/MEDIUM | Remove unused misleading declaration or make it authoritative and test it against the wrapper. |
 | F-42 | Google OAuth generated-resource contract | `R.string.default_web_client_id` caused compile failure when the generated resource was absent even though Google Services processing itself succeeded. | **FIX IMPLEMENTED; VERIFY** | MEDIUM/HIGH | Resolve resource by name and fail closed at authentication time instead of failing compilation; verify configured and unconfigured Firebase builds. |
+| F-43 | P0 storage index corruption from content-identity changes | Existing DAO preserved hashes/OCR/embeddings even when file size or modification time changed, allowing derived metadata from an old physical file to remain attached to a replacement file. | **FIX IMPLEMENTED ON ROUND-3 BRANCH; VERIFY** | CRITICAL | `upsertFilesPreservingMetadata` and `insertFile` now detect size/mtime identity changes and invalidate content-derived metadata; regression tests added. |
+| F-44 | Partial background scan could delete valid index records | `BackgroundIndexWorker` previously collected a partial discovered-path set and reconciled all absent records, despite not having an authoritative view of SAF/MediaStore/app-private sources. | **FIX IMPLEMENTED ON ROUND-3 BRANCH; VERIFY** | CRITICAL | Removed stale-record reconciliation from the partial background scan; added explicit preservation behavior for incomplete/zero-result scans. |
+| F-45 | Content-URI deletion can fail closed incorrectly | Current `deleteFile()` returns success when deletion did not report success and the follow-up existence check itself failed, because `stillExists=false` is treated as proof of deletion. | **OPEN** | CRITICAL | Make post-delete verification tri-state: confirmed absent = success; confirmed present = failure; verification error = failure. Never interpret inability to verify as deletion success. Add targeted content-URI regression tests. |
+| F-46 | Stale P0 PR branch contained useful storage-integrity changes but diverged heavily | PR #46 was three commits ahead of the old audit base and 47 commits behind the current remediation base; its useful three-file changes overlap current files. | **PORTED / PR STILL OPEN** | HIGH | Port only validated logic into current remediation branch; do not merge the stale branch wholesale. Close #46 after confirming current branch contains the validated fixes and no unique unresolved requirement is lost. |
 
 ## 3. Round-3 changes already implemented
 
@@ -115,6 +119,18 @@ The Room key manager previously used `java.util.Base64`. Android's platform Base
 ### 3.6 Firebase OAuth compile-time dependency reduction
 
 The authentication manager no longer directly references generated `R.string.default_web_client_id`. It resolves the resource by name and fails closed if it is absent or blank. This keeps secret-free validation builds compilable while preserving explicit runtime failure when Google OAuth is not configured.
+
+### 3.7 P0 storage-index integrity port
+
+PR #46 was inspected rather than merged wholesale because its branch was materially stale and diverged from the current remediation branch. Its three-file change was isolated:
+
+- `FileDao.kt`
+- `BackgroundIndexWorker.kt`
+- `FileDaoMetadataInvalidationTest.kt`
+
+The validated portions were ported to `audit/remediation-round-3` while preserving the current branch's newer semantic-search DAO surface and durable WorkManager lease implementation.
+
+The DAO now invalidates derived content metadata when the file's size or modification time changes. The background worker no longer treats a partial scan as an authoritative inventory capable of deleting unrelated indexed records.
 
 ## 4. CodeQL finding — current external evidence
 
@@ -193,7 +209,7 @@ The following remain hard release gates:
 | Area | Required tests |
 |---|---|
 | Room | fresh install, encrypted reopen, wrong/missing key, Keystore failure, plaintext-to-encrypted upgrade, interrupted migration, corrupted temp file, rollback failure with backup retention |
-| File operations | traversal, symlink, canonical path, rename race, delete race, recycle-bin consistency |
+| File operations | traversal, symlink, canonical path, rename race, delete race, recycle-bin consistency, content-URI delete verification failure |
 | Scanner | cancellation, huge tree, low memory, inaccessible directories, symlink loops, file-count limits |
 | Vault | crash window, authentication failure, key invalidation, partial write, restore/export |
 | Cloud | disabled-by-default, auth failure, resumable upload, redirect handling, remote-ID reconciliation, unsupported-provider terminal state |
@@ -271,8 +287,11 @@ The earlier failed Android CI run was blocked first by the generated Firebase `d
 - `d474690fb64cdfe547742a49130ef156bc9bcdc6` — API-24-compatible Room key Base64.
 - `5970b42fe904130d8696dd0d415691b2a01bc89a` — interrupted Room encryption swap recovery and rollback preservation.
 - `8edff7be9bbfde1d7ae25cbf8dea1767e6b3abd2` — unsupported CloudSync provider terminal-state correction.
+- `e44cd4996fb7ed31837cff2cbed2f3dde3ce7c2d` — content-identity-aware metadata invalidation in `FileDao`.
+- `74edacc1ced815a77463634397ddc8c20051ade2` — partial background scan no longer reconciles/deletes the global index.
+- `f87ce024fc1388bb5d55fbce7331764269de1966` — regression tests for replacement-file metadata invalidation and unchanged-file metadata preservation.
 
-A fresh Android CI run **#491** and CodeQL run **#399** were triggered from the latest remediation head. Their results are not yet evidence of success; they must be evaluated to completion.
+A fresh Android CI run must be evaluated after these latest commits. Their source changes are not evidence of runtime success until hosted checks complete.
 
 ## 13. External reference policy used for remediation
 
@@ -280,7 +299,7 @@ For current implementation decisions, use authoritative upstream documentation r
 
 ## 14. Next evidence-gated actions
 
-1. Complete CI #491 and CodeQL #399.
+1. Complete the current Android CI and CodeQL runs.
 2. If Unit tests fail, fix the production/test contract rather than weakening assertions.
 3. If instrumentation fails, inspect the actual test failure before changing artifact-upload behavior.
 4. Run Room migration/recovery tests covering all crash windows, including retained plaintext backup after rollback failure.
@@ -288,5 +307,7 @@ For current implementation decisions, use authoritative upstream documentation r
 6. Audit Dependabot configuration and update state, including GitHub Actions dependencies and blocked/stale security updates.
 7. Audit secret names, scopes, permissions and workflow exposure without retrieving or exposing secret values.
 8. Verify repository Ruleset/Branch Protection required checks and remove only checks proven obsolete/duplicate/harmful; do not add arbitrary checks.
-9. Run clean release AAB/R8 validation and inspect mapping/missing-class output.
-10. Update this file with every resulting finding and evidence. Do not create a second consolidated audit summary.
+9. Fix F-45: make content-URI deletion fail closed when post-delete verification is unavailable.
+10. Run clean release AAB/R8 validation and inspect mapping/missing-class output.
+11. After F-45 and CI verification, close stale PR #46 if no unique unresolved requirement remains; do not merge its divergent branch wholesale.
+12. Update this file with every resulting finding and evidence. Do not create a second consolidated audit summary.
