@@ -8,7 +8,6 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeoutException
 
-/** Operation families use an explicit retry contract instead of a catch-all exception loop. */
 enum class RetryOperation {
     DATABASE_READ,
     DATABASE_WRITE,
@@ -35,11 +34,15 @@ object RetryPolicy {
 
     fun classify(operation: RetryOperation, cause: Throwable): RetryDecision {
         val rootCause = cause.rootCause()
+        val message = rootCause.message.orEmpty().lowercase()
         val reasonCode = when {
             rootCause is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
             rootCause is SocketTimeoutException || rootCause is TimeoutException -> "TIMEOUT"
             rootCause is UnknownHostException || rootCause is ConnectException ||
-                rootCause.message?.contains("unable to resolve host", ignoreCase = true) == true -> "NETWORK_UNAVAILABLE"
+                message.contains("unable to resolve host") ||
+                message.contains("network unavailable") ||
+                message.contains("connection reset") ||
+                message.contains("connection refused") -> "NETWORK_UNAVAILABLE"
             rootCause is FileNotFoundException -> "SOURCE_UNAVAILABLE"
             rootCause is SecurityException -> "PERMISSION_DENIED"
             rootCause is IllegalArgumentException -> "INVALID_INPUT"
