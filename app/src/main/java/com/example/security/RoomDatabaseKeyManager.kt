@@ -3,9 +3,9 @@ package com.example.security
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.util.Base64
 import java.security.KeyStore
 import java.security.SecureRandom
-import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -40,8 +40,8 @@ class RoomDatabaseKeyManager(context: Context) {
         val encodedCiphertext = preferences.getString(CIPHERTEXT, null)
         if (encodedIv != null && encodedCiphertext != null) {
             return decrypt(
-                Base64.getDecoder().decode(encodedIv),
-                Base64.getDecoder().decode(encodedCiphertext)
+                Base64.decode(encodedIv, Base64.NO_WRAP),
+                Base64.decode(encodedCiphertext, Base64.NO_WRAP)
             )
         }
 
@@ -51,8 +51,8 @@ class RoomDatabaseKeyManager(context: Context) {
         val ciphertext = cipher.doFinal(databaseKey)
         check(
             preferences.edit()
-                .putString(IV, Base64.getEncoder().encodeToString(cipher.iv))
-                .putString(CIPHERTEXT, Base64.getEncoder().encodeToString(ciphertext))
+                .putString(IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                .putString(CIPHERTEXT, Base64.encodeToString(ciphertext, Base64.NO_WRAP))
                 .commit()
         ) { "Unable to persist Room database key metadata" }
         return databaseKey
