@@ -10,16 +10,15 @@ object RoomDatabaseEncryptionMigration {
     fun migrateIfNeeded(context: Context, databaseName: String, key: ByteArray) {
         System.loadLibrary("sqlcipher")
         val databaseFile = context.getDatabasePath(databaseName)
-        if (!databaseFile.exists()) return
+        val temporaryFile = File(databaseFile.parentFile, "$databaseName.encrypted.tmp")
+        val backupFile = File(databaseFile.parentFile, "$databaseName.plaintext.backup")
 
+        recoverInterruptedSwap(databaseFile, temporaryFile, backupFile, key)
+        if (!databaseFile.exists()) return
         if (isAlreadyEncrypted(databaseFile, key)) return
         requirePlaintextDatabase(databaseFile)
 
-        val temporaryFile = File(databaseFile.parentFile, "$databaseName.encrypted.tmp")
-        val backupFile = File(databaseFile.parentFile, "$databaseName.plaintext.backup")
         SQLiteDatabase.deleteDatabase(temporaryFile)
-        SQLiteDatabase.deleteDatabase(backupFile)
-
         val plaintextDatabase = SQLiteDatabase.openDatabase(
             databaseFile.absolutePath,
             ByteArray(0),
@@ -70,8 +69,11 @@ object RoomDatabaseEncryptionMigration {
                 check(backupFile.delete()) { "Unable to remove legacy plaintext Room database" }
             } catch (error: Throwable) {
                 databaseFile.delete()
-                check(backupFile.renameTo(databaseFile)) {
-                    "Unable to restore legacy Room database after encryption failure"
+                if (!backupFile.renameTo(databaseFile)) {
+                    throw IllegalStateException(
+                        "Encrypted installation failed and the legacy database could not be restored; plaintext backup retained at ${backupFile.absolutePath}",
+                        error
+                    )
                 }
                 throw error
             }
@@ -80,7 +82,47 @@ object RoomDatabaseEncryptionMigration {
             throw IllegalStateException("Failed to encrypt the existing Room database", error)
         } finally {
             SQLiteDatabase.deleteDatabase(temporaryFile)
-            SQLiteDatabase.deleteDatabase(backupFile)
+        }
+    }
+
+    /**
+     * Recovers an interrupted plaintext -> encrypted swap before Room can create
+     * a new empty database. A valid encrypted staging file wins; otherwise the
+     * plaintext backup is restored so normal migration can retry it.
+     */
+    private fun recoverInterruptedSwap(
+        databaseFile: File,
+        temporaryFile: File,
+        backupFile: File,
+        key: ByteArray
+    ) {
+        if (!databaseFile.exists() && temporaryFile.exists() && isAlreadyEncrypted(temporaryFile, key)) {
+            check(temporaryFile.renameTo(databaseFile)) {
+                "Unable to recover staged encrypted Room database"
+            }
+            if (backupFile.exists()) {
+                deleteSidecars(backupFile)
+                check(backupFile.delete()) { "Unable to remove recovered plaintext Room backup" }
+            }
+            return
+        }
+
+        if (temporaryFile.exists() && !isAlreadyEncrypted(temporaryFile, key)) {
+            SQLiteDatabase.deleteDatabase(temporaryFile)
+        }
+
+        if (!databaseFile.exists() && backupFile.exists()) {
+            check(backupFile.renameTo(databaseFile)) {
+                "Unable to restore staged plaintext Room database"
+            }
+            return
+        }
+
+        if (databaseFile.exists() && backupFile.exists()) {
+            if (isAlreadyEncrypted(databaseFile, key)) {
+                deleteSidecars(backupFile)
+                check(backupFile.delete()) { "Unable to remove stale plaintext Room backup" }
+            }
         }
     }
 
