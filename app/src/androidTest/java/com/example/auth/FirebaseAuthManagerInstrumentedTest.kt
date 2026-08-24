@@ -9,7 +9,6 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.R
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.AuthResult
 import com.google.firebase.auth.FirebaseAuth
@@ -34,7 +33,6 @@ import java.util.concurrent.ExecutionException
 
 @RunWith(AndroidJUnit4::class)
 class FirebaseAuthManagerInstrumentedTest {
-
     private lateinit var context: Context
     private lateinit var auth: FirebaseAuth
     private lateinit var credentialManager: CredentialManager
@@ -45,14 +43,20 @@ class FirebaseAuthManagerInstrumentedTest {
         auth = mockk(relaxed = true)
         credentialManager = mockk(relaxed = true)
         every { auth.currentUser } returns null
+        every { context.packageName } returns "com.example"
+    }
+
+    private fun stubWebClientId(value: String?) {
+        every {
+            context.resources.getIdentifier("default_web_client_id", "string", "com.example")
+        } returns if (value == null) 0 else 12345
+        if (value != null) every { context.getString(12345) } returns value
     }
 
     @Test
     fun signOut_clearsPublishedUserAndDelegatesToFirebase() {
         val manager = FirebaseAuthManager(context, auth, credentialManager)
-
         manager.signOut()
-
         assertEquals(null, manager.user.value)
         verify(exactly = 1) { auth.signOut() }
     }
@@ -60,9 +64,7 @@ class FirebaseAuthManagerInstrumentedTest {
     @Test
     fun dispose_removesAuthStateListener() {
         val manager = FirebaseAuthManager(context, auth, credentialManager)
-
         manager.dispose()
-
         verify(exactly = 1) { auth.removeAuthStateListener(any()) }
     }
 
@@ -72,20 +74,16 @@ class FirebaseAuthManagerInstrumentedTest {
         every { auth.addAuthStateListener(capture(listener)) } just Runs
         val expectedUser = mockk<FirebaseUser>()
         val manager = FirebaseAuthManager(context, auth, credentialManager)
-
         every { auth.currentUser } returns expectedUser
         listener.captured.onAuthStateChanged(auth)
-
         assertSame(expectedUser, manager.user.value)
     }
 
     @Test
     fun signInWithGoogle_failsClosedWhenConfigurationMissing() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "  "
+        stubWebClientId(null)
         val manager = FirebaseAuthManager(context, auth, credentialManager)
-
         val result = manager.signInWithGoogle()
-
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()!!.message!!.contains("not configured"))
         verify(exactly = 0) { auth.signInWithCredential(any()) }
@@ -93,29 +91,20 @@ class FirebaseAuthManagerInstrumentedTest {
 
     @Test
     fun signInWithGoogle_convertsCredentialManagerFailureToResult() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
-        coEvery {
-            credentialManager.getCredential(any(), any<GetCredentialRequest>())
-        } throws IllegalStateException("credential lookup failed")
-        val manager = FirebaseAuthManager(context, auth, credentialManager)
-
-        val result = manager.signInWithGoogle()
-
+        stubWebClientId("configured-client-id")
+        coEvery { credentialManager.getCredential(any(), any<GetCredentialRequest>()) } throws
+            IllegalStateException("credential lookup failed")
+        val result = FirebaseAuthManager(context, auth, credentialManager).signInWithGoogle()
         assertTrue(result.isFailure)
         assertEquals("credential lookup failed", result.exceptionOrNull()?.message)
     }
 
     @Test
     fun signInWithGoogle_preservesNoCredentialFailure() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        stubWebClientId("configured-client-id")
         val expected = NoCredentialException("no credential")
-        coEvery {
-            credentialManager.getCredential(any(), any<GetCredentialRequest>())
-        } throws expected
-        val manager = FirebaseAuthManager(context, auth, credentialManager)
-
-        val result = manager.signInWithGoogle()
-
+        coEvery { credentialManager.getCredential(any(), any<GetCredentialRequest>()) } throws expected
+        val result = FirebaseAuthManager(context, auth, credentialManager).signInWithGoogle()
         assertTrue(result.isFailure)
         val actual = result.exceptionOrNull()
         assertTrue(actual === expected || actual?.cause === expected)
@@ -123,16 +112,13 @@ class FirebaseAuthManagerInstrumentedTest {
 
     @Test
     fun signInWithGoogle_rethrowsCancellation() {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        stubWebClientId("configured-client-id")
         val expected = CancellationException("cancelled")
-        coEvery {
-            credentialManager.getCredential(any(), any<GetCredentialRequest>())
-        } throws expected
+        coEvery { credentialManager.getCredential(any(), any<GetCredentialRequest>()) } throws expected
         val manager = FirebaseAuthManager(context, auth, credentialManager)
-
         try {
             runBlocking { manager.signInWithGoogle() }
-            assertTrue("CancellationException should be rethrown", false)
+            fail("CancellationException should be rethrown")
         } catch (actual: CancellationException) {
             assertSame(expected, actual)
         }
@@ -140,15 +126,11 @@ class FirebaseAuthManagerInstrumentedTest {
 
     @Test
     fun signInWithGoogle_rejectsUnsupportedCredentialType() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        stubWebClientId("configured-client-id")
         val credential = CustomCredential("com.example.unexpected", Bundle())
-        coEvery {
-            credentialManager.getCredential(any(), any<GetCredentialRequest>())
-        } returns GetCredentialResponse(credential)
-        val manager = FirebaseAuthManager(context, auth, credentialManager)
-
-        val result = manager.signInWithGoogle()
-
+        coEvery { credentialManager.getCredential(any(), any<GetCredentialRequest>()) } returns
+            GetCredentialResponse(credential)
+        val result = FirebaseAuthManager(context, auth, credentialManager).signInWithGoogle()
         assertTrue(result.isFailure)
         assertEquals("Unsupported Google credential type", result.exceptionOrNull()?.message)
     }
@@ -156,29 +138,17 @@ class FirebaseAuthManagerInstrumentedTest {
     @Test
     fun signInWithMicrosoft_returnsAuthenticatedUser() {
         val expectedUser = mockk<FirebaseUser>()
-        val authResult = mockk<AuthResult> {
-            every { user } returns expectedUser
-        }
-        every {
-            auth.startActivityForSignInWithProvider(any<Activity>(), any())
-        } returns Tasks.forResult(authResult)
-        val manager = FirebaseAuthManager(context, auth, credentialManager)
-
-        val actualUser = Tasks.await(manager.signInWithMicrosoft(mockk(relaxed = true)))
-
+        val authResult = mockk<AuthResult> { every { user } returns expectedUser }
+        every { auth.startActivityForSignInWithProvider(any<Activity>(), any()) } returns Tasks.forResult(authResult)
+        val actualUser = Tasks.await(FirebaseAuthManager(context, auth, credentialManager).signInWithMicrosoft(mockk(relaxed = true)))
         assertSame(expectedUser, actualUser)
     }
 
     @Test
     fun signInWithMicrosoft_surfacesProviderFailure() {
         val failure = IllegalStateException("Microsoft provider failed")
-        every {
-            auth.startActivityForSignInWithProvider(any<Activity>(), any())
-        } returns Tasks.forException(failure)
-        val manager = FirebaseAuthManager(context, auth, credentialManager)
-
-        val task = manager.signInWithMicrosoft(mockk(relaxed = true))
-
+        every { auth.startActivityForSignInWithProvider(any<Activity>(), any()) } returns Tasks.forException(failure)
+        val task = FirebaseAuthManager(context, auth, credentialManager).signInWithMicrosoft(mockk(relaxed = true))
         try {
             Tasks.await(task)
             fail("Microsoft provider failure should complete the task exceptionally")
