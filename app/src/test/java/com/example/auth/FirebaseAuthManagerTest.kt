@@ -2,6 +2,7 @@ package com.example.auth
 
 import android.app.Activity
 import android.content.Context
+import android.content.res.Resources
 import android.os.Bundle
 import android.os.Looper
 import androidx.credentials.CredentialManager
@@ -9,7 +10,6 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.NoCredentialException
-import com.example.R
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.AuthResult
 import com.google.firebase.auth.FirebaseAuth
@@ -40,15 +40,24 @@ import org.robolectric.annotation.Config
 class FirebaseAuthManagerTest {
 
     private lateinit var context: Context
+    private lateinit var resources: Resources
     private lateinit var auth: FirebaseAuth
     private lateinit var credentialManager: CredentialManager
 
     @Before
     fun setUp() {
         context = mockk(relaxed = true)
+        resources = mockk(relaxed = true)
         auth = mockk(relaxed = true)
         credentialManager = mockk(relaxed = true)
+        every { context.resources } returns resources
+        every { context.packageName } returns "com.example"
         every { auth.currentUser } returns null
+    }
+
+    private fun configureWebClientId(value: String) {
+        every { resources.getIdentifier("default_web_client_id", "string", "com.example") } returns 123
+        every { context.getString(123) } returns value
     }
 
     @Test
@@ -72,13 +81,25 @@ class FirebaseAuthManagerTest {
 
     @Test
     fun signInWithGoogle_failsClosedWhenOAuthConfigurationIsMissing() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "   "
+        every { resources.getIdentifier("default_web_client_id", "string", "com.example") } returns 0
         val manager = FirebaseAuthManager(context, auth, credentialManager)
 
         val result = manager.signInWithGoogle()
 
         assertTrue(result.isFailure)
         assertFalse(result.isSuccess)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("not configured"))
+        verify(exactly = 0) { auth.signInWithCredential(any()) }
+    }
+
+    @Test
+    fun signInWithGoogle_failsClosedWhenGeneratedOAuthResourceIsBlank() = runBlocking {
+        configureWebClientId("   ")
+        val manager = FirebaseAuthManager(context, auth, credentialManager)
+
+        val result = manager.signInWithGoogle()
+
+        assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()!!.message!!.contains("not configured"))
         verify(exactly = 0) { auth.signInWithCredential(any()) }
     }
@@ -99,7 +120,7 @@ class FirebaseAuthManagerTest {
 
     @Test
     fun signInWithGoogle_returnsFailureWhenCredentialManagerThrows() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        configureWebClientId("configured-client-id")
         coEvery {
             credentialManager.getCredential(any(), any<GetCredentialRequest>())
         } throws IllegalStateException("credential lookup failed")
@@ -114,7 +135,7 @@ class FirebaseAuthManagerTest {
 
     @Test
     fun signInWithGoogle_rejectsCredentialWithUnexpectedType() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        configureWebClientId("configured-client-id")
         val credential = CustomCredential("com.example.unexpected", Bundle())
         coEvery {
             credentialManager.getCredential(any(), any<GetCredentialRequest>())
@@ -130,7 +151,7 @@ class FirebaseAuthManagerTest {
 
     @Test
     fun signInWithGoogle_preservesExpectedNoCredentialFailure() = runBlocking {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        configureWebClientId("configured-client-id")
         val noCredential = NoCredentialException("no credential available")
         coEvery {
             credentialManager.getCredential(any(), any<GetCredentialRequest>())
@@ -146,7 +167,7 @@ class FirebaseAuthManagerTest {
 
     @Test
     fun signInWithGoogle_rethrowsCancellationInsteadOfConvertingItToFailure() {
-        every { context.getString(R.string.default_web_client_id) } returns "configured-client-id"
+        configureWebClientId("configured-client-id")
         val cancellation = CancellationException("authentication cancelled")
         coEvery {
             credentialManager.getCredential(any(), any<GetCredentialRequest>())
