@@ -126,6 +126,8 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
+  implementation("net.zetetic:sqlcipher-android:4.18.0@aar")
+  implementation("androidx.sqlite:sqlite:2.7.0")
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
