@@ -40,12 +40,12 @@ class CloudSyncWorker @JvmOverloads constructor(
     @Suppress("ReturnCount", "LongMethod", "CyclomaticComplexMethod", "NestedBlockDepth")
     override suspend fun doWork(): Result = kotlinx.coroutines.coroutineScope {
         executeWithDurableLease(
-        context = applicationContext,
-        worker = this@CloudSyncWorker,
-        scope = this,
-        workName = WORK_NAME,
-        operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
-        block = { runWork() }
+            context = applicationContext,
+            worker = this@CloudSyncWorker,
+            scope = this,
+            workName = WORK_NAME,
+            operationId = inputData.getString(WorkCoordinator.OPERATION_ID_KEY) ?: "worker:${id}",
+            block = { runWork() }
         )
     }
 
@@ -172,7 +172,7 @@ class CloudSyncWorker @JvmOverloads constructor(
                             leaseStore.markFailed(
                                 operationId = operationId,
                                 leaseOwner = leaseOwner,
-                                status = "FAILED",
+                                status = "NOT_SUPPORTED",
                                 errorCode = "PROVIDER_NOT_SUPPORTED",
                                 nowMs = System.currentTimeMillis()
                             )
