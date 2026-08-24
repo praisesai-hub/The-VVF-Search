@@ -16,7 +16,9 @@ object RoomDatabaseEncryptionMigration {
         requirePlaintextDatabase(databaseFile)
 
         val temporaryFile = File(databaseFile.parentFile, "$databaseName.encrypted.tmp")
+        val backupFile = File(databaseFile.parentFile, "$databaseName.plaintext.backup")
         SQLiteDatabase.deleteDatabase(temporaryFile)
+        SQLiteDatabase.deleteDatabase(backupFile)
 
         val plaintextDatabase = SQLiteDatabase.openDatabase(
             databaseFile.absolutePath,
@@ -58,14 +60,33 @@ object RoomDatabaseEncryptionMigration {
                 encryptedDatabase.close()
             }
 
-            check(databaseFile.delete()) { "Unable to remove legacy plaintext Room database" }
-            check(temporaryFile.renameTo(databaseFile)) {
-                "Unable to replace Room database with encrypted database"
+            deleteSidecars(databaseFile)
+            check(databaseFile.renameTo(backupFile)) { "Unable to stage legacy plaintext Room database" }
+            try {
+                check(temporaryFile.renameTo(databaseFile)) {
+                    "Unable to install encrypted Room database"
+                }
+                deleteSidecars(backupFile)
+                check(backupFile.delete()) { "Unable to remove legacy plaintext Room database" }
+            } catch (error: Throwable) {
+                databaseFile.delete()
+                check(backupFile.renameTo(databaseFile)) {
+                    "Unable to restore legacy Room database after encryption failure"
+                }
+                throw error
             }
         } catch (error: Throwable) {
             SQLiteDatabase.deleteDatabase(temporaryFile)
             throw IllegalStateException("Failed to encrypt the existing Room database", error)
+        } finally {
+            SQLiteDatabase.deleteDatabase(temporaryFile)
+            SQLiteDatabase.deleteDatabase(backupFile)
         }
+    }
+
+    private fun deleteSidecars(databaseFile: File) {
+        File(databaseFile.path + "-wal").delete()
+        File(databaseFile.path + "-shm").delete()
     }
 
     private fun isAlreadyEncrypted(databaseFile: File, key: ByteArray): Boolean = runCatching {
