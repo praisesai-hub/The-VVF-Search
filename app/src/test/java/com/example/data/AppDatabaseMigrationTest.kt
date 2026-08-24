@@ -367,7 +367,7 @@ class AppDatabaseMigrationTest {
         val cursor = db.query("SELECT documentCandidateFingerprint, visualSimilarityHash FROM files WHERE id = 801")
         assertTrue(cursor.moveToFirst())
         assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
-        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
+        assertEquals("legacy-candidate", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
         cursor.close()
         db.close()
     }
@@ -384,8 +384,9 @@ class AppDatabaseMigrationTest {
         val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
         val db = helper.writableDatabase
         db.execSQL("CREATE TABLE files (id INTEGER PRIMARY KEY NOT NULL, category TEXT NOT NULL, documentCandidateFingerprint TEXT NOT NULL DEFAULT '', visualSimilarityHash TEXT NOT NULL DEFAULT '')")
-        db.execSQL("INSERT INTO files (id, category, documentCandidateFingerprint, visualSimilarityHash) VALUES (851, 'DOCUMENTS', 'copied-image-hash', '')")
+        db.execSQL("INSERT INTO files (id, category, documentCandidateFingerprint, visualSimilarityHash) VALUES (851, 'DOCUMENTS', 'copied-image-hash', 'copied-image-hash')")
         db.execSQL("INSERT INTO files (id, category, documentCandidateFingerprint, visualSimilarityHash) VALUES (852, 'IMAGES', 'image-document-value', 'real-image-hash')")
+        db.execSQL("INSERT INTO files (id, category, documentCandidateFingerprint, visualSimilarityHash) VALUES (853, 'DOCUMENTS', 'independent-document-value', 'real-image-hash')")
 
         AppDatabase.MIGRATION_10_11.migrate(db)
 
@@ -393,10 +394,14 @@ class AppDatabaseMigrationTest {
         assertTrue(cursor.moveToFirst())
         assertEquals(851L, cursor.getLong(cursor.getColumnIndexOrThrow("id")))
         assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
-        assertEquals("", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
+        assertEquals("copied-image-hash", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
         assertTrue(cursor.moveToNext())
         assertEquals(852L, cursor.getLong(cursor.getColumnIndexOrThrow("id")))
         assertEquals("image-document-value", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
+        assertEquals("real-image-hash", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
+        assertTrue(cursor.moveToNext())
+        assertEquals(853L, cursor.getLong(cursor.getColumnIndexOrThrow("id")))
+        assertEquals("independent-document-value", cursor.getString(cursor.getColumnIndexOrThrow("documentCandidateFingerprint")))
         assertEquals("real-image-hash", cursor.getString(cursor.getColumnIndexOrThrow("visualSimilarityHash")))
         cursor.close()
         db.close()

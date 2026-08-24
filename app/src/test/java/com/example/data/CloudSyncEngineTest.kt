@@ -1,14 +1,7 @@
 package com.example.data
 
-import android.content.ContentProvider
-import android.content.ContentValues
 import android.content.Context
-import android.content.ContextWrapper
-import android.content.pm.ProviderInfo
-import android.database.Cursor
 import android.net.Uri
-import android.os.ParcelFileDescriptor
-import android.test.mock.MockContentResolver
 import io.mockk.coEvery
 import java.io.File
 import java.net.UnknownHostException
@@ -26,28 +19,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
-
-private class TestContentProvider(private val sourceFile: File) : ContentProvider() {
-    override fun onCreate(): Boolean = true
-    override fun query(
-        uri: Uri,
-        projection: Array<out String>?,
-        selection: String?,
-        selectionArgs: Array<out String>?,
-        sortOrder: String?,
-    ): Cursor? = null
-    override fun getType(uri: Uri): String = "application/octet-stream"
-    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
-    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
-    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
-    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor =
-        ParcelFileDescriptor.open(sourceFile, ParcelFileDescriptor.MODE_READ_ONLY)
-}
 
 private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     override val providerId: String = "TEST_PROVIDER"
     var uploadedFile: File? = null
+    var uploadedLength: Long? = null
     var uploadedRemotePath: String? = null
     var uploadedOperationId: String? = null
     var result: CloudSyncResult = CloudSyncResult.Success()
@@ -55,6 +33,7 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
 
     override suspend fun uploadFile(file: File, remotePath: String): CloudSyncResult {
         uploadedFile = file
+        uploadedLength = file.length()
         uploadedRemotePath = remotePath
         exceptionToThrow?.let { throw it }
         return result
@@ -151,14 +130,10 @@ class CloudSyncEngineTest {
             it.writeText("content URI payload")
             temporaryFiles += it
         }
-        val resolver = MockContentResolver()
-        val resolverContext = object : ContextWrapper(context) {
-            override fun getContentResolver() = resolver
-        }
-        val authority = "vvf.test.content"
-        val provider = TestContentProvider(source)
-        provider.attachInfo(resolverContext, ProviderInfo().apply { this.authority = authority })
-        resolver.addProvider(authority, provider)
+        val resolverContext = context
+        val contentUri = Uri.parse("content://vvf.test.content/item-42")
+        Shadows.shadowOf(resolverContext.contentResolver)
+            .registerInputStream(contentUri, source.inputStream())
 
         val adapter = RecordingCloudProviderAdapter()
         val engine = CloudSyncEngine(resolverContext, FakeFileDaoForCloudSyncEngine(), authManager, adapter)
@@ -167,14 +142,14 @@ class CloudSyncEngineTest {
                 id = 42L,
                 provider = "DROPBOX",
                 fileName = "remote-content.txt",
-                filePath = "content://$authority/item-42",
+                filePath = contentUri.toString(),
                 fileSize = source.length(),
                 status = "PENDING",
             ),
         )
 
         assertTrue(result is CloudSyncResult.Success)
-        assertEquals(source.length(), adapter.uploadedFile?.length())
+        assertEquals(source.length(), adapter.uploadedLength)
         assertTrue(adapter.uploadedFile?.path?.startsWith(resolverContext.cacheDir.path) == true)
         assertFalse(adapter.uploadedFile?.exists() == true)
     }

@@ -1,0 +1,639 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 11,
+    "identityHash": "05de1e607511752c35fcbfbc5cfb99eb",
+    "entities": [
+      {
+        "tableName": "files",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `path` TEXT NOT NULL, `originalPath` TEXT NOT NULL, `category` TEXT NOT NULL, `sizeBytes` INTEGER NOT NULL, `dateModifiedMs` INTEGER NOT NULL, `md5Hash` TEXT NOT NULL, `ocrText` TEXT NOT NULL, `tags` TEXT NOT NULL, `isVault` INTEGER NOT NULL, `isRecycleBin` INTEGER NOT NULL, `deletedTimestampMs` INTEGER NOT NULL, `visualSimilarityHash` TEXT NOT NULL, `semanticEmbeddingVersion` INTEGER NOT NULL, `semanticIndexed` INTEGER NOT NULL, `semanticEmbeddingString` TEXT NOT NULL, `videoFingerprintVersion` INTEGER NOT NULL, `videoSampleHashes` TEXT NOT NULL, `videoDurationMs` INTEGER NOT NULL, `videoWidth` INTEGER NOT NULL, `videoHeight` INTEGER NOT NULL, `videoAudioSignature` TEXT NOT NULL, `videoChunkHash` TEXT NOT NULL, `documentCandidateFingerprint` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "path",
+            "columnName": "path",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originalPath",
+            "columnName": "originalPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateModifiedMs",
+            "columnName": "dateModifiedMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "md5Hash",
+            "columnName": "md5Hash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ocrText",
+            "columnName": "ocrText",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isVault",
+            "columnName": "isVault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRecycleBin",
+            "columnName": "isRecycleBin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedTimestampMs",
+            "columnName": "deletedTimestampMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "visualSimilarityHash",
+            "columnName": "visualSimilarityHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "semanticEmbeddingVersion",
+            "columnName": "semanticEmbeddingVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "semanticIndexed",
+            "columnName": "semanticIndexed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "semanticEmbeddingString",
+            "columnName": "semanticEmbeddingString",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoFingerprintVersion",
+            "columnName": "videoFingerprintVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoSampleHashes",
+            "columnName": "videoSampleHashes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoDurationMs",
+            "columnName": "videoDurationMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoWidth",
+            "columnName": "videoWidth",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoHeight",
+            "columnName": "videoHeight",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoAudioSignature",
+            "columnName": "videoAudioSignature",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoChunkHash",
+            "columnName": "videoChunkHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "documentCandidateFingerprint",
+            "columnName": "documentCandidateFingerprint",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_files_path",
+            "unique": true,
+            "columnNames": [
+              "path"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_files_path` ON `${TABLE_NAME}` (`path`)"
+          },
+          {
+            "name": "index_files_category",
+            "unique": false,
+            "columnNames": [
+              "category"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_files_category` ON `${TABLE_NAME}` (`category`)"
+          },
+          {
+            "name": "index_files_md5Hash",
+            "unique": false,
+            "columnNames": [
+              "md5Hash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_files_md5Hash` ON `${TABLE_NAME}` (`md5Hash`)"
+          },
+          {
+            "name": "index_files_isVault",
+            "unique": false,
+            "columnNames": [
+              "isVault"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_files_isVault` ON `${TABLE_NAME}` (`isVault`)"
+          },
+          {
+            "name": "index_files_isRecycleBin",
+            "unique": false,
+            "columnNames": [
+              "isRecycleBin"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_files_isRecycleBin` ON `${TABLE_NAME}` (`isRecycleBin`)"
+          },
+          {
+            "name": "index_files_name",
+            "unique": false,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_files_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_files_tags",
+            "unique": false,
+            "columnNames": [
+              "tags"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_files_tags` ON `${TABLE_NAME}` (`tags`)"
+          },
+          {
+            "name": "index_files_ocrText",
+            "unique": false,
+            "columnNames": [
+              "ocrText"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_files_ocrText` ON `${TABLE_NAME}` (`ocrText`)"
+          }
+        ]
+      },
+      {
+        "tableName": "vault_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `originalName` TEXT NOT NULL, `encryptedName` TEXT NOT NULL, `encryptedFilePath` TEXT NOT NULL, `ivBase64` TEXT NOT NULL, `category` TEXT NOT NULL, `sizeBytes` INTEGER NOT NULL, `encryptedAtMs` INTEGER NOT NULL, `isBiometricProtected` INTEGER NOT NULL, `vaultFormatVersion` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originalName",
+            "columnName": "originalName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encryptedName",
+            "columnName": "encryptedName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encryptedFilePath",
+            "columnName": "encryptedFilePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ivBase64",
+            "columnName": "ivBase64",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "encryptedAtMs",
+            "columnName": "encryptedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isBiometricProtected",
+            "columnName": "isBiometricProtected",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vaultFormatVersion",
+            "columnName": "vaultFormatVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "cloud_sync",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `provider` TEXT NOT NULL, `fileName` TEXT NOT NULL, `filePath` TEXT NOT NULL, `fileSize` INTEGER NOT NULL, `status` TEXT NOT NULL, `lastSyncedMs` INTEGER NOT NULL, `isCore` INTEGER NOT NULL, `operationId` TEXT NOT NULL, `leaseOwner` TEXT, `leaseExpiresAtMs` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL, `startedAtMs` INTEGER NOT NULL, `heartbeatAtMs` INTEGER NOT NULL, `completedAtMs` INTEGER NOT NULL, `lastErrorCode` TEXT, `remoteFileId` TEXT NOT NULL, `resumableSessionUri` TEXT NOT NULL, `resumableBytesCommitted` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileName",
+            "columnName": "fileName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filePath",
+            "columnName": "filePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileSize",
+            "columnName": "fileSize",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSyncedMs",
+            "columnName": "lastSyncedMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCore",
+            "columnName": "isCore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "leaseOwner",
+            "columnName": "leaseOwner",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "leaseExpiresAtMs",
+            "columnName": "leaseExpiresAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtMs",
+            "columnName": "startedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "heartbeatAtMs",
+            "columnName": "heartbeatAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAtMs",
+            "columnName": "completedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "remoteFileId",
+            "columnName": "remoteFileId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resumableSessionUri",
+            "columnName": "resumableSessionUri",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resumableBytesCommitted",
+            "columnName": "resumableBytesCommitted",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_cloud_sync_operationId",
+            "unique": true,
+            "columnNames": [
+              "operationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_cloud_sync_operationId` ON `${TABLE_NAME}` (`operationId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "plugins",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pluginId` TEXT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `description` TEXT NOT NULL, `isEnabled` INTEGER NOT NULL, `isCore` INTEGER NOT NULL, PRIMARY KEY(`pluginId`))",
+        "fields": [
+          {
+            "fieldPath": "pluginId",
+            "columnName": "pluginId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isEnabled",
+            "columnName": "isEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCore",
+            "columnName": "isCore",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "pluginId"
+          ]
+        }
+      },
+      {
+        "tableName": "work_operations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operationId` TEXT NOT NULL, `workName` TEXT NOT NULL, `status` TEXT NOT NULL, `leaseOwner` TEXT, `leaseExpiresAtMs` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL, `startedAtMs` INTEGER NOT NULL, `heartbeatAtMs` INTEGER NOT NULL, `completedAtMs` INTEGER NOT NULL, `lastErrorCode` TEXT, PRIMARY KEY(`operationId`))",
+        "fields": [
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workName",
+            "columnName": "workName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "leaseOwner",
+            "columnName": "leaseOwner",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "leaseExpiresAtMs",
+            "columnName": "leaseExpiresAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtMs",
+            "columnName": "startedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "heartbeatAtMs",
+            "columnName": "heartbeatAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAtMs",
+            "columnName": "completedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "operationId"
+          ]
+        }
+      },
+      {
+        "tableName": "file_operations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operationId` TEXT NOT NULL, `operationType` TEXT NOT NULL, `fileId` INTEGER NOT NULL, `sourcePath` TEXT NOT NULL, `targetPath` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAtMs` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, `lastErrorCode` TEXT, PRIMARY KEY(`operationId`))",
+        "fields": [
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationType",
+            "columnName": "operationType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileId",
+            "columnName": "fileId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourcePath",
+            "columnName": "sourcePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetPath",
+            "columnName": "targetPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "createdAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtMs",
+            "columnName": "updatedAtMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "operationId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '05de1e607511752c35fcbfbc5cfb99eb')"
+    ]
+  }
+}
