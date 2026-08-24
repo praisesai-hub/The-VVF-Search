@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.security.RoomDatabaseEncryptionMigration
+import com.example.security.RoomDatabaseKeyManager
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 private const val LEGACY_VAULT_FORMAT_VERSION = 1
 private const val DATABASE_VERSION_BEFORE_VAULT_FORMAT = 4
@@ -15,6 +18,7 @@ private const val DATABASE_VERSION_WITH_VIDEO_EVIDENCE = 7
 private const val DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT = 8
 private const val DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE = 9
 private const val DATABASE_VERSION_WITH_FILE_OPERATIONS = 10
+private const val DATABASE_NAME = "vvf_smart_manager_db"
 
 @Database(
     entities = [
@@ -42,27 +46,27 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS `vault_items` (
-                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
-                        `originalName` TEXT NOT NULL, 
-                        `encryptedName` TEXT NOT NULL, 
-                        `encryptedFilePath` TEXT NOT NULL, 
-                        `ivBase64` TEXT NOT NULL, 
-                        `category` TEXT NOT NULL, 
-                        `sizeBytes` INTEGER NOT NULL, 
-                        `encryptedAtMs` INTEGER NOT NULL, 
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `originalName` TEXT NOT NULL,
+                        `encryptedName` TEXT NOT NULL,
+                        `encryptedFilePath` TEXT NOT NULL,
+                        `ivBase64` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `sizeBytes` INTEGER NOT NULL,
+                        `encryptedAtMs` INTEGER NOT NULL,
                         `isBiometricProtected` INTEGER NOT NULL
                     )
                 """.trimIndent())
 
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS `cloud_sync` (
-                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
-                        `provider` TEXT NOT NULL, 
-                        `fileName` TEXT NOT NULL, 
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `provider` TEXT NOT NULL,
+                        `fileName` TEXT NOT NULL,
                         `filePath` TEXT NOT NULL DEFAULT '',
-                        `fileSize` INTEGER NOT NULL, 
-                        `status` TEXT NOT NULL, 
-                        `lastSyncedMs` INTEGER NOT NULL, 
+                        `fileSize` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `lastSyncedMs` INTEGER NOT NULL,
                         `isCore` INTEGER NOT NULL
                     )
                 """.trimIndent())
@@ -73,11 +77,11 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS `plugins` (
-                        `pluginId` TEXT NOT NULL PRIMARY KEY, 
-                        `name` TEXT NOT NULL, 
-                        `category` TEXT NOT NULL, 
-                        `description` TEXT NOT NULL, 
-                        `isEnabled` INTEGER NOT NULL, 
+                        `pluginId` TEXT NOT NULL PRIMARY KEY,
+                        `name` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `isEnabled` INTEGER NOT NULL,
                         `isCore` INTEGER NOT NULL
                     )
                 """.trimIndent())
@@ -86,7 +90,6 @@ abstract class AppDatabase : RoomDatabase() {
                 addColumnIfNotExists(db, "files", "semanticEmbeddingVersion", "INTEGER NOT NULL DEFAULT 0")
                 addColumnIfNotExists(db, "files", "semanticIndexed", "INTEGER NOT NULL DEFAULT 0")
                 addColumnIfNotExists(db, "files", "semanticEmbeddingString", "TEXT NOT NULL DEFAULT ''")
-
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_files_name` ON `files` (`name`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_files_tags` ON `files` (`tags`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_files_ocrText` ON `files` (`ocrText`)")
@@ -99,10 +102,7 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_5_6 = object : Migration(
-            DATABASE_VERSION_WITH_VAULT_FORMAT,
-            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY
-        ) {
+        val MIGRATION_5_6 = object : Migration(DATABASE_VERSION_WITH_VAULT_FORMAT, DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "cloud_sync", "operationId", "TEXT NOT NULL DEFAULT ''")
                 addColumnIfNotExists(db, "cloud_sync", "leaseOwner", "TEXT")
@@ -132,10 +132,7 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_6_7 = object : Migration(
-            DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY,
-            DATABASE_VERSION_WITH_VIDEO_EVIDENCE
-        ) {
+        val MIGRATION_6_7 = object : Migration(DATABASE_VERSION_WITH_CLOUD_IDEMPOTENCY, DATABASE_VERSION_WITH_VIDEO_EVIDENCE) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "files", "videoFingerprintVersion", "INTEGER NOT NULL DEFAULT 0")
                 addColumnIfNotExists(db, "files", "videoSampleHashes", "TEXT NOT NULL DEFAULT ''")
@@ -147,20 +144,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_7_8 = object : Migration(
-            DATABASE_VERSION_WITH_VIDEO_EVIDENCE,
-            DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT
-        ) {
+        val MIGRATION_7_8 = object : Migration(DATABASE_VERSION_WITH_VIDEO_EVIDENCE, DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "files", "documentCandidateFingerprint", "TEXT NOT NULL DEFAULT ''")
                 db.execSQL("UPDATE files SET documentCandidateFingerprint = visualSimilarityHash WHERE category = 'DOCUMENTS' AND documentCandidateFingerprint = '' AND visualSimilarityHash IS NOT NULL AND visualSimilarityHash <> ''")
             }
         }
 
-        val MIGRATION_8_9 = object : Migration(
-            DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT,
-            DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE
-        ) {
+        val MIGRATION_8_9 = object : Migration(DATABASE_VERSION_WITH_DOCUMENT_CANDIDATE_FINGERPRINT, DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "cloud_sync", "remoteFileId", "TEXT NOT NULL DEFAULT ''")
                 addColumnIfNotExists(db, "cloud_sync", "resumableSessionUri", "TEXT NOT NULL DEFAULT ''")
@@ -168,10 +159,7 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_9_10 = object : Migration(
-            DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE,
-            DATABASE_VERSION_WITH_FILE_OPERATIONS
-        ) {
+        val MIGRATION_9_10 = object : Migration(DATABASE_VERSION_WITH_CLOUD_TRANSFER_STATE, DATABASE_VERSION_WITH_FILE_OPERATIONS) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS `file_operations` (
@@ -190,17 +178,9 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_4_5 = object : Migration(
-            DATABASE_VERSION_BEFORE_VAULT_FORMAT,
-            DATABASE_VERSION_WITH_VAULT_FORMAT
-        ) {
+        val MIGRATION_4_5 = object : Migration(DATABASE_VERSION_BEFORE_VAULT_FORMAT, DATABASE_VERSION_WITH_VAULT_FORMAT) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                addColumnIfNotExists(
-                    db,
-                    "vault_items",
-                    "vaultFormatVersion",
-                    "INTEGER NOT NULL DEFAULT $LEGACY_VAULT_FORMAT_VERSION"
-                )
+                addColumnIfNotExists(db, "vault_items", "vaultFormatVersion", "INTEGER NOT NULL DEFAULT $LEGACY_VAULT_FORMAT_VERSION")
             }
         }
 
@@ -215,12 +195,9 @@ abstract class AppDatabase : RoomDatabase() {
             try {
                 while (cursor.moveToNext()) {
                     val nameIndex = cursor.getColumnIndex("name")
-                    if (nameIndex != -1) {
-                        val name = cursor.getString(nameIndex)
-                        if (name.equals(columnName, ignoreCase = true)) {
-                            exists = true
-                            break
-                        }
+                    if (nameIndex != -1 && cursor.getString(nameIndex).equals(columnName, ignoreCase = true)) {
+                        exists = true
+                        break
                     }
                 }
             } finally {
@@ -233,19 +210,30 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val builder = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "vvf_smart_manager_db"
-                )
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
-
-                val instance = builder.build()
-                INSTANCE = instance
-                instance
+                INSTANCE ?: run {
+                    val appContext = context.applicationContext
+                    System.loadLibrary("sqlcipher")
+                    val databaseKey = RoomDatabaseKeyManager(appContext).getOrCreateKey()
+                    RoomDatabaseEncryptionMigration.migrateIfNeeded(appContext, DATABASE_NAME, databaseKey)
+                    val factory = SupportOpenHelperFactory(databaseKey)
+                    Room.databaseBuilder(appContext, AppDatabase::class.java, DATABASE_NAME)
+                        .openHelperFactory(factory)
+                        .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                        .addMigrations(
+                            MIGRATION_1_2,
+                            MIGRATION_2_3,
+                            MIGRATION_3_4,
+                            MIGRATION_4_5,
+                            MIGRATION_5_6,
+                            MIGRATION_6_7,
+                            MIGRATION_7_8,
+                            MIGRATION_8_9,
+                            MIGRATION_9_10
+                        )
+                        .build()
+                        .also { INSTANCE = it }
+                }
             }
         }
     }
 }
-
