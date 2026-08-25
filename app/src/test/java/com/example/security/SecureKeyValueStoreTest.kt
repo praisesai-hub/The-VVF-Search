@@ -4,6 +4,9 @@ import android.content.Context
 import io.mockk.mockk
 import java.io.File
 import java.nio.file.Files
+import java.security.GeneralSecurityException
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -130,6 +133,140 @@ class SecureKeyValueStoreTest {
             )
         )
     }
+
+    @Test
+    fun `write rejects oversized entries and invalid encrypted bounds`() {
+        val store = store()
+        val tooMany = buildMap {
+            repeat(33) { put("key-$it", "value") }
+        }
+        assertThrows(IllegalArgumentException::class.java) { store.commit(tooMany) }
+        assertThrows(IllegalArgumentException::class.java) {
+            store.commit(mapOf("large" to "x".repeat(16_385)))
+        }
+
+        val invalidCrypto = object : SecureStoreCrypto {
+            override fun encrypt(plaintext: ByteArray): EncryptedPayload =
+                EncryptedPayload(ByteArray(16), ByteArray(1))
+
+            override fun decrypt(payload: EncryptedPayload): ByteArray = byteArrayOf()
+        }
+        val invalidStore = SecureKeyValueStore(context, FILE_NAME, "unused", directory, invalidCrypto)
+        assertThrows(IllegalStateException::class.java) {
+            invalidStore.commit(mapOf("key" to "value"))
+        }
+    }
+
+    @Test
+    fun `malformed plaintext payloads fail closed`() {
+        val writer = store()
+        writer.commit(mapOf("key" to "value"))
+        val malformedPayloads = listOf(
+            plainPayload(magic = 0, count = 0),
+            plainPayload(version = 2, count = 0),
+            plainPayload(count = 33),
+            plainPayload(count = 2, entries = listOf("same" to "one", "same" to "two")),
+        )
+
+        malformedPayloads.forEach { malformed ->
+            val failing = SecureKeyValueStore(
+                context,
+                FILE_NAME,
+                "unused",
+                directory,
+                object : SecureStoreCrypto {
+                    override fun encrypt(plaintext: ByteArray): EncryptedPayload =
+                        EncryptedPayload(ByteArray(16), ByteArray(12))
+
+                    override fun decrypt(payload: EncryptedPayload): ByteArray = malformed
+                },
+            )
+            assertThrows(IllegalStateException::class.java) { failing.getString("key") }
+        }
+    }
+
+    @Test
+    fun `invalid outer envelope sizes fail closed`() {
+        val file = File(directory, FILE_NAME)
+        file.writeBytes(
+            envelopeBytes(
+                ivSize = 0,
+                ciphertextSize = 16,
+            ),
+        )
+
+        assertThrows(IllegalStateException::class.java) { store().getString("key") }
+    }
+
+    @Test
+    fun `crypto write failure is wrapped and temporary file is removed`() {
+        val failing = SecureKeyValueStore(
+            context,
+            FILE_NAME,
+            "unused",
+            directory,
+            object : SecureStoreCrypto {
+                override fun encrypt(plaintext: ByteArray): EncryptedPayload =
+                    throw GeneralSecurityException("encryption failed")
+
+                override fun decrypt(payload: EncryptedPayload): ByteArray = byteArrayOf()
+            },
+        )
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            failing.commit(mapOf("key" to "value"))
+        }
+
+        assertTrue(error.message!!.contains("durably write"))
+        assertFalse(File(directory, "$FILE_NAME.tmp").exists())
+    }
+
+    @Test
+    fun `filesystem write failure is wrapped`() {
+        val blocker = Files.createTempFile("vvf-secure-store-blocker-", ".tmp").toFile()
+        try {
+            val failing = SecureKeyValueStore(context, FILE_NAME, "unused", blocker, crypto)
+
+            val error = assertThrows(IllegalStateException::class.java) {
+                failing.commit(mapOf("key" to "value"))
+            }
+
+            assertTrue(error.message!!.contains("durably write"))
+        } finally {
+            blocker.delete()
+        }
+    }
+
+    private fun plainPayload(
+        magic: Int = 0x56564650,
+        version: Int = 1,
+        count: Int,
+        entries: List<Pair<String, String>> = emptyList(),
+    ): ByteArray = ByteArrayOutputStream().use { bytes ->
+        DataOutputStream(bytes).use { output ->
+            output.writeInt(magic)
+            output.writeInt(version)
+            output.writeInt(count)
+            entries.forEach { (key, value) ->
+                output.writeUTF(key)
+                output.writeUTF(value)
+            }
+        }
+        bytes.toByteArray()
+    }
+
+    private fun envelopeBytes(ivSize: Int, ciphertextSize: Int): ByteArray =
+        ByteArrayOutputStream().use { bytes ->
+            DataOutputStream(bytes).use { output ->
+                output.writeInt(0x56564645)
+                output.writeInt(1)
+                output.writeInt(ivSize)
+                output.write(ByteArray(maxOf(ivSize, 0)))
+                output.writeInt(ciphertextSize)
+                output.write(ByteArray(maxOf(ciphertextSize, 0)))
+            }
+            bytes.toByteArray()
+        }
 
     private fun store(): SecureKeyValueStore = SecureKeyValueStore(
         context = context,
