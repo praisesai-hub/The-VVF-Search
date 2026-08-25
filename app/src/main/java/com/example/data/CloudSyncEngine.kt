@@ -1,7 +1,6 @@
 package com.example.data
 
 import android.content.Context
-import android.util.Log
 import com.example.context.cloud.CloudProviderRegistry
 import com.example.context.drive.DriveAuthorizationPort
 import com.example.domain.error.DomainErrorMapper
@@ -62,7 +61,6 @@ class CloudSyncEngine(
                 )
             }
 
-        Log.i(TAG, "Starting sync for item ${item.id} (${item.fileName}) with provider ${item.provider}...")
         return try {
             adapter.uploadFile(
                 file = file,
