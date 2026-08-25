@@ -113,17 +113,18 @@ jobs:
       run: ./gradlew :app:createDebugUnitTestCoverageReport
     - name: Test JVM coverage policy checker
       run: python3 -m unittest scripts/test_check_coverage_floor.py
-    - name: Enforce JVM Unit Test Coverage Policy
-      run: |
-        python3 scripts/check_coverage_floor.py \
-          --report app/build/reports/coverage/test/debug/report.xml \
-          --policy scripts/coverage-policy.json
     - name: Upload JVM Unit Test Coverage Report
+      if: always()
       uses: actions/upload-artifact@v7
       with:
         name: jvm-unit-test-coverage
         path: app/build/reports/coverage/test/debug
         if-no-files-found: error
+    - name: Enforce JVM Unit Test Coverage Policy
+      run: |
+        python3 scripts/check_coverage_floor.py \
+          --report app/build/reports/coverage/test/debug/report.xml \
+          --policy scripts/coverage-policy.json
     - name: Run Lint
       run: ./gradlew :app:lintDebug
     - name: Run Detekt
@@ -211,11 +212,6 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
           script: |
             ./gradlew :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
-      - name: Enforce Instrumented Android Coverage Policy
-        run: |
-          python3 scripts/check_coverage_floor.py \
-            --report app/build/reports/coverage/androidTest/debug/connected/report.xml \
-            --policy scripts/instrumented-coverage-policy.json
       - name: Upload Android Test Reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -232,3 +228,8 @@ jobs:
           name: android-test-coverage
           path: app/build/reports/coverage/androidTest/debug/connected
           if-no-files-found: warn
+      - name: Enforce Instrumented Android Coverage Policy
+        run: |
+          python3 scripts/check_coverage_floor.py \
+            --report app/build/reports/coverage/androidTest/debug/connected/report.xml \
+            --policy scripts/instrumented-coverage-policy.json
