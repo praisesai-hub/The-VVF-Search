@@ -92,11 +92,15 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
                         context.filesDir,
                         context.cacheDir,
                     )
+                val processedDirectories = mutableSetOf<String>()
                 for (appDir in appDirs) {
                     if (appDir.exists() && appDir.canRead()) {
                         scanDirectoryRecursively(
                             appDir,
+                            appDir.absoluteFile.path,
+                            appDir.canonicalFile.path,
                             processedPaths,
+                            processedDirectories,
                             0,
                             Int.MAX_VALUE,
                             computeHashes,
@@ -210,7 +214,10 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
     )
     private suspend fun scanDirectoryRecursively(
         dir: File,
+        rootAbsolutePath: String,
+        rootCanonicalPath: String,
         processedPaths: MutableSet<String>,
+        processedDirectories: MutableSet<String>,
         depth: Int,
         maxDepth: Int,
         computeHashes: Boolean,
@@ -220,18 +227,37 @@ class StorageScanner(private val context: Context) : HammingDistanceCalculator {
         // App-private roots are bounded by Android's sandbox. Do not impose an
         // arbitrary depth cap: deep user directory trees must remain searchable.
         if (depth > maxDepth) return
+        val canonicalDir = runCatching { dir.canonicalFile }.getOrNull() ?: return
+        if (!processedDirectories.add(canonicalDir.path)) return
         val files = dir.listFiles() ?: return
         for (file in files) {
             currentCoroutineContext().ensureActive()
             if (processedPaths.size >= MAX_DISCOVERED_FILES) return
             if (file.name.startsWith(".")) continue
             val canonicalFile = runCatching { file.canonicalFile }.getOrNull() ?: continue
+            // Android may expose /data/user/0/<pkg> as a canonical /data/data/<pkg>
+            // path. Accept only that exact relative-path alias for the selected root;
+            // arbitrary symlinks remain excluded for both files and directories.
+            val rawPath = file.absoluteFile.path
+            val relativePath =
+                when {
+                    rawPath == rootAbsolutePath -> ""
+                    rawPath.startsWith(rootAbsolutePath + File.separator) ->
+                        rawPath.removePrefix(rootAbsolutePath + File.separator)
+                    else -> continue
+                }
+            val expectedCanonicalPath =
+                if (relativePath.isEmpty()) rootCanonicalPath
+                else File(rootCanonicalPath, relativePath).path
+            if (canonicalFile.path != expectedCanonicalPath) continue
             if (file.isDirectory) {
-                if (canonicalFile.path != file.absoluteFile.path) continue
                 if (file.name.equals("Android", ignoreCase = true) && depth == 0) continue
                 scanDirectoryRecursively(
                     file,
+                    rootAbsolutePath,
+                    rootCanonicalPath,
                     processedPaths,
+                    processedDirectories,
                     depth + 1,
                     maxDepth,
                     computeHashes,
