@@ -334,7 +334,6 @@ object PhysicalStorageManager {
                 val doc =
                     DocumentFile.fromSingleUri(context, uri)
                         ?: DocumentFile.fromTreeUri(context, uri)
-                if (doc != null && !doc.exists()) return true
                 if (doc?.delete() == true) return true
                 val rows =
                     try {
@@ -347,19 +346,16 @@ object PhysicalStorageManager {
                         0
                     }
                 if (rows > 0) return true
-                val deletionVerified =
-                    try {
-                        if (doc != null) {
-                            !doc.exists()
-                        } else {
-                            // A null descriptor is not proof of deletion: the provider may be
-                            // unavailable. Without a provider-backed existence answer, fail closed.
-                            context.contentResolver.openFileDescriptor(uri, "r")?.use { false } ?: false
-                        }
-                    } catch (_: Exception) {
-                        false
-                    }
-                deletionVerified
+                // A false DocumentFile.exists() or null descriptor is ambiguous: both can mean
+                // that the provider is unavailable. Only a successful provider query returning no
+                // row is a trustworthy absence check after a zero-row delete.
+                try {
+                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        !cursor.moveToFirst()
+                    } ?: false
+                } catch (_: Exception) {
+                    false
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to delete content URI; error=${e::class.simpleName}")
                 false
