@@ -244,6 +244,37 @@ class StorageScannerInstrumentedTest {
     }
 
     @Test
+    fun contentUriDerivedFingerprints_failClosedForMissingOrUnsupportedUris(): Unit = runBlocking {
+        val missing = File(testRoot, "missing-content.bin").toUri()
+        assertEquals("", scanner.computeContentUriHash(missing))
+        assertEquals("", scanner.computeContentUriDocumentCandidateFingerprint(missing))
+        assertEquals(null, scanner.computeContentUriVideoFingerprint(missing))
+    }
+
+    @Test
+    fun videoFingerprint_rejectsMissingAndInvalidMediaWithoutInventingEvidence(): Unit = runBlocking {
+        val missing = File(testRoot, "missing.mp4")
+        val invalid = File(testRoot, "invalid-video.mp4").apply { writeText("not a video") }
+
+        assertEquals(null, scanner.computeVideoFingerprint(missing))
+        assertEquals(null, scanner.computeVideoFingerprint(invalid))
+        assertEquals("", scanner.computeVideoDHash(invalid))
+    }
+
+    @Test
+    fun storagePermissionManager_keepsSafFallbackConsistentWithSettingsIntent() {
+        val hasFullAccess = StoragePermissionManager.hasFullDeviceAccess()
+        assertEquals(!hasFullAccess, StoragePermissionManager.shouldUseSafFallback())
+        val intent = StoragePermissionManager.settingsIntent(context)
+        if (hasFullAccess) {
+            assertEquals(null, intent)
+        } else {
+            assertEquals(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, intent?.action)
+            assertEquals("package:${context.packageName}", intent?.data?.toString())
+        }
+    }
+
+    @Test
     fun fileHashAndQuietDHash_failClosedForMissingOrUnsupportedFiles(): Unit = runBlocking {
         val missing = File(testRoot, "missing.txt")
         assertEquals("", scanner.computeFileHash(missing))
