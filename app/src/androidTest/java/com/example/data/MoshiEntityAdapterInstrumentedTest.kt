@@ -3,6 +3,7 @@ package com.example.data
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -103,6 +104,47 @@ class MoshiEntityAdapterInstrumentedTest {
         assertEquals(vault, roundTrip(vault, VaultItemEntity::class.java))
         assertEquals(cloud, roundTrip(cloud, CloudSyncItemEntity::class.java))
         assertEquals(plugin, roundTrip(plugin, PluginEntity::class.java))
+    }
+
+    @Test
+    fun vaultAndCloudAdapters_applyDefaultsForOptionalFields(): Unit {
+        val vault =
+            moshi.adapter(VaultItemEntity::class.java).fromJson(
+                """
+                {
+                  "id": 4,
+                  "originalName": "secret.txt",
+                  "encryptedName": "ENC_secret.txt.vvf",
+                  "category": "DOCUMENTS",
+                  "sizeBytes": 12
+                }
+                """.trimIndent()
+            )
+        assertNotNull(vault)
+        assertEquals("", vault?.encryptedFilePath)
+        assertEquals("", vault?.ivBase64)
+        assertTrue(vault?.isBiometricProtected == true)
+        assertEquals(1, vault?.vaultFormatVersion)
+
+        val cloud =
+            moshi.adapter(CloudSyncItemEntity::class.java).fromJson(
+                """
+                {
+                  "id": 5,
+                  "provider": "TEST_PROVIDER",
+                  "fileName": "document.txt",
+                  "fileSize": 12,
+                  "status": "PENDING"
+                }
+                """.trimIndent()
+            )
+        assertNotNull(cloud)
+        assertEquals("", cloud?.filePath)
+        assertFalse(cloud?.isCore == true)
+        assertEquals(null, cloud?.leaseOwner)
+        assertEquals(0L, cloud?.leaseExpiresAtMs)
+        assertEquals(0, cloud?.attemptCount)
+        assertEquals("", cloud?.remoteFileId)
     }
 
     @Test

@@ -71,6 +71,18 @@ class CloudSyncEngineInstrumentedTest {
     )
 
     @Test
+    fun cloudTransfer_requiresBuildProvisioningAndExplicitOptIn() {
+        CloudSyncPolicy.setExplicitOptIn(context, false)
+        assertTrue(!CloudSyncPolicy.hasExplicitOptIn(context))
+        assertTrue(!CloudSyncPolicy.canTransfer(context))
+        CloudSyncPolicy.setExplicitOptIn(context, true)
+        assertTrue(CloudSyncPolicy.hasExplicitOptIn(context))
+        assertTrue(!CloudSyncPolicy.isBuildProvisioned())
+        assertTrue(!CloudSyncPolicy.canTransfer(context))
+        CloudSyncPolicy.setExplicitOptIn(context, false)
+    }
+
+    @Test
     fun missingFile_returnsNonRetryableErrorWithoutAdapterCall(): Unit = runBlocking {
         val missing = File(context.cacheDir, "missing-${System.nanoTime()}.txt")
         val adapter = InstrumentedCloudProviderAdapter()
