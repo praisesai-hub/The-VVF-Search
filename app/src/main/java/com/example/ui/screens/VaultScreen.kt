@@ -1,8 +1,8 @@
 package com.example.ui.screens
-import com.example.R
-import com.example.data.MAX_VAULT_PIN_LENGTH
-import com.example.data.MIN_VAULT_PIN_LENGTH
-import androidx.compose.ui.res.stringResource
+
+import android.view.WindowManager
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -41,23 +42,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
-
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
-import androidx.fragment.app.FragmentActivity
-import androidx.biometric.BiometricPrompt
-import androidx.biometric.BiometricManager
-import androidx.core.content.ContextCompat
-import android.view.WindowManager
-import android.widget.Toast
-
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -70,143 +60,210 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
+import com.example.data.MAX_VAULT_PIN_LENGTH
+import com.example.data.MIN_VAULT_PIN_LENGTH
 import com.example.data.VaultItemEntity
 import com.example.ui.MainViewModel
 import com.example.ui.appendPinDigit
 import com.example.ui.changeVaultPin
 import com.example.ui.clearPinDigit
-import com.example.ui.lockVault
+import com.example.ui.hasBiometricEnrollment
 import com.example.ui.isVaultPinSetupRequired
+import com.example.ui.lockVault
+import com.example.ui.onBiometricEnrollmentSuccess
 import com.example.ui.onBiometricError
 import com.example.ui.onBiometricSuccess
-import com.example.ui.onBiometricEnrollmentSuccess
-import com.example.ui.hasBiometricEnrollment
 import com.example.ui.recordVaultActivity
 import com.example.ui.setVaultAutoLockTimeout
-import com.example.ui.vaultAutoLockTimeoutMs
 import com.example.ui.theme.BhagwaOrange
 import com.example.ui.theme.CosmicBlue
 import com.example.ui.theme.EmeraldGreen
 import com.example.ui.theme.SoftGold
-import kotlinx.coroutines.FlowPreview
+import com.example.ui.vaultAutoLockTimeoutMs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 
 private const val ONE_MINUTE_MS = 60_000L
 private const val FIVE_MINUTES_MS = 5 * ONE_MINUTE_MS
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @Composable
+// Legacy vault boundary coordinates authentication, timeout, and recovery UI state.
+@Suppress(
+    "detekt.LongMethod",
+    "detekt.CyclomaticComplexMethod",
+    "detekt.ComplexCondition",
+)
 fun VaultScreen(
     viewModel: MainViewModel,
     isUnlocked: Boolean,
     enteredPin: String,
     pinError: String?,
-    vaultItems: List<VaultItemEntity>
+    vaultItems: List<VaultItemEntity>,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context as? FragmentActivity }
     val executor = remember(context) { ContextCompat.getMainExecutor(context) }
-
+    val biometricAuthUnavailableLabel = stringResource(R.string.biometric_auth_unavailable)
+    val authenticationFailedLabel = stringResource(R.string.authentication_failed)
+    val authenticateStrongLabel = stringResource(R.string.authenticate_strong_biometric)
+    val usePinLabel = stringResource(R.string.use_pin)
     DisposableEffect(activity) {
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
+
+    val isBiometricAvailable =
+        remember(context) {
+            val biometricManager = BiometricManager.from(context)
+            biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+                BiometricManager.BIOMETRIC_SUCCESS
         }
-    }
-    
-    val isBiometricAvailable = remember(context) {
-        val biometricManager = BiometricManager.from(context)
-        biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
-            BiometricManager.BIOMETRIC_SUCCESS
-    }
 
     var biometricEnabled by rememberSaveable { mutableStateOf(true) }
     var biometricKeyReady by rememberSaveable { mutableStateOf(viewModel.hasBiometricEnrollment) }
+    val biometricPromptTitle =
+        stringResource(
+            if (isUnlocked && !biometricKeyReady) R.string.protect_vault_biometrics
+            else R.string.unlock_vault
+        )
 
-    val showBiometricPrompt = remember(
-        activity,
-        executor,
-        viewModel,
-        isBiometricAvailable,
-        biometricEnabled,
-        biometricKeyReady,
-        isUnlocked
-    ) {
-        {
-            if (activity != null && isBiometricAvailable && biometricEnabled) {
-                val enrollment = isUnlocked && !biometricKeyReady
-                val cipher = try {
-                    if (enrollment) viewModel.repository.prepareBiometricEnrollmentCipher()
-                    else if (!isUnlocked && biometricKeyReady) viewModel.repository.prepareBiometricUnlockCipher()
-                    else null
-                } catch (_: Exception) {
-                    null
-                }
-                if (cipher == null) {
-                    viewModel.onBiometricError(context.getString(R.string.biometric_auth_unavailable))
-                } else {
-                    val biometricPrompt = BiometricPrompt(
-                        activity,
-                        executor,
-                        object : BiometricPrompt.AuthenticationCallback() {
-                            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                                super.onAuthenticationError(errorCode, errString)
-                                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
-                                    errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
-                                ) {
-                                    viewModel.onBiometricError(errString.toString())
-                                }
-                            }
-
-                            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                super.onAuthenticationSucceeded(result)
-                                if (enrollment) {
-                                    biometricKeyReady = viewModel.onBiometricEnrollmentSuccess(result)
-                                } else {
-                                    viewModel.onBiometricSuccess(result)
-                                }
-                            }
-
-                            override fun onAuthenticationFailed() {
-                                super.onAuthenticationFailed()
-                                viewModel.onBiometricError(context.getString(R.string.authentication_failed))
-                            }
+    val showBiometricPrompt =
+        remember(
+            activity,
+            executor,
+            viewModel,
+            isBiometricAvailable,
+            biometricEnabled,
+            biometricKeyReady,
+            isUnlocked,
+            biometricAuthUnavailableLabel,
+            authenticationFailedLabel,
+            authenticateStrongLabel,
+            usePinLabel,
+            biometricPromptTitle,
+        ) {
+            {
+                if (activity != null && isBiometricAvailable && biometricEnabled) {
+                    val enrollment = isUnlocked && !biometricKeyReady
+                    val cipher =
+                        try {
+                            if (enrollment) viewModel.repository.prepareBiometricEnrollmentCipher()
+                            else if (!isUnlocked && biometricKeyReady)
+                                viewModel.repository.prepareBiometricUnlockCipher()
+                            else null
+                        } catch (_: Exception) {
+                            null
                         }
-                    )
+                    if (cipher == null) {
+                        viewModel.onBiometricError(
+                            biometricAuthUnavailableLabel
+                        )
+                    } else {
+                        val biometricPrompt =
+                            BiometricPrompt(
+                                activity,
+                                executor,
+                                object : BiometricPrompt.AuthenticationCallback() {
+                                    override fun onAuthenticationError(
+                                        errorCode: Int,
+                                        errString: CharSequence,
+                                    ) {
+                                        super.onAuthenticationError(errorCode, errString)
+                                        if (
+                                            errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                                                errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
+                                        ) {
+                                            viewModel.onBiometricError(errString.toString())
+                                        }
+                                    }
 
-                    val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                        .setTitle(context.getString(if (enrollment) R.string.protect_vault_biometrics else R.string.unlock_vault))
-                        .setSubtitle(context.getString(R.string.authenticate_strong_biometric))
-                        .setNegativeButtonText(context.getString(R.string.use_pin))
-                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                        .build()
+                                    override fun onAuthenticationSucceeded(
+                                        result: BiometricPrompt.AuthenticationResult
+                                    ) {
+                                        super.onAuthenticationSucceeded(result)
+                                        if (enrollment) {
+                                            biometricKeyReady =
+                                                viewModel.onBiometricEnrollmentSuccess(result)
+                                        } else {
+                                            viewModel.onBiometricSuccess(result)
+                                        }
+                                    }
 
-                    biometricPrompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
+                                    override fun onAuthenticationFailed() {
+                                        super.onAuthenticationFailed()
+                                        viewModel.onBiometricError(
+                                            authenticationFailedLabel
+                                        )
+                                    }
+                                },
+                            )
+
+                        val promptInfo =
+                            BiometricPrompt.PromptInfo.Builder()
+                                .setTitle(
+                                    biometricPromptTitle
+                                )
+                                .setSubtitle(
+                                    authenticateStrongLabel
+                                )
+                                .setNegativeButtonText(usePinLabel)
+                                .setAllowedAuthenticators(
+                                    BiometricManager.Authenticators.BIOMETRIC_STRONG
+                                )
+                                .build()
+
+                        biometricPrompt.authenticate(
+                            promptInfo,
+                            BiometricPrompt.CryptoObject(cipher),
+                        )
+                    }
                 }
             }
         }
-    }
 
-    androidx.compose.runtime.LaunchedEffect(isUnlocked, isBiometricAvailable, biometricEnabled, biometricKeyReady) {
-        if (shouldAutoPromptBiometric(isUnlocked, isBiometricAvailable, biometricEnabled, biometricKeyReady)) {
+    androidx.compose.runtime.LaunchedEffect(
+        isUnlocked,
+        isBiometricAvailable,
+        biometricEnabled,
+        biometricKeyReady,
+    ) {
+        if (
+            shouldAutoPromptBiometric(
+                isUnlocked,
+                isBiometricAvailable,
+                biometricEnabled,
+                biometricKeyReady,
+            )
+        ) {
             showBiometricPrompt()
         }
     }
     val autoLockTimeoutMs by viewModel.vaultAutoLockTimeoutMs.collectAsStateWithLifecycle()
-    val autoLockTimer = stringResource(
-        if (autoLockTimeoutMs <= ONE_MINUTE_MS) R.string.one_minute else R.string.five_minutes
-    )
+    val autoLockTimer =
+        stringResource(
+            if (autoLockTimeoutMs <= ONE_MINUTE_MS) R.string.one_minute else R.string.five_minutes
+        )
     var showChangePinDialog by rememberSaveable { mutableStateOf(false) }
     var changePinOld by rememberSaveable { mutableStateOf("") }
     var changePinNew by rememberSaveable { mutableStateOf("") }
     var changePinConfirm by rememberSaveable { mutableStateOf("") }
     var changePinError by rememberSaveable { mutableStateOf<String?>(null) }
+    val pinMismatchLabel = stringResource(R.string.pin_mismatch)
+    val pinExactlyDigitsLabel = stringResource(R.string.pin_exactly_digits)
+    val pinUpdateFailedLabel = stringResource(R.string.pin_update_failed)
     if (showChangePinDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -219,111 +276,303 @@ fun VaultScreen(
             title = { Text(stringResource(R.string.change_master_pin)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = changePinOld, onValueChange = { changePinOld = it }, label = { Text(stringResource(R.string.current_pin)) }, singleLine = true)
-                    OutlinedTextField(value = changePinNew, onValueChange = { changePinNew = it }, label = { Text(stringResource(R.string.new_4_digit_pin)) }, singleLine = true)
-                    OutlinedTextField(value = changePinConfirm, onValueChange = { changePinConfirm = it }, label = { Text(stringResource(R.string.confirm_new_pin)) }, singleLine = true)
-                    if (changePinError != null) Text(text = changePinError!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = changePinOld,
+                        onValueChange = { changePinOld = it },
+                        label = { Text(stringResource(R.string.current_pin)) },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = changePinNew,
+                        onValueChange = { changePinNew = it },
+                        label = { Text(stringResource(R.string.new_4_digit_pin)) },
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = changePinConfirm,
+                        onValueChange = { changePinConfirm = it },
+                        label = { Text(stringResource(R.string.confirm_new_pin)) },
+                        singleLine = true,
+                    )
+                    if (changePinError != null)
+                        Text(
+                            text = changePinError!!,
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (changePinNew != changePinConfirm) changePinError = context.getString(R.string.pin_mismatch)
-                    else if (changePinNew.length < MIN_VAULT_PIN_LENGTH || changePinNew.length > MAX_VAULT_PIN_LENGTH || !changePinNew.any { it.isDigit() } || changePinNew.any { it.isWhitespace() }) changePinError = context.getString(R.string.pin_exactly_digits)
-                    else {
-                        val success = viewModel.changeVaultPin(changePinOld, changePinNew)
-                        if (success) {
-                            showChangePinDialog = false
-                            changePinOld = ""; changePinNew = ""; changePinConfirm = ""; changePinError = null
-                        } else changePinError = context.getString(R.string.pin_update_failed)
-                    }
-                }, colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange)) { Text(stringResource(R.string.change)) }
+                Button(
+                    onClick = {
+                        if (changePinNew != changePinConfirm)
+                            changePinError = pinMismatchLabel
+                        else if (
+                            changePinNew.length < MIN_VAULT_PIN_LENGTH ||
+                                changePinNew.length > MAX_VAULT_PIN_LENGTH ||
+                                !changePinNew.any { it.isDigit() } ||
+                                changePinNew.any { it.isWhitespace() }
+                        )
+                            changePinError = pinExactlyDigitsLabel
+                        else {
+                            val success = viewModel.changeVaultPin(changePinOld, changePinNew)
+                            if (success) {
+                                showChangePinDialog = false
+                                changePinOld = ""
+                                changePinNew = ""
+                                changePinConfirm = ""
+                                changePinError = null
+                            } else changePinError = pinUpdateFailedLabel
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BhagwaOrange),
+                ) {
+                    Text(stringResource(R.string.change))
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showChangePinDialog = false; changePinOld = ""; changePinNew = ""; changePinConfirm = ""; changePinError = null }) { Text(stringResource(R.string.cancel)) }
-            }
+                TextButton(
+                    onClick = {
+                        showChangePinDialog = false
+                        changePinOld = ""
+                        changePinNew = ""
+                        changePinConfirm = ""
+                        changePinError = null
+                    }
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
         )
     }
     if (!isUnlocked) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Box(modifier = Modifier.size(80.dp).clip(CircleShape).background(BhagwaOrange.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                Icon(imageVector = Icons.Default.Lock, contentDescription = stringResource(R.string.vault_locked), tint = BhagwaOrange, modifier = Modifier.size(40.dp))
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Box(
+                modifier =
+                    Modifier.size(80.dp)
+                        .clip(CircleShape)
+                        .background(BhagwaOrange.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = stringResource(R.string.vault_locked),
+                    tint = BhagwaOrange,
+                    modifier = Modifier.size(40.dp),
+                )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = stringResource(R.string.secure_encrypted_vault), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             Text(
-                text = stringResource(if (viewModel.isVaultPinSetupRequired) R.string.create_master_pin else R.string.enter_master_pin),
+                text = stringResource(R.string.secure_encrypted_vault),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text =
+                    stringResource(
+                        if (viewModel.isVaultPinSetupRequired) R.string.create_master_pin
+                        else R.string.enter_master_pin
+                    ),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(24.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                repeat(MIN_VAULT_PIN_LENGTH) { index -> Box(modifier = Modifier.size(18.dp).clip(CircleShape).background(if (index < enteredPin.length) BhagwaOrange else MaterialTheme.colorScheme.surfaceVariant)) }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(MIN_VAULT_PIN_LENGTH) { index ->
+                    Box(
+                        modifier =
+                            Modifier.size(18.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (index < enteredPin.length) BhagwaOrange
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                )
+                    )
+                }
             }
-            if (pinError != null) { Spacer(modifier = Modifier.height(12.dp)); Text(text = pinError, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+            if (pinError != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = pinError,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
             Spacer(modifier = Modifier.height(32.dp))
-            val keypadDigits = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "BIO", "0", "DEL")
-            LazyVerticalGrid(columns = GridCells.Fixed(3), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.width(280.dp)) {
+            val keypadDigits =
+                listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "BIO", "0", "DEL")
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.width(280.dp),
+            ) {
                 items(keypadDigits) { digit ->
                     when (digit) {
-                        "BIO" -> if (isBiometricAvailable && biometricEnabled && biometricKeyReady) {
+                        "BIO" ->
+                            if (isBiometricAvailable && biometricEnabled && biometricKeyReady) {
+                                IconButton(
+                                    onClick = { showBiometricPrompt() },
+                                    modifier =
+                                        Modifier.size(64.dp)
+                                            .clip(CircleShape)
+                                            .background(EmeraldGreen.copy(alpha = 0.15f)),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Fingerprint,
+                                        contentDescription = stringResource(R.string.biometric),
+                                        tint = EmeraldGreen,
+                                    )
+                                }
+                            } else {
+                                Box(modifier = Modifier.size(64.dp))
+                            }
+                        "DEL" ->
                             IconButton(
-                                onClick = { showBiometricPrompt() },
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(EmeraldGreen.copy(alpha = 0.15f))
+                                onClick = { viewModel.clearPinDigit() },
+                                modifier =
+                                    Modifier.size(64.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
                             ) {
                                 Icon(
-                                    Icons.Default.Fingerprint,
-                                    contentDescription = stringResource(R.string.biometric),
-                                    tint = EmeraldGreen
+                                    Icons.AutoMirrored.Filled.Backspace,
+                                    contentDescription = stringResource(R.string.delete),
+                                    tint = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
-                        } else {
-                            Box(modifier = Modifier.size(64.dp))
-                        }
-                        "DEL" -> IconButton(onClick = { viewModel.clearPinDigit() }, modifier = Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) { Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurface) }
-                        else -> Surface(onClick = { viewModel.appendPinDigit(digit) }, modifier = Modifier.size(64.dp).testTag("pin_key_$digit"), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) { Box(contentAlignment = Alignment.Center) { Text(text = digit, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) } }
+                        else ->
+                            Surface(
+                                onClick = { viewModel.appendPinDigit(digit) },
+                                modifier = Modifier.size(64.dp).testTag("pin_key_$digit"),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = digit,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                            }
                     }
                 }
             }
         }
     } else {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .pointerInput(viewModel) {
+            modifier =
+                Modifier.fillMaxSize().padding(16.dp).pointerInput(viewModel) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         viewModel.recordVaultActivity()
                         waitForUpOrCancellation()
                     }
                 },
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                    Box(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(colors = listOf(CosmicBlue, MaterialTheme.colorScheme.surfaceVariant))).padding(16.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors =
+                                            listOf(
+                                                CosmicBlue,
+                                                MaterialTheme.colorScheme.surfaceVariant,
+                                            )
+                                    )
+                                )
+                                .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LockOpen, contentDescription = stringResource(R.string.unlocked), tint = EmeraldGreen); Spacer(modifier = Modifier.width(8.dp)); Text(text = stringResource(R.string.encrypted_vault_unlocked), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White) }
-                                Text(text = stringResource(R.string.aes_cipher_active), fontSize = 12.sp, color = SoftGold)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.LockOpen,
+                                        contentDescription = stringResource(R.string.unlocked),
+                                        tint = EmeraldGreen,
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.encrypted_vault_unlocked),
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                    )
+                                }
+                                Text(
+                                    text = stringResource(R.string.aes_cipher_active),
+                                    fontSize = 12.sp,
+                                    color = SoftGold,
+                                )
                             }
-                            Button(onClick = { viewModel.lockVault() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text(stringResource(R.string.lock_vault)) }
+                            Button(
+                                onClick = { viewModel.lockVault() },
+                                colors =
+                                    ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error
+                                    ),
+                            ) {
+                                Text(stringResource(R.string.lock_vault))
+                            }
                         }
                     }
                 }
             }
             item {
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors =
+                        CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = stringResource(R.string.vault_security_options), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = BhagwaOrange)
+                        Text(
+                            text = stringResource(R.string.vault_security_options),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = BhagwaOrange,
+                        )
                         Spacer(modifier = Modifier.height(12.dp))
                         if (isBiometricAvailable) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Column { Text(text = stringResource(R.string.biometric_unlock), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.use_fingerprint_or_face_id_to_), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.biometric_unlock),
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                    )
+                                    Text(
+                                        text =
+                                            stringResource(R.string.use_fingerprint_or_face_id_to_),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 Switch(
                                     checked = biometricEnabled,
                                     onCheckedChange = {
@@ -333,79 +582,206 @@ fun VaultScreen(
                                             viewModel.repository.disableBiometricEnrollment()
                                         }
                                     },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = BhagwaOrange)
+                                    colors = SwitchDefaults.colors(checkedThumbColor = BhagwaOrange),
                                 )
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                         }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column { Text(text = stringResource(R.string.auto_lock_timer), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.locks_automatically_when_inact), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.auto_lock_timer),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                )
+                                Text(
+                                    text = stringResource(R.string.locks_automatically_when_inact),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                             Text(
                                 text = autoLockTimer,
                                 color = BhagwaOrange,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
-                                modifier = Modifier
-                                    .testTag("vault_auto_lock_timeout")
-                                    .clickable {
+                                modifier =
+                                    Modifier.testTag("vault_auto_lock_timeout").clickable {
                                         viewModel.setVaultAutoLockTimeout(
-                                            if (autoLockTimeoutMs <= ONE_MINUTE_MS) FIVE_MINUTES_MS else ONE_MINUTE_MS
+                                            if (autoLockTimeoutMs <= ONE_MINUTE_MS) FIVE_MINUTES_MS
+                                            else ONE_MINUTE_MS
                                         )
-                                    }
+                                    },
                             )
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column { Text(text = stringResource(R.string.change_master_pin), fontWeight = FontWeight.SemiBold, fontSize = 14.sp); Text(text = stringResource(R.string.update_your_4_digit_security_p), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            OutlinedButton(onClick = { showChangePinDialog = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = BhagwaOrange), modifier = Modifier.testTag("change_pin_button")) { Text(stringResource(R.string.change), fontSize = 12.sp) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.change_master_pin),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                )
+                                Text(
+                                    text = stringResource(R.string.update_your_4_digit_security_p),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { showChangePinDialog = true },
+                                colors =
+                                    ButtonDefaults.outlinedButtonColors(
+                                        contentColor = BhagwaOrange
+                                    ),
+                                modifier = Modifier.testTag("change_pin_button"),
+                            ) {
+                                Text(stringResource(R.string.change), fontSize = 12.sp)
+                            }
                         }
                     }
                 }
             }
             item {
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f))) {
-                    Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(imageVector = Icons.Default.Shield, contentDescription = stringResource(R.string.best_effort_wipe_disclaimer), tint = BhagwaOrange, modifier = Modifier.size(24.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor =
+                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                        ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription =
+                                stringResource(R.string.best_effort_wipe_disclaimer),
+                            tint = BhagwaOrange,
+                            modifier = Modifier.size(24.dp),
+                        )
                         Column {
-                            Text(text = stringResource(R.string.best_effort_source_overwrite), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(
+                                text = stringResource(R.string.best_effort_source_overwrite),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = stringResource(R.string.overwrite_details), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                            Text(
+                                text = stringResource(R.string.overwrite_details),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 16.sp,
+                            )
                         }
                     }
                 }
             }
-            item { Text(text = stringResource(R.string.encrypted_files, vaultItems.size), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) }
+            item {
+                Text(
+                    text = stringResource(R.string.encrypted_files, vaultItems.size),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            }
             if (vaultItems.isEmpty()) {
                 item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(imageVector = Icons.Default.Shield, contentDescription = stringResource(R.string.vault_empty), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp))
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = stringResource(R.string.vault_empty),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(48.dp),
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = stringResource(R.string.no_encrypted_files), textAlign = TextAlign.Center, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = stringResource(R.string.no_encrypted_files),
+                                textAlign = TextAlign.Center,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
             } else {
                 items(vaultItems, key = { it.id }) { item ->
-                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(EmeraldGreen.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(Icons.Default.Security, contentDescription = stringResource(R.string.encrypted), tint = EmeraldGreen) }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier =
+                                        Modifier.size(40.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(EmeraldGreen.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Security,
+                                        contentDescription = stringResource(R.string.encrypted),
+                                        tint = EmeraldGreen,
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
-                                    Text(text = item.originalName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                     Text(
-                                        text = stringResource(
-                                            R.string.format_file_size_category,
-                                            item.encryptedName,
-                                            formatFileSize(item.sizeBytes, stringResource(R.string.unknown_size))
-                                        ),
+                                        text = item.originalName,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                    )
+                                    Text(
+                                        text =
+                                            stringResource(
+                                                R.string.format_file_size_category,
+                                                item.encryptedName,
+                                                formatFileSize(
+                                                    item.sizeBytes,
+                                                    stringResource(R.string.unknown_size),
+                                                ),
+                                            ),
                                         fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
-                            OutlinedButton(onClick = { viewModel.unlockFromVault(item) }) { Text(stringResource(R.string.decrypt), fontSize = 12.sp, color = EmeraldGreen) }
+                            OutlinedButton(onClick = { viewModel.unlockFromVault(item) }) {
+                                Text(
+                                    stringResource(R.string.decrypt),
+                                    fontSize = 12.sp,
+                                    color = EmeraldGreen,
+                                )
+                            }
                         }
                     }
                 }
@@ -418,7 +794,8 @@ private fun shouldAutoPromptBiometric(
     isUnlocked: Boolean,
     isBiometricAvailable: Boolean,
     biometricEnabled: Boolean,
-    biometricKeyReady: Boolean
+    biometricKeyReady: Boolean,
 ): Boolean =
-    isBiometricAvailable && biometricEnabled &&
+    isBiometricAvailable &&
+        biometricEnabled &&
         ((!isUnlocked && biometricKeyReady) || (isUnlocked && !biometricKeyReady))

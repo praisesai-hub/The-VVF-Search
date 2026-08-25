@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VideoDuplicateEvidenceTest {
+    @Suppress("detekt.LongParameterList")
     private fun video(
         id: Long,
         samples: String,

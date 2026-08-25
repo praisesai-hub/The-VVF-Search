@@ -9,9 +9,11 @@ data class VideoFingerprint(
     val audioSignature: String,
     val chunkHash: String
 ) {
-    fun serializedSamples(): String = sampleHashes.filter { it.length == 16 }.joinToString(";")
+    fun serializedSamples(): String =
+        sampleHashes.filter { it.length == SAMPLE_HASH_HEX_LENGTH }.joinToString(";")
 
     companion object {
         const val CURRENT_VERSION = 2
+        private const val SAMPLE_HASH_HEX_LENGTH = 16
     }
 }

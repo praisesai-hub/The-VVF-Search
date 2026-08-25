@@ -78,6 +78,9 @@ android {
     checkReleaseBuilds = true
     abortOnError = true
     lintConfig = file("lint.xml")
+    // AGP 9.3.1's SARIF quick-fix writer crashes on a provider message containing %1$s.
+    // Keep lint checks and abort-on-error active; retain text, XML, and HTML reports instead.
+    sarifReport = false
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17

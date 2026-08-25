@@ -1,17 +1,17 @@
 package com.example.ui
 
-import com.example.R
-import androidx.compose.ui.res.stringResource
+import android.app.Application
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.R
 import com.example.data.*
-import com.example.ui.components.PickableLocalFile
-import com.example.storage.PhysicalStorageManager
 import com.example.domain.error.DiagnosticLogger
 import com.example.domain.error.DomainErrorMapper
+import com.example.storage.PhysicalStorageManager
+import com.example.ui.components.PickableLocalFile
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,17 +23,17 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import androidx.work.WorkManager
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = (application as com.example.VVFApplication).repository
     private val _globalError = MutableStateFlow<String?>(null)
     val globalError: StateFlow<String?> = _globalError.asStateFlow()
-    fun clearGlobalError() { _globalError.value = null }
+
+    fun clearGlobalError() {
+        _globalError.value = null
+    }
+
     private val coroutineExceptionHandler = CoroutineExceptionHandler { _, throwable ->
         val error = DomainErrorMapper.fromThrowable("UI_BACKGROUND_OPERATION", throwable)
         DiagnosticLogger.log("MainViewModel", error)
@@ -42,44 +42,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _selectedTabIndex = MutableStateFlow(0)
     val selectedTabIndex: StateFlow<Int> = _selectedTabIndex.asStateFlow()
-    fun selectTab(index: Int) { _selectedTabIndex.value = index }
+
+    fun selectTab(index: Int) {
+        _selectedTabIndex.value = index
+    }
+
     private val _selectedCategory = MutableStateFlow<FileCategory?>(null)
     val selectedCategory: StateFlow<FileCategory?> = _selectedCategory.asStateFlow()
-    fun selectCategory(category: FileCategory?) { _selectedCategory.value = category }
+
+    fun selectCategory(category: FileCategory?) {
+        _selectedCategory.value = category
+    }
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-    fun setSearchQuery(query: String) { _searchQuery.value = query }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
     val isSemanticSearchAvailable: Boolean = repository.isSemanticSearchAvailable
     private val _semanticQuery = MutableStateFlow("")
     val semanticQuery: StateFlow<String> = _semanticQuery.asStateFlow()
-    fun setSemanticQuery(query: String) { _semanticQuery.value = query }
+
+    fun setSemanticQuery(query: String) {
+        _semanticQuery.value = query
+    }
+
     private val _similarityThreshold = MutableStateFlow(80.0f)
     val similarityThreshold: StateFlow<Float> = _similarityThreshold.asStateFlow()
-    fun setSimilarityThreshold(value: Float) { _similarityThreshold.value = value }
-    private val appPrefs by lazy { getApplication<Application>().getSharedPreferences("vvf_app_settings", android.content.Context.MODE_PRIVATE) }
-    private val _autoCleanDuplicatesBg = MutableStateFlow(appPrefs.getBoolean("auto_clean_duplicates_bg", false))
+
+    fun setSimilarityThreshold(value: Float) {
+        _similarityThreshold.value = value
+    }
+
+    private val appPrefs by lazy {
+        getApplication<Application>()
+            .getSharedPreferences("vvf_app_settings", android.content.Context.MODE_PRIVATE)
+    }
+    private val _autoCleanDuplicatesBg =
+        MutableStateFlow(appPrefs.getBoolean("auto_clean_duplicates_bg", false))
     val autoCleanDuplicatesBg: StateFlow<Boolean> = _autoCleanDuplicatesBg.asStateFlow()
+
     fun setAutoCleanDuplicatesBg(enabled: Boolean) {
         _autoCleanDuplicatesBg.value = enabled
         appPrefs.edit { putBoolean("auto_clean_duplicates_bg", enabled) }
     }
 
-    val files: StateFlow<List<FileItemEntity>> = combine(
-        searchQuery.debounce(250), selectedCategory
-    ) { query, category -> query to category }.flatMapLatest { (query, category) ->
-        repository.searchFiles(query, category?.name)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val files: StateFlow<List<FileItemEntity>> =
+        combine(searchQuery.debounce(250), selectedCategory) { query, category ->
+                query to category
+            }
+            .flatMapLatest { (query, category) -> repository.searchFiles(query, category?.name) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val dashboardStats: StateFlow<List<CategoryStat>> = repository.getCategoryStats()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val duplicateGroups: StateFlow<List<DuplicateGroup>> = repository.getDuplicateGroups()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val plugins: StateFlow<List<PluginEntity>> = repository.getPlugins()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val cloudSyncItems: StateFlow<List<CloudSyncItemEntity>> = repository.getCloudSyncItems()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val vaultItems: StateFlow<List<VaultItemEntity>> = repository.getVaultItems()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val dashboardStats: StateFlow<List<CategoryStat>> =
+        repository
+            .getCategoryStats()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val duplicateGroups: StateFlow<List<DuplicateGroup>> =
+        repository
+            .getDuplicateGroups()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val plugins: StateFlow<List<PluginEntity>> =
+        repository
+            .getPlugins()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val cloudSyncItems: StateFlow<List<CloudSyncItemEntity>> =
+        repository
+            .getCloudSyncItems()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val vaultItems: StateFlow<List<VaultItemEntity>> =
+        repository
+            .getVaultItems()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun unlockFromVault(vaultItem: VaultItemEntity) {
         viewModelScope.launch(coroutineExceptionHandler) {
@@ -87,27 +123,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.unlockFromVault(vaultItem, originalFile)
         }
     }
+
     fun renameFile(file: FileItemEntity, newName: String) {
         viewModelScope.launch(coroutineExceptionHandler) { repository.renameFile(file, newName) }
     }
+
     fun addTagToFile(file: FileItemEntity, tag: String) {
         viewModelScope.launch(coroutineExceptionHandler) { repository.addTagToFile(file, tag) }
     }
+
     fun togglePlugin(pluginId: String, currentEnabled: Boolean) {
-        viewModelScope.launch(coroutineExceptionHandler) { repository.togglePlugin(pluginId, currentEnabled) }
+        viewModelScope.launch(coroutineExceptionHandler) {
+            repository.togglePlugin(pluginId, currentEnabled)
+        }
     }
 
     // Google Auth Foundation: real OAuth integration must call saveSession only after
     // Google's authorization flow returns verified credentials. No local token generation.
-    private val googleAuthManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        com.example.data.GoogleAuthManagerFactory.getInstance(getApplication())
-    }
-    val googleAuthState: StateFlow<com.example.data.GoogleAuthState> by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        googleAuthManager.authState
-    }
+    private val googleAuthManager by
+        lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+            com.example.data.GoogleAuthManagerFactory.getInstance(getApplication())
+        }
+    val googleAuthState: StateFlow<com.example.data.GoogleAuthState> by
+        lazy(LazyThreadSafetyMode.SYNCHRONIZED) { googleAuthManager.authState }
 
     fun signInToGoogle(email: String, displayName: String?) {
-        _globalError.value = getApplication<Application>().getString(R.string.google_sign_in_oauth_required)
+        _globalError.value =
+            getApplication<Application>().getString(R.string.google_sign_in_oauth_required)
     }
 
     fun signOutFromGoogle() {
@@ -115,101 +157,187 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncCloudProvider(provider: String) {
-        val providerLabel = provider.ifBlank { getApplication<Application>().getString(R.string.cloud) }
-        _globalError.value = getApplication<Application>().getString(
-            R.string.cloud_sync_requires_oauth,
-            providerLabel
-        )
+        val providerLabel =
+            provider.ifBlank { getApplication<Application>().getString(R.string.cloud) }
+        _globalError.value =
+            getApplication<Application>()
+                .getString(R.string.cloud_sync_requires_oauth, providerLabel)
     }
 
-    fun retryCloudSyncItem(id: Long) { viewModelScope.launch(coroutineExceptionHandler) { repository.retryCloudSyncItem(id) } }
-    fun cancelCloudSyncItem(id: Long) { viewModelScope.launch(coroutineExceptionHandler) { repository.cancelCloudSyncItem(id) } }
-    fun triggerDuplicateCleanupWorker() { repository.enqueueDuplicateCleanupWork() }
-    fun triggerCloudSyncWorker() { repository.enqueueCloudSyncWork() }
-    fun triggerCacheCleanupWorker() { repository.enqueueCacheCleanupWork() }
+    fun retryCloudSyncItem(id: Long) {
+        viewModelScope.launch(coroutineExceptionHandler) { repository.retryCloudSyncItem(id) }
+    }
+
+    fun cancelCloudSyncItem(id: Long) {
+        viewModelScope.launch(coroutineExceptionHandler) { repository.cancelCloudSyncItem(id) }
+    }
+
+    fun triggerDuplicateCleanupWorker() {
+        repository.enqueueDuplicateCleanupWork()
+    }
+
+    fun triggerCloudSyncWorker() {
+        repository.enqueueCloudSyncWork()
+    }
+
+    fun triggerCacheCleanupWorker() {
+        repository.enqueueCacheCleanupWork()
+    }
 
     fun processPickedLocalFiles(pickedFiles: List<PickableLocalFile>) {
         viewModelScope.launch(coroutineExceptionHandler) {
-            val entities = pickedFiles.map { picked ->
-                FileItemEntity(name = picked.name, path = picked.path, category = picked.category.name,
-                    sizeBytes = picked.sizeBytes, dateModifiedMs = picked.dateModifiedMs, tags = "Imported")
-            }
-            repository.insertFiles(entities); resetPagination(); repository.enqueueBackgroundIndexWork()
+            val entities =
+                pickedFiles.map { picked ->
+                    FileItemEntity(
+                        name = picked.name,
+                        path = picked.path,
+                        category = picked.category.name,
+                        sizeBytes = picked.sizeBytes,
+                        dateModifiedMs = picked.dateModifiedMs,
+                        tags = "Imported",
+                    )
+                }
+            repository.insertFiles(entities)
+            resetPagination()
+            repository.enqueueBackgroundIndexWork()
         }
     }
 
     @JvmName("processPickedJavaFiles")
     fun processPickedLocalFiles(files: List<java.io.File>) {
         viewModelScope.launch(coroutineExceptionHandler) {
-            val entities = files.map { file ->
-                FileItemEntity(name = file.name, path = file.absolutePath, category = inferCategoryFromFilename(file.name),
-                    sizeBytes = if (file.exists()) file.length() else 0L, tags = "Local_Import")
-            }
-            repository.insertFiles(entities); resetPagination(); repository.enqueueBackgroundIndexWork()
+            val entities =
+                files.map { file ->
+                    FileItemEntity(
+                        name = file.name,
+                        path = file.absolutePath,
+                        category = inferCategoryFromFilename(file.name),
+                        sizeBytes = if (file.exists()) file.length() else 0L,
+                        tags = "Local_Import",
+                    )
+                }
+            repository.insertFiles(entities)
+            resetPagination()
+            repository.enqueueBackgroundIndexWork()
         }
     }
 
     fun processPickedUris(uris: List<android.net.Uri>) {
         viewModelScope.launch(coroutineExceptionHandler) {
             val context = getApplication<Application>().applicationContext
-            val entities = uris.mapIndexed { index, uri ->
-                var fileName = "Picked_File_${System.currentTimeMillis()}_$index.bin"
-                var sizeBytes = 0L
-                try {
-                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                        if (cursor.moveToFirst()) {
-                            if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { fileName = PhysicalStorageManager.safeTrashFileName(it) }
-                            if (sizeIndex != -1) sizeBytes = cursor.getLong(sizeIndex)
+            val entities =
+                uris.mapIndexed { index, uri ->
+                    var fileName = "Picked_File_${System.currentTimeMillis()}_$index.bin"
+                    var sizeBytes = 0L
+                    try {
+                        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                            val nameIndex =
+                                cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            val sizeIndex =
+                                cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                            if (cursor.moveToFirst()) {
+                                if (nameIndex != -1)
+                                    cursor
+                                        .getString(nameIndex)
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?.let {
+                                            fileName = PhysicalStorageManager.safeTrashFileName(it)
+                                        }
+                                if (sizeIndex != -1) sizeBytes = cursor.getLong(sizeIndex)
+                            }
                         }
+                    } catch (_: Exception) {
+                        uri.lastPathSegment
+                            ?.substringAfterLast('/')
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { fileName = PhysicalStorageManager.safeTrashFileName(it) }
                     }
-                } catch (_: Exception) {
-                    uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }?.let { fileName = PhysicalStorageManager.safeTrashFileName(it) }
+                    if (sizeBytes < 0L) sizeBytes = 0L
+                    FileItemEntity(
+                        name = fileName,
+                        path = uri.toString(),
+                        category = inferCategoryFromFilename(fileName),
+                        sizeBytes = sizeBytes,
+                        tags = "SAF_Import",
+                    )
                 }
-                if (sizeBytes < 0L) sizeBytes = 0L
-                FileItemEntity(name = fileName, path = uri.toString(), category = inferCategoryFromFilename(fileName), sizeBytes = sizeBytes, tags = "SAF_Import")
-            }
-            repository.insertFiles(entities); resetPagination(); repository.enqueueBackgroundIndexWork()
+            repository.insertFiles(entities)
+            resetPagination()
+            repository.enqueueBackgroundIndexWork()
         }
     }
 
-    suspend fun extractOcrBlocks(filePath: String): List<com.example.data.OcrTextBlock> = repository.activeOcrEngine.extractOcrBlocks(filePath)
+    suspend fun extractOcrBlocks(filePath: String): List<com.example.data.OcrTextBlock> =
+        repository.activeOcrEngine.extractOcrBlocks(filePath)
 
     private fun inferCategoryFromFilename(fileName: String): String {
         return when (fileName.substringAfterLast('.', "").lowercase()) {
-            "jpg", "jpeg", "png", "webp", "gif" -> FileCategory.IMAGES.name
-            "pdf", "doc", "docx", "txt", "csv", "xlsx" -> FileCategory.DOCUMENTS.name
-            "mp3", "wav", "m4a", "aac" -> FileCategory.AUDIO.name
-            "mp4", "mkv", "webm", "mov" -> FileCategory.VIDEO.name
+            "jpg",
+            "jpeg",
+            "png",
+            "webp",
+            "gif" -> FileCategory.IMAGES.name
+            "pdf",
+            "doc",
+            "docx",
+            "txt",
+            "csv",
+            "xlsx" -> FileCategory.DOCUMENTS.name
+            "mp3",
+            "wav",
+            "m4a",
+            "aac" -> FileCategory.AUDIO.name
+            "mp4",
+            "mkv",
+            "webm",
+            "mov" -> FileCategory.VIDEO.name
             else -> FileCategory.OTHER.name
         }
     }
 
-    private val _persistedFolderUris = MutableStateFlow<Set<String>>(appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet())
+    private val _persistedFolderUris =
+        MutableStateFlow<Set<String>>(
+            appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()
+        )
     val persistedFolderUris: StateFlow<Set<String>> = _persistedFolderUris.asStateFlow()
-    init { rescanPersistedFolders() }
+
+    init {
+        rescanPersistedFolders()
+    }
+
     fun savePersistedFolderUri(uri: String) {
-        val newSet = (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()).toMutableSet().apply { add(uri) }
+        val newSet =
+            (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet())
+                .toMutableSet()
+                .apply { add(uri) }
         appPrefs.edit { putStringSet("persisted_saf_folders", newSet) }
         _persistedFolderUris.value = newSet
     }
+
     fun getPersistedFolderUris(): Set<String> = _persistedFolderUris.value
+
     fun removePersistedFolderUri(uri: String) {
         val context = getApplication<Application>().applicationContext
         try {
             context.contentResolver.releasePersistableUriPermission(
                 uri.toUri(),
                 android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
         } catch (e: Exception) {
-            DiagnosticLogger.log("MainViewModel", DomainErrorMapper.fromThrowable("SAF_PERMISSION_RELEASE", e))
+            DiagnosticLogger.log(
+                "MainViewModel",
+                DomainErrorMapper.fromThrowable("SAF_PERMISSION_RELEASE", e),
+            )
         }
-        val newSet = (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet()).toMutableSet().apply { remove(uri) }
+        val newSet =
+            (appPrefs.getStringSet("persisted_saf_folders", emptySet()) ?: emptySet())
+                .toMutableSet()
+                .apply { remove(uri) }
         appPrefs.edit { putStringSet("persisted_saf_folders", newSet) }
         _persistedFolderUris.value = newSet
     }
+
     fun rescanPersistedFolders() {
         viewModelScope.launch(coroutineExceptionHandler) {
             var discovered = 0
@@ -217,26 +345,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     discovered += repository.scanSafTree(uriStr.toUri())
                 } catch (e: Exception) {
-                    DiagnosticLogger.log("MainViewModel", DomainErrorMapper.fromThrowable("SAF_FOLDER_SCAN", e))
+                    DiagnosticLogger.log(
+                        "MainViewModel",
+                        DomainErrorMapper.fromThrowable("SAF_FOLDER_SCAN", e),
+                    )
                 }
             }
-            if (discovered > 0) { resetPagination(); repository.enqueueBackgroundIndexWork() }
+            if (discovered > 0) {
+                resetPagination()
+                repository.enqueueBackgroundIndexWork()
+            }
         }
     }
+
     fun processPickedDirectoryUri(uri: android.net.Uri) {
         viewModelScope.launch(coroutineExceptionHandler) {
             val context = getApplication<Application>().applicationContext
             try {
-                val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, takeFlags); savePersistedFolderUri(uri.toString())
+                val takeFlags =
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                savePersistedFolderUri(uri.toString())
                 val discovered = repository.scanSafTree(uri)
-                if (discovered > 0) { resetPagination(); repository.enqueueBackgroundIndexWork() }
+                if (discovered > 0) {
+                    resetPagination()
+                    repository.enqueueBackgroundIndexWork()
+                }
             } catch (e: Exception) {
-                DiagnosticLogger.log("MainViewModel", DomainErrorMapper.fromThrowable("SAF_FOLDER_PERMISSION_OR_SCAN", e))
+                DiagnosticLogger.log(
+                    "MainViewModel",
+                    DomainErrorMapper.fromThrowable("SAF_FOLDER_PERMISSION_OR_SCAN", e),
+                )
             }
         }
     }
 
     private var currentPage = 0
-    private fun resetPagination() { currentPage = 0 }
+
+    private fun resetPagination() {
+        currentPage = 0
+    }
 }

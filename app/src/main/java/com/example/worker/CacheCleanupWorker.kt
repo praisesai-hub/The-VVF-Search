@@ -28,6 +28,8 @@ class CacheCleanupWorker(
         )
     }
 
+    // Bottom-up cache traversal and deletion accounting share one cleanup boundary.
+    @Suppress("detekt.NestedBlockDepth")
     private suspend fun runWork(): Result {
         Log.i(TAG, "Starting CacheCleanupWorker...")
         return try {

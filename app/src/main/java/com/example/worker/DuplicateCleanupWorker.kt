@@ -36,6 +36,8 @@ class DuplicateCleanupWorker(
         )
     }
 
+    // Query, policy, and recycle-bin transitions remain one cleanup transaction boundary.
+    @Suppress("detekt.LongMethod", "detekt.NestedBlockDepth")
     private suspend fun runWork(): Result {
         Log.i(TAG, "Starting background DuplicateCleanupWorker...")
         return try {

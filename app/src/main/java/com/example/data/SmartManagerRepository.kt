@@ -1,21 +1,22 @@
 // SmartManagerRepository - Production baseline
 package com.example.data
 
-import com.example.ai.SearchTextTokenizer
-
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.example.ai.SemanticEmbeddingProvider
 import com.example.ai.FallbackSemanticEmbeddingProvider
+import com.example.ai.SearchTextTokenizer
+import com.example.ai.SemanticEmbeddingProvider
 import com.example.ai.TFLiteSemanticEmbeddingProvider
-import com.example.security.KeystoreVaultManager
 import com.example.domain.WorkCoordinator
 import com.example.domain.retry.RetryDecision
 import com.example.domain.retry.RetryOperation
 import com.example.domain.retry.RetryPolicy
+import com.example.security.KeystoreVaultManager
 import com.example.storage.PhysicalStorageManager
 import com.example.storage.StorageScanner
+import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,9 +30,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.util.UUID
 
+// Facade intentionally keeps file, vault, plugin, duplicate, and recovery APIs together.
+@Suppress("detekt.LargeClass")
 open class SmartManagerRepository(
     private val context: Context,
     private val dao: FileDao = AppDatabase.getDatabase(context).fileDao(),
@@ -41,31 +42,44 @@ open class SmartManagerRepository(
     private val cloudTransferAllowed: (Context) -> Boolean = CloudSyncPolicy::canTransfer,
     private val fileOperationStoreOverride: FileOperationStore? = null,
 ) {
-    private val fileOperationStore: FileOperationStore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        fileOperationStoreOverride ?: AppDatabase.getDatabase(context).fileOperationStore()
-    }
-    val keystoreVaultManager: KeystoreVaultManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { KeystoreVaultManager() }
+    private val fileOperationStore: FileOperationStore by
+        lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+            fileOperationStoreOverride ?: AppDatabase.getDatabase(context).fileOperationStore()
+        }
+    val keystoreVaultManager: KeystoreVaultManager by
+        lazy(LazyThreadSafetyMode.SYNCHRONIZED) { KeystoreVaultManager() }
     val storageScanner = StorageScanner(context)
     val workCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { WorkCoordinator(context) }
     val fileRepository by lazy { FileRepository(context, dao) }
-    private val vaultManagerEngine: VaultManagerEngine by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        VaultManagerEngine(context, keystoreVaultManager)
+    private val vaultManagerEngine: VaultManagerEngine by
+        lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+            VaultManagerEngine(context, keystoreVaultManager)
+        }
+    val vaultRepository by lazy {
+        VaultRepository(context, dao, keystoreVaultManager, vaultManagerEngine)
     }
-    val vaultRepository by lazy { VaultRepository(context, dao, keystoreVaultManager, vaultManagerEngine) }
     val pluginRepository by lazy { PluginRepository(dao) }
     val activeOcrEngine: OcrEngine by lazy { ocrEngine ?: MLKitOcrEngine(context) }
 
-    private fun isAssetExists(fileName: String): Boolean = try {
-        context.assets.open(fileName).use { }
-        true
-    } catch (_: Exception) { false }
+    private fun isAssetExists(fileName: String): Boolean =
+        try {
+            context.assets.open(fileName).use {}
+            true
+        } catch (_: Exception) {
+            false
+        }
 
     val tfliteProvider: SemanticEmbeddingProvider by lazy {
-        if (isAssetExists("mobile_clip_embedding.tflite") && isAssetExists("mobile_clip_vocab.txt")) {
+        if (
+            isAssetExists("mobile_clip_embedding.tflite") && isAssetExists("mobile_clip_vocab.txt")
+        ) {
             try {
                 TFLiteSemanticEmbeddingProvider().apply { loadModelFromAssets(context) }
             } catch (e: Exception) {
-                Log.e("SmartManagerRepository", "TFLite semantic model failed to load; error=${e::class.simpleName}")
+                Log.e(
+                    "SmartManagerRepository",
+                    "TFLite semantic model failed to load; error=${e::class.simpleName}",
+                )
                 FallbackSemanticEmbeddingProvider()
             }
         } else {
@@ -77,10 +91,21 @@ open class SmartManagerRepository(
     val isSemanticSearchAvailable: Boolean
         get() = tfliteProvider.isModelLoaded()
 
-    private val duplicateDetectionEngine by lazy { DuplicateDetectionEngine(storageScanner, tfliteProvider) }
-    private val repositoryScope = CoroutineScope(Dispatchers.IO + Job() + kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
-        Log.e("SmartManagerRepository", "Unhandled exception in background repositoryScope", throwable)
-    })
+    private val duplicateDetectionEngine by lazy {
+        DuplicateDetectionEngine(storageScanner, tfliteProvider)
+    }
+    private val repositoryScope =
+        CoroutineScope(
+            Dispatchers.IO +
+                Job() +
+                kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+                    Log.e(
+                        "SmartManagerRepository",
+                        "Unhandled exception in background repositoryScope",
+                        throwable,
+                    )
+                }
+        )
     private var activeScanJob: Job? = null
     private val _scanProgress = MutableStateFlow(1.0f)
     val scanProgress: StateFlow<Float> = _scanProgress.asStateFlow()
@@ -93,6 +118,7 @@ open class SmartManagerRepository(
     val ocrScannedFiles: Flow<List<FileItemEntity>> = dao.getOcrScannedFiles()
 
     suspend fun getFileById(id: Long) = fileRepository.getFileById(id)
+
     suspend fun getFileByName(name: String) = dao.getFileByName(name)
 
     fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> {
@@ -108,17 +134,27 @@ open class SmartManagerRepository(
                         SearchTextTokenizer.containsQuery(file.tags, normalizedQuery)
                 }
             } else {
-                files.mapNotNull { file ->
-                    val fileVec = tfliteProvider.stringToFloatArray(file.semanticEmbeddingString)
-                        ?: tfliteProvider.generateTextEmbedding("${file.name} ${file.ocrText} ${file.tags}")
-                    if (fileVec != null) {
-                        val sim = tfliteProvider.calculateCosineSimilarity(queryVec, fileVec)
-                        val isTextMatch = SearchTextTokenizer.containsQuery(file.name, normalizedQuery) ||
-                            SearchTextTokenizer.containsQuery(file.ocrText, normalizedQuery) ||
-                            SearchTextTokenizer.containsQuery(file.tags, normalizedQuery)
-                        if (sim > 0.10f || isTextMatch) file to sim else null
-                    } else null
-                }.sortedByDescending { it.second }.map { it.first }
+                files
+                    .mapNotNull { file ->
+                        val fileVec =
+                            tfliteProvider.stringToFloatArray(file.semanticEmbeddingString)
+                                ?: tfliteProvider.generateTextEmbedding(
+                                    "${file.name} ${file.ocrText} ${file.tags}"
+                                )
+                        if (fileVec != null) {
+                            val sim = tfliteProvider.calculateCosineSimilarity(queryVec, fileVec)
+                            val isTextMatch =
+                                SearchTextTokenizer.containsQuery(file.name, normalizedQuery) ||
+                                    SearchTextTokenizer.containsQuery(
+                                        file.ocrText,
+                                        normalizedQuery,
+                                    ) ||
+                                    SearchTextTokenizer.containsQuery(file.tags, normalizedQuery)
+                            if (sim > 0.10f || isTextMatch) file to sim else null
+                        } else null
+                    }
+                    .sortedByDescending { it.second }
+                    .map { it.first }
             }
         }
     }
@@ -128,142 +164,224 @@ open class SmartManagerRepository(
     val cloudSyncItems: Flow<List<CloudSyncItemEntity>> = dao.getCloudSyncItems()
     val plugins: Flow<List<PluginEntity>> = pluginRepository.getAllPlugins()
 
-    val exactDuplicates: Flow<List<DuplicateGroup>> = dao.getDuplicateFilesByHash().map { duplicateFiles ->
-        duplicateFiles.groupBy { it.md5Hash }
-            .filter { it.value.size > 1 && it.key.isNotBlank() }
-            .map { (_, duplicateList) ->
-                DuplicateGroup(
-                    title = "Exact SHA-256 Hash Match: ${duplicateList.first().name}",
-                    level = 1,
-                    similarityScore = 100,
-                    files = duplicateList
-                )
+    val exactDuplicates: Flow<List<DuplicateGroup>> =
+        dao.getDuplicateFilesByHash()
+            .map { duplicateFiles ->
+                duplicateFiles
+                    .groupBy { it.md5Hash }
+                    .filter { it.value.size > 1 && it.key.isNotBlank() }
+                    .map { (_, duplicateList) ->
+                        DuplicateGroup(
+                            title = "Exact SHA-256 Hash Match: ${duplicateList.first().name}",
+                            level = 1,
+                            similarityScore = 100,
+                            files = duplicateList,
+                        )
+                    }
             }
-    }.flowOn(Dispatchers.Default)
+            .flowOn(Dispatchers.Default)
 
     fun startIncrementalDuplicateScan() {
         activeScanJob?.cancel()
-        activeScanJob = repositoryScope.launch {
-            _isScanning.value = true
-            _scanProgress.value = 0.0f
-            try {
-                val unhashed = dao.getUnhashedFiles()
-                if (unhashed.isEmpty()) return@launch
-                val isOcrEnabled = dao.getAllPlugins().first().find { it.pluginId == "ocr_engine" }?.isEnabled ?: true
-                val totalCount = unhashed.size
-                var processedCount = 0
-                unhashed.chunked(50).forEach { chunk ->
-                    ensureActive()
-                    val updatedChunk = mutableListOf<FileItemEntity>()
-                    chunk.forEach { file ->
+        activeScanJob =
+            repositoryScope.launch {
+                _isScanning.value = true
+                _scanProgress.value = 0.0f
+                try {
+                    val unhashed = dao.getUnhashedFiles()
+                    if (unhashed.isEmpty()) return@launch
+                    val isOcrEnabled =
+                        dao.getAllPlugins().first().find { it.pluginId == "ocr_engine" }?.isEnabled
+                            ?: true
+                    val totalCount = unhashed.size
+                    var processedCount = 0
+                    unhashed.chunked(50).forEach { chunk ->
                         ensureActive()
-                        var updated = file
-                        if (isOcrEnabled && updated.ocrText.isBlank() && (updated.category == FileCategory.IMAGES.name || updated.category == FileCategory.DOCUMENTS.name)) {
-                            val realOcr = activeOcrEngine.extractRealOcrText(updated.path)
-                            if (realOcr.isNotBlank()) updated = updated.copy(ocrText = realOcr)
-                        }
-                        if (updated.md5Hash.isBlank() && !updated.path.startsWith("content://")) {
-                            val javaFile = File(updated.path)
-                            if (javaFile.exists() && javaFile.canRead()) {
-                                val hash = withContext(Dispatchers.IO) { storageScanner.computeFileHash(javaFile) }
-                                if (hash.isNotBlank()) updated = updated.copy(md5Hash = hash)
+                        val updatedChunk = mutableListOf<FileItemEntity>()
+                        chunk.forEach { file ->
+                            ensureActive()
+                            var updated = file
+                            if (
+                                isOcrEnabled &&
+                                    updated.ocrText.isBlank() &&
+                                    (updated.category == FileCategory.IMAGES.name ||
+                                        updated.category == FileCategory.DOCUMENTS.name)
+                            ) {
+                                val realOcr = activeOcrEngine.extractRealOcrText(updated.path)
+                                if (realOcr.isNotBlank()) updated = updated.copy(ocrText = realOcr)
                             }
-                        }
-                        if (updated.category == FileCategory.IMAGES.name && updated.visualSimilarityHash.isBlank() && !updated.path.startsWith("content://")) {
-                            val javaFile = File(updated.path)
-                            if (javaFile.exists() && javaFile.canRead()) {
-                                val dHash = withContext(Dispatchers.IO) { storageScanner.computeDHash(javaFile) }
-                                if (dHash.isNotBlank()) updated = updated.copy(visualSimilarityHash = dHash)
-                            }
-                        }
-                        if (updated.category == FileCategory.VIDEO.name &&
-                            updated.videoSampleHashes.isBlank() &&
-                            !updated.path.startsWith("content://")
-                        ) {
-                            val javaFile = File(updated.path)
-                            if (javaFile.exists() && javaFile.canRead()) {
-                                val fingerprint = withContext(Dispatchers.IO) {
-                                    storageScanner.computeVideoFingerprint(javaFile)
-                                }
-                                if (fingerprint != null) {
-                                    updated = updated.copy(
-                                        videoFingerprintVersion = fingerprint.version,
-                                        videoSampleHashes = fingerprint.serializedSamples(),
-                                        videoDurationMs = fingerprint.durationMs,
-                                        videoWidth = fingerprint.width,
-                                        videoHeight = fingerprint.height,
-                                        videoAudioSignature = fingerprint.audioSignature,
-                                        videoChunkHash = fingerprint.chunkHash
-                                    )
-                                }
-                            }
-                        }
-                        if (updated.category == FileCategory.DOCUMENTS.name && updated.documentCandidateFingerprint.isBlank()) {
-                            val docCandidateFp = if (updated.path.startsWith("content://")) {
-                                withContext(Dispatchers.IO) {
-                                    storageScanner.computeContentUriDocumentCandidateFingerprint(Uri.parse(updated.path))
-                                }
-                            } else {
+                            if (
+                                updated.md5Hash.isBlank() && !updated.path.startsWith("content://")
+                            ) {
                                 val javaFile = File(updated.path)
                                 if (javaFile.exists() && javaFile.canRead()) {
-                                    withContext(Dispatchers.IO) { storageScanner.computeDocumentCandidateFingerprint(javaFile) }
-                                } else ""
+                                    val hash =
+                                        withContext(Dispatchers.IO) {
+                                            storageScanner.computeFileHash(javaFile)
+                                        }
+                                    if (hash.isNotBlank()) updated = updated.copy(md5Hash = hash)
+                                }
                             }
-                            if (docCandidateFp.isNotBlank()) updated = updated.copy(documentCandidateFingerprint = docCandidateFp)
-                        }
-                        if (!updated.semanticIndexed) {
-                            val textContent = "${updated.name} ${updated.ocrText} ${updated.tags}".trim()
-                            val javaFile = if (!updated.path.startsWith("content://")) File(updated.path) else null
-                            val embedding = if (javaFile != null && javaFile.exists() && javaFile.canRead()) {
-                                tfliteProvider.generateImageEmbedding(javaFile) ?: tfliteProvider.generateTextEmbedding(textContent)
-                            } else tfliteProvider.generateTextEmbedding(textContent)
-                            if (embedding != null) {
-                                updated = updated.copy(
-                                    semanticEmbeddingVersion = tfliteProvider.embeddingVersion,
-                                    semanticIndexed = true,
-                                    semanticEmbeddingString = tfliteProvider.floatArrayToString(embedding)
-                                )
+                            if (
+                                updated.category == FileCategory.IMAGES.name &&
+                                    updated.visualSimilarityHash.isBlank() &&
+                                    !updated.path.startsWith("content://")
+                            ) {
+                                val javaFile = File(updated.path)
+                                if (javaFile.exists() && javaFile.canRead()) {
+                                    val dHash =
+                                        withContext(Dispatchers.IO) {
+                                            storageScanner.computeDHash(javaFile)
+                                        }
+                                    if (dHash.isNotBlank())
+                                        updated = updated.copy(visualSimilarityHash = dHash)
+                                }
                             }
+                            if (
+                                updated.category == FileCategory.VIDEO.name &&
+                                    updated.videoSampleHashes.isBlank() &&
+                                    !updated.path.startsWith("content://")
+                            ) {
+                                val javaFile = File(updated.path)
+                                if (javaFile.exists() && javaFile.canRead()) {
+                                    val fingerprint =
+                                        withContext(Dispatchers.IO) {
+                                            storageScanner.computeVideoFingerprint(javaFile)
+                                        }
+                                    if (fingerprint != null) {
+                                        updated =
+                                            updated.copy(
+                                                videoFingerprintVersion = fingerprint.version,
+                                                videoSampleHashes = fingerprint.serializedSamples(),
+                                                videoDurationMs = fingerprint.durationMs,
+                                                videoWidth = fingerprint.width,
+                                                videoHeight = fingerprint.height,
+                                                videoAudioSignature = fingerprint.audioSignature,
+                                                videoChunkHash = fingerprint.chunkHash,
+                                            )
+                                    }
+                                }
+                            }
+                            if (
+                                updated.category == FileCategory.DOCUMENTS.name &&
+                                    updated.documentCandidateFingerprint.isBlank()
+                            ) {
+                                val docCandidateFp =
+                                    if (updated.path.startsWith("content://")) {
+                                        withContext(Dispatchers.IO) {
+                                            storageScanner
+                                                .computeContentUriDocumentCandidateFingerprint(
+                                                    Uri.parse(updated.path)
+                                                )
+                                        }
+                                    } else {
+                                        val javaFile = File(updated.path)
+                                        if (javaFile.exists() && javaFile.canRead()) {
+                                            withContext(Dispatchers.IO) {
+                                                storageScanner.computeDocumentCandidateFingerprint(
+                                                    javaFile
+                                                )
+                                            }
+                                        } else ""
+                                    }
+                                if (docCandidateFp.isNotBlank())
+                                    updated =
+                                        updated.copy(documentCandidateFingerprint = docCandidateFp)
+                            }
+                            if (!updated.semanticIndexed) {
+                                val textContent =
+                                    "${updated.name} ${updated.ocrText} ${updated.tags}".trim()
+                                val javaFile =
+                                    if (!updated.path.startsWith("content://")) File(updated.path)
+                                    else null
+                                val embedding =
+                                    if (
+                                        javaFile != null && javaFile.exists() && javaFile.canRead()
+                                    ) {
+                                        tfliteProvider.generateImageEmbedding(javaFile)
+                                            ?: tfliteProvider.generateTextEmbedding(textContent)
+                                    } else tfliteProvider.generateTextEmbedding(textContent)
+                                if (embedding != null) {
+                                    updated =
+                                        updated.copy(
+                                            semanticEmbeddingVersion =
+                                                tfliteProvider.embeddingVersion,
+                                            semanticIndexed = true,
+                                            semanticEmbeddingString =
+                                                tfliteProvider.floatArrayToString(embedding),
+                                        )
+                                }
+                            }
+                            if (updated != file) updatedChunk.add(updated)
+                            processedCount++
                         }
-                        if (updated != file) updatedChunk.add(updated)
-                        processedCount++
+                        if (updatedChunk.isNotEmpty()) dao.updateFiles(updatedChunk)
+                        _scanProgress.value = processedCount.toFloat() / totalCount.toFloat()
                     }
-                    if (updatedChunk.isNotEmpty()) dao.updateFiles(updatedChunk)
-                    _scanProgress.value = processedCount.toFloat() / totalCount.toFloat()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e("SmartManagerRepository", "Incremental scan failed", e)
+                } finally {
+                    _scanProgress.value = 1.0f
+                    _isScanning.value = false
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e("SmartManagerRepository", "Incremental scan failed", e)
-            } finally {
-                _scanProgress.value = 1.0f
-                _isScanning.value = false
             }
-        }
     }
 
-    fun getVisualDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getVisualDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
-    fun getVideoDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getVideoDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
-    fun getDocumentDuplicates(): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getDocumentDuplicates(dao.getAllActiveFiles())
-    fun getSemanticDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> = duplicateDetectionEngine.getSemanticDuplicates(dao.getAllActiveFiles(), similarityThresholdFlow)
+    fun getVisualDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> =
+        duplicateDetectionEngine.getVisualDuplicates(
+            dao.getAllActiveFiles(),
+            similarityThresholdFlow,
+        )
 
-    val documentStats: Flow<Triple<Int, Int, Float>> = dao.getAllActiveFiles().map { files ->
-        val docs = files.filter { it.category == FileCategory.DOCUMENTS.name && !it.isVault && !it.isRecycleBin }
-        val total = docs.size
-        val indexed = docs.count {
-            it.documentCandidateFingerprint.isNotBlank() ||
-                it.videoSampleHashes.isNotBlank() ||
-                it.md5Hash.isNotBlank()
-        }
-        Triple(indexed, total - indexed, if (total > 0) indexed.toFloat() / total.toFloat() else 1.0f)
-    }.flowOn(Dispatchers.Default)
+    fun getVideoDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> =
+        duplicateDetectionEngine.getVideoDuplicates(
+            dao.getAllActiveFiles(),
+            similarityThresholdFlow,
+        )
 
+    fun getDocumentDuplicates(): Flow<List<DuplicateGroup>> =
+        duplicateDetectionEngine.getDocumentDuplicates(dao.getAllActiveFiles())
+
+    fun getSemanticDuplicates(similarityThresholdFlow: Flow<Float>): Flow<List<DuplicateGroup>> =
+        duplicateDetectionEngine.getSemanticDuplicates(
+            dao.getAllActiveFiles(),
+            similarityThresholdFlow,
+        )
+
+    val documentStats: Flow<Triple<Int, Int, Float>> =
+        dao.getAllActiveFiles()
+            .map { files ->
+                val docs =
+                    files.filter {
+                        it.category == FileCategory.DOCUMENTS.name &&
+                            !it.isVault &&
+                            !it.isRecycleBin
+                    }
+                val total = docs.size
+                val indexed =
+                    docs.count {
+                        it.documentCandidateFingerprint.isNotBlank() ||
+                            it.videoSampleHashes.isNotBlank() ||
+                            it.md5Hash.isNotBlank()
+                    }
+                Triple(
+                    indexed,
+                    total - indexed,
+                    if (total > 0) indexed.toFloat() / total.toFloat() else 1.0f,
+                )
+            }
+            .flowOn(Dispatchers.Default)
+
+    // RetryPolicy must classify every operation failure, including provider-specific exceptions.
+    @Suppress("detekt.TooGenericExceptionCaught")
     suspend fun <T> withRetry(
         operation: RetryOperation,
         maxAttempts: Int = RetryDecision.DEFAULT_MAX_ATTEMPTS,
         initialDelayMs: Long = RetryPolicy.INITIAL_DELAY_MS,
         factor: Double = RetryPolicy.BACKOFF_FACTOR,
-        block: suspend () -> T
+        block: suspend () -> T,
     ): T {
         var lastException: Throwable? = null
         for (attempt in 0 until maxAttempts) {
@@ -274,11 +392,15 @@ open class SmartManagerRepository(
                 val decision = RetryPolicy.classify(operation, error)
                 Log.w(
                     "SmartManagerRepository",
-                    "Retry decision operation=$operation attempt=${attempt + 1} reason=${decision.reasonCode} retryable=${decision.retryable}"
+                    "Retry decision operation=$operation attempt=${attempt + 1} " +
+                        "reason=${decision.reasonCode} retryable=${decision.retryable}",
                 )
                 if (!RetryPolicy.shouldRetry(operation, error, attempt)) throw error
                 kotlinx.coroutines.delay(
-                    if (factor == RetryPolicy.BACKOFF_FACTOR && initialDelayMs == RetryPolicy.INITIAL_DELAY_MS) {
+                    if (
+                        factor == RetryPolicy.BACKOFF_FACTOR &&
+                            initialDelayMs == RetryPolicy.INITIAL_DELAY_MS
+                    ) {
                         RetryPolicy.delayForAttempt(attempt)
                     } else {
                         (initialDelayMs * factor.pow(attempt)).toLong()
@@ -286,7 +408,7 @@ open class SmartManagerRepository(
                 )
             }
         }
-        throw lastException ?: IllegalStateException("Operation failed without an exception")
+        throw checkNotNull(lastException) { "Operation failed without an exception" }
     }
 
     private fun Double.pow(exponent: Int): Double {
@@ -295,184 +417,386 @@ open class SmartManagerRepository(
         return result
     }
 
-    open suspend fun insertFiles(files: List<FileItemEntity>) = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_WRITE) { dao.insertFiles(files) } }
-
-    suspend fun rescanPhysicalStorage(): Int = withContext(Dispatchers.IO) {
-        withRetry(RetryOperation.INDEXING) {
-            var totalCount = 0
-            storageScanner.scanDeviceStorageFlow(computeHashes = false).collect { batch ->
-                if (batch.isNotEmpty()) { dao.insertFiles(batch); totalCount += batch.size }
-            }
-            startIncrementalDuplicateScan()
-            totalCount
+    open suspend fun insertFiles(files: List<FileItemEntity>) =
+        withContext(Dispatchers.IO) {
+            withRetry(RetryOperation.DATABASE_WRITE) { dao.insertFiles(files) }
         }
-    }
 
-    /** Imports a user-granted SAF tree in scanner-managed batches without building a full list in the UI layer. */
-    suspend fun scanSafTree(treeUri: Uri): Int = withContext(Dispatchers.IO) {
-        storageScanner.scanSafTree(treeUri, computeHashes = false) { batch ->
-            if (batch.isNotEmpty()) dao.insertFiles(batch)
-        }
-    }
-
-    suspend fun cleanSelectedDuplicates(selectedIds: Set<Long>) = withContext(Dispatchers.IO) {
-        DuplicateManager(dao, context).cleanSelectedDuplicates(selectedIds)
-    }
-
-    suspend fun moveToRecycleBin(file: FileItemEntity) = withContext(Dispatchers.IO) {
-        recoverPendingFileOperations()
-        val currentFile = dao.getFileById(file.id) ?: return@withContext
-        if (currentFile.isRecycleBin) return@withContext
-        withRetry(RetryOperation.FILE_STORAGE) {
-            val operation = prepareFileOperation(
-                type = FILE_OPERATION_MOVE_TO_TRASH,
-                fileId = currentFile.id,
-                sourcePath = currentFile.path,
-                targetPath = PhysicalStorageManager.trashPathForOperation(context, currentFile.path, operationId(currentFile.id, FILE_OPERATION_MOVE_TO_TRASH))
-            )
-            val operationId = operation.operationId
-            val trashResult = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
-                Result.success(operation.targetPath)
-            } else {
-                PhysicalStorageManager.moveToTrash(context, operation.sourcePath, operationId)
-            }
-            if (trashResult.isFailure) {
-                fileOperationStore.transition(operationId, FILE_OPERATION_FAILED, operation.sourcePath, operation.targetPath, System.currentTimeMillis(), "PHYSICAL_MOVE_FAILED")
-                throw trashResult.exceptionOrNull() ?: java.io.IOException("Failed to move file to trash")
-            }
-            val newPath = trashResult.getOrThrow()
-            fileOperationStore.transition(operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, newPath, System.currentTimeMillis(), null)
-            val latest = dao.getFileById(currentFile.id) ?: return@withRetry
-            val originalPathToKeep = if (latest.originalPath.isNotBlank()) latest.originalPath else operation.sourcePath
-            dao.updateFile(latest.copy(path = newPath, originalPath = originalPathToKeep, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
-            fileOperationStore.transition(operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, newPath, System.currentTimeMillis(), null)
-            fileOperationStore.delete(operationId)
-        }
-    }
-
-    suspend fun restoreFromRecycleBin(file: FileItemEntity) = withContext(Dispatchers.IO) {
-        recoverPendingFileOperations()
-        val currentFile = dao.getFileById(file.id) ?: return@withContext
-        if (!currentFile.isRecycleBin) return@withContext
-        withRetry(RetryOperation.FILE_STORAGE) {
-            val targetPath = if (currentFile.originalPath.isNotBlank()) currentFile.originalPath else currentFile.path
-            val operation = prepareFileOperation(FILE_OPERATION_RESTORE, currentFile.id, currentFile.path, targetPath)
-            val restoreResult = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
-                Result.success(operation.targetPath)
-            } else {
-                PhysicalStorageManager.restoreFromTrash(context, operation.sourcePath, operation.targetPath)
-            }
-            if (restoreResult.isFailure) {
-                fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, operation.targetPath, System.currentTimeMillis(), "PHYSICAL_RESTORE_FAILED")
-                throw restoreResult.exceptionOrNull() ?: java.io.IOException("Failed to restore file from trash")
-            }
-            val restoredPath = restoreResult.getOrThrow()
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, restoredPath, System.currentTimeMillis(), null)
-            val latest = dao.getFileById(currentFile.id) ?: return@withRetry
-            dao.updateFile(latest.copy(path = restoredPath, originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, restoredPath, System.currentTimeMillis(), null)
-            fileOperationStore.delete(operation.operationId)
-        }
-    }
-
-    suspend fun deletePermanently(file: FileItemEntity) = withContext(Dispatchers.IO) {
-        recoverPendingFileOperations()
-        val currentFile = dao.getFileById(file.id) ?: return@withContext
-        withRetry(RetryOperation.FILE_STORAGE) {
-            val operation = prepareFileOperation(FILE_OPERATION_DELETE, currentFile.id, currentFile.path, "")
-            if (operation.status != FILE_OPERATION_PHYSICAL_COMPLETED) {
-                if (!PhysicalStorageManager.deleteFile(context, operation.sourcePath)) {
-                    if (File(operation.sourcePath).exists()) {
-                        fileOperationStore.transition(operation.operationId, FILE_OPERATION_FAILED, operation.sourcePath, "", System.currentTimeMillis(), "PHYSICAL_DELETE_FAILED")
-                        throw java.io.IOException("Failed to physically delete file")
+    suspend fun rescanPhysicalStorage(): Int =
+        withContext(Dispatchers.IO) {
+            withRetry(RetryOperation.INDEXING) {
+                var totalCount = 0
+                storageScanner.scanDeviceStorageFlow(computeHashes = false).collect { batch ->
+                    if (batch.isNotEmpty()) {
+                        dao.insertFiles(batch)
+                        totalCount += batch.size
                     }
                 }
-                fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
-            }
-            dao.deleteFileById(currentFile.id)
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_COMMITTED, operation.sourcePath, "", System.currentTimeMillis(), null)
-            fileOperationStore.delete(operation.operationId)
-        }
-    }
-
-    suspend fun emptyRecycleBin() = withContext(Dispatchers.IO) {
-        recoverPendingFileOperations()
-        val trashFiles = dao.getRecycleBinFiles().first()
-        trashFiles.forEach { deletePermanently(it) }
-    }
-
-    suspend fun recoverPendingFileOperations() = withContext(Dispatchers.IO) {
-        fileOperationStore.getOpenOperations().forEach { operation ->
-            when (operation.operationType) {
-                FILE_OPERATION_MOVE_TO_TRASH -> recoverMoveToTrash(operation)
-                FILE_OPERATION_RESTORE -> recoverRestore(operation)
-                FILE_OPERATION_DELETE -> recoverDelete(operation)
+                startIncrementalDuplicateScan()
+                totalCount
             }
         }
-    }
+
+    /**
+     * Imports a user-granted SAF tree in scanner-managed batches without building a full list in
+     * the UI layer.
+     */
+    suspend fun scanSafTree(treeUri: Uri): Int =
+        withContext(Dispatchers.IO) {
+            storageScanner.scanSafTree(treeUri, computeHashes = false) { batch ->
+                if (batch.isNotEmpty()) dao.insertFiles(batch)
+            }
+        }
+
+    suspend fun cleanSelectedDuplicates(selectedIds: Set<Long>) =
+        withContext(Dispatchers.IO) {
+            DuplicateManager(dao, context).cleanSelectedDuplicates(selectedIds)
+        }
+
+    // Durable prepare, physical move, metadata update, and commit remain one workflow.
+    @Suppress("detekt.LongMethod")
+    suspend fun moveToRecycleBin(file: FileItemEntity) =
+        withContext(Dispatchers.IO) {
+            recoverPendingFileOperations()
+            val currentFile = dao.getFileById(file.id) ?: return@withContext
+            if (currentFile.isRecycleBin) return@withContext
+            withRetry(RetryOperation.FILE_STORAGE) {
+                val operation =
+                    prepareFileOperation(
+                        type = FILE_OPERATION_MOVE_TO_TRASH,
+                        fileId = currentFile.id,
+                        sourcePath = currentFile.path,
+                        targetPath =
+                            PhysicalStorageManager.trashPathForOperation(
+                                context,
+                                currentFile.path,
+                                operationId(currentFile.id, FILE_OPERATION_MOVE_TO_TRASH),
+                            ),
+                    )
+                val operationId = operation.operationId
+                val trashResult =
+                    if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+                        Result.success(operation.targetPath)
+                    } else {
+                        PhysicalStorageManager.moveToTrash(
+                            context,
+                            operation.sourcePath,
+                            operationId,
+                        )
+                    }
+                if (trashResult.isFailure) {
+                    fileOperationStore.transition(
+                        operationId,
+                        FILE_OPERATION_FAILED,
+                        operation.sourcePath,
+                        operation.targetPath,
+                        System.currentTimeMillis(),
+                        "PHYSICAL_MOVE_FAILED",
+                    )
+                    throw trashResult.exceptionOrNull()
+                        ?: java.io.IOException("Failed to move file to trash")
+                }
+                val newPath = trashResult.getOrThrow()
+                fileOperationStore.transition(
+                    operationId,
+                    FILE_OPERATION_PHYSICAL_COMPLETED,
+                    operation.sourcePath,
+                    newPath,
+                    System.currentTimeMillis(),
+                    null,
+                )
+                val latest = dao.getFileById(currentFile.id) ?: return@withRetry
+                val originalPathToKeep =
+                    if (latest.originalPath.isNotBlank()) latest.originalPath
+                    else operation.sourcePath
+                dao.updateFile(
+                    latest.copy(
+                        path = newPath,
+                        originalPath = originalPathToKeep,
+                        isRecycleBin = true,
+                        deletedTimestampMs = System.currentTimeMillis(),
+                    )
+                )
+                fileOperationStore.transition(
+                    operationId,
+                    FILE_OPERATION_COMMITTED,
+                    operation.sourcePath,
+                    newPath,
+                    System.currentTimeMillis(),
+                    null,
+                )
+                fileOperationStore.delete(operationId)
+            }
+        }
+
+    // Durable restore recovery remains ordered with physical restoration and metadata update.
+    @Suppress("detekt.LongMethod")
+    suspend fun restoreFromRecycleBin(file: FileItemEntity) =
+        withContext(Dispatchers.IO) {
+            recoverPendingFileOperations()
+            val currentFile = dao.getFileById(file.id) ?: return@withContext
+            if (!currentFile.isRecycleBin) return@withContext
+            withRetry(RetryOperation.FILE_STORAGE) {
+                val targetPath =
+                    if (currentFile.originalPath.isNotBlank()) currentFile.originalPath
+                    else currentFile.path
+                val operation =
+                    prepareFileOperation(
+                        FILE_OPERATION_RESTORE,
+                        currentFile.id,
+                        currentFile.path,
+                        targetPath,
+                    )
+                val restoreResult =
+                    if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+                        Result.success(operation.targetPath)
+                    } else {
+                        PhysicalStorageManager.restoreFromTrash(
+                            context,
+                            operation.sourcePath,
+                            operation.targetPath,
+                        )
+                    }
+                if (restoreResult.isFailure) {
+                    fileOperationStore.transition(
+                        operation.operationId,
+                        FILE_OPERATION_FAILED,
+                        operation.sourcePath,
+                        operation.targetPath,
+                        System.currentTimeMillis(),
+                        "PHYSICAL_RESTORE_FAILED",
+                    )
+                    throw restoreResult.exceptionOrNull()
+                        ?: java.io.IOException("Failed to restore file from trash")
+                }
+                val restoredPath = restoreResult.getOrThrow()
+                fileOperationStore.transition(
+                    operation.operationId,
+                    FILE_OPERATION_PHYSICAL_COMPLETED,
+                    operation.sourcePath,
+                    restoredPath,
+                    System.currentTimeMillis(),
+                    null,
+                )
+                val latest = dao.getFileById(currentFile.id) ?: return@withRetry
+                dao.updateFile(
+                    latest.copy(
+                        path = restoredPath,
+                        originalPath = "",
+                        isRecycleBin = false,
+                        deletedTimestampMs = 0L,
+                    )
+                )
+                fileOperationStore.transition(
+                    operation.operationId,
+                    FILE_OPERATION_COMMITTED,
+                    operation.sourcePath,
+                    restoredPath,
+                    System.currentTimeMillis(),
+                    null,
+                )
+                fileOperationStore.delete(operation.operationId)
+            }
+        }
+
+    suspend fun deletePermanently(file: FileItemEntity) =
+        withContext(Dispatchers.IO) {
+            recoverPendingFileOperations()
+            val currentFile = dao.getFileById(file.id) ?: return@withContext
+            withRetry(RetryOperation.FILE_STORAGE) {
+                val operation =
+                    prepareFileOperation(
+                        FILE_OPERATION_DELETE,
+                        currentFile.id,
+                        currentFile.path,
+                        "",
+                    )
+                if (operation.status != FILE_OPERATION_PHYSICAL_COMPLETED) {
+                    if (!PhysicalStorageManager.deleteFile(context, operation.sourcePath)) {
+                        if (File(operation.sourcePath).exists()) {
+                            fileOperationStore.transition(
+                                operation.operationId,
+                                FILE_OPERATION_FAILED,
+                                operation.sourcePath,
+                                "",
+                                System.currentTimeMillis(),
+                                "PHYSICAL_DELETE_FAILED",
+                            )
+                            throw java.io.IOException("Failed to physically delete file")
+                        }
+                    }
+                    fileOperationStore.transition(
+                        operation.operationId,
+                        FILE_OPERATION_PHYSICAL_COMPLETED,
+                        operation.sourcePath,
+                        "",
+                        System.currentTimeMillis(),
+                        null,
+                    )
+                }
+                dao.deleteFileById(currentFile.id)
+                fileOperationStore.transition(
+                    operation.operationId,
+                    FILE_OPERATION_COMMITTED,
+                    operation.sourcePath,
+                    "",
+                    System.currentTimeMillis(),
+                    null,
+                )
+                fileOperationStore.delete(operation.operationId)
+            }
+        }
+
+    suspend fun emptyRecycleBin() =
+        withContext(Dispatchers.IO) {
+            recoverPendingFileOperations()
+            val trashFiles = dao.getRecycleBinFiles().first()
+            trashFiles.forEach { deletePermanently(it) }
+        }
+
+    suspend fun recoverPendingFileOperations() =
+        withContext(Dispatchers.IO) {
+            fileOperationStore.getOpenOperations().forEach { operation ->
+                when (operation.operationType) {
+                    FILE_OPERATION_MOVE_TO_TRASH -> recoverMoveToTrash(operation)
+                    FILE_OPERATION_RESTORE -> recoverRestore(operation)
+                    FILE_OPERATION_DELETE -> recoverDelete(operation)
+                }
+            }
+        }
 
     private suspend fun recoverMoveToTrash(operation: FileOperationEntity) {
-        val current = dao.getFileById(operation.fileId) ?: run {
-            fileOperationStore.delete(operation.operationId)
-            return
-        }
+        val current =
+            dao.getFileById(operation.fileId)
+                ?: run {
+                    fileOperationStore.delete(operation.operationId)
+                    return
+                }
         if (current.isRecycleBin) {
             fileOperationStore.delete(operation.operationId)
             return
         }
-        val result = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
-            Result.success(operation.targetPath)
-        } else if (!operation.sourcePath.startsWith("content://") && !File(operation.sourcePath).exists() && File(operation.targetPath).exists()) {
-            Result.success(operation.targetPath)
-        } else {
-            PhysicalStorageManager.moveToTrash(context, operation.sourcePath, operation.operationId)
-        }
+        val result =
+            if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+                Result.success(operation.targetPath)
+            } else if (
+                !operation.sourcePath.startsWith("content://") &&
+                    !File(operation.sourcePath).exists() &&
+                    File(operation.targetPath).exists()
+            ) {
+                Result.success(operation.targetPath)
+            } else {
+                PhysicalStorageManager.moveToTrash(
+                    context,
+                    operation.sourcePath,
+                    operation.operationId,
+                )
+            }
         if (result.isSuccess) {
             val path = result.getOrThrow()
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, path, System.currentTimeMillis(), null)
-            dao.updateFile(current.copy(path = path, originalPath = operation.sourcePath, isRecycleBin = true, deletedTimestampMs = System.currentTimeMillis()))
+            fileOperationStore.transition(
+                operation.operationId,
+                FILE_OPERATION_PHYSICAL_COMPLETED,
+                operation.sourcePath,
+                path,
+                System.currentTimeMillis(),
+                null,
+            )
+            dao.updateFile(
+                current.copy(
+                    path = path,
+                    originalPath = operation.sourcePath,
+                    isRecycleBin = true,
+                    deletedTimestampMs = System.currentTimeMillis(),
+                )
+            )
             fileOperationStore.delete(operation.operationId)
         }
     }
 
     private suspend fun recoverRestore(operation: FileOperationEntity) {
-        val current = dao.getFileById(operation.fileId) ?: run {
-            fileOperationStore.delete(operation.operationId)
-            return
-        }
+        val current =
+            dao.getFileById(operation.fileId)
+                ?: run {
+                    fileOperationStore.delete(operation.operationId)
+                    return
+                }
         if (!current.isRecycleBin) {
             fileOperationStore.delete(operation.operationId)
             return
         }
-        val result = if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
-            Result.success(operation.targetPath)
-        } else {
-            PhysicalStorageManager.restoreFromTrash(context, operation.sourcePath, operation.targetPath)
-        }
+        val result =
+            if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED) {
+                Result.success(operation.targetPath)
+            } else {
+                PhysicalStorageManager.restoreFromTrash(
+                    context,
+                    operation.sourcePath,
+                    operation.targetPath,
+                )
+            }
         if (result.isSuccess) {
             val path = result.getOrThrow()
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, path, System.currentTimeMillis(), null)
-            dao.updateFile(current.copy(path = path, originalPath = "", isRecycleBin = false, deletedTimestampMs = 0L))
+            fileOperationStore.transition(
+                operation.operationId,
+                FILE_OPERATION_PHYSICAL_COMPLETED,
+                operation.sourcePath,
+                path,
+                System.currentTimeMillis(),
+                null,
+            )
+            dao.updateFile(
+                current.copy(
+                    path = path,
+                    originalPath = "",
+                    isRecycleBin = false,
+                    deletedTimestampMs = 0L,
+                )
+            )
             fileOperationStore.delete(operation.operationId)
         }
     }
 
     private suspend fun recoverDelete(operation: FileOperationEntity) {
-        if (operation.status == FILE_OPERATION_PHYSICAL_COMPLETED || PhysicalStorageManager.deleteFile(context, operation.sourcePath) || !File(operation.sourcePath).exists()) {
-            fileOperationStore.transition(operation.operationId, FILE_OPERATION_PHYSICAL_COMPLETED, operation.sourcePath, "", System.currentTimeMillis(), null)
+        if (
+            operation.status == FILE_OPERATION_PHYSICAL_COMPLETED ||
+                PhysicalStorageManager.deleteFile(context, operation.sourcePath) ||
+                !File(operation.sourcePath).exists()
+        ) {
+            fileOperationStore.transition(
+                operation.operationId,
+                FILE_OPERATION_PHYSICAL_COMPLETED,
+                operation.sourcePath,
+                "",
+                System.currentTimeMillis(),
+                null,
+            )
             dao.deleteFileById(operation.fileId)
             fileOperationStore.delete(operation.operationId)
         }
     }
 
-    private suspend fun prepareFileOperation(type: String, fileId: Long, sourcePath: String, targetPath: String): FileOperationEntity {
+    private suspend fun prepareFileOperation(
+        type: String,
+        fileId: Long,
+        sourcePath: String,
+        targetPath: String,
+    ): FileOperationEntity {
         val operationId = operationId(fileId, type)
         val existing = fileOperationStore.findOpenOperation(fileId, type)
         if (existing != null) return existing
         val now = System.currentTimeMillis()
-        return FileOperationEntity(operationId, type, fileId, sourcePath, targetPath, FILE_OPERATION_PREPARED, now, now).also {
-            fileOperationStore.insert(it)
-        }
+        return FileOperationEntity(
+                operationId,
+                type,
+                fileId,
+                sourcePath,
+                targetPath,
+                FILE_OPERATION_PREPARED,
+                now,
+                now,
+            )
+            .also { fileOperationStore.insert(it) }
     }
 
     private fun operationId(fileId: Long, type: String): String = "file-$type-$fileId"
@@ -488,102 +812,168 @@ open class SmartManagerRepository(
     }
 
     suspend fun encryptToVault(file: FileItemEntity) = vaultRepository.encryptToVault(file)
-    suspend fun unlockFromVault(vaultItem: VaultItemEntity, file: FileItemEntity?): Boolean = vaultRepository.unlockFromVault(vaultItem, file)
+
+    suspend fun unlockFromVault(vaultItem: VaultItemEntity, file: FileItemEntity?): Boolean =
+        vaultRepository.unlockFromVault(vaultItem, file)
+
     open fun hasVaultPin(): Boolean = vaultRepository.hasVaultPin()
+
     open fun getStoredVaultPinHash(): String = vaultRepository.getStoredVaultPinHash()
+
     open fun initializeVaultPin(pin: String): Boolean = vaultRepository.initializeVaultPin(pin)
-    open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean = vaultRepository.verifyVaultPin(inputPin, storedHash)
-    open fun changeVaultPin(oldPin: String, newPin: String): Boolean = vaultRepository.changeVaultPin(oldPin, newPin)
+
+    open fun verifyVaultPin(inputPin: String, storedHash: String = ""): Boolean =
+        vaultRepository.verifyVaultPin(inputPin, storedHash)
+
+    open fun changeVaultPin(oldPin: String, newPin: String): Boolean =
+        vaultRepository.changeVaultPin(oldPin, newPin)
+
     open fun unlockVaultWithPin(pin: String): Boolean = vaultRepository.unlockWithPin(pin)
+
     open fun hasBiometricEnrollment(): Boolean = vaultRepository.hasBiometricEnrollment()
+
     open fun prepareBiometricEnrollmentCipher() = vaultRepository.prepareBiometricEnrollmentCipher()
-    open fun completeBiometricEnrollment(result: androidx.biometric.BiometricPrompt.AuthenticationResult): Boolean =
-        vaultRepository.completeBiometricEnrollment(result)
+
+    open fun completeBiometricEnrollment(
+        result: androidx.biometric.BiometricPrompt.AuthenticationResult
+    ): Boolean = vaultRepository.completeBiometricEnrollment(result)
+
     open fun prepareBiometricUnlockCipher() = vaultRepository.prepareBiometricUnlockCipher()
-    open fun completeBiometricUnlock(result: androidx.biometric.BiometricPrompt.AuthenticationResult): Boolean =
-        vaultRepository.completeBiometricUnlock(result)
+
+    open fun completeBiometricUnlock(
+        result: androidx.biometric.BiometricPrompt.AuthenticationResult
+    ): Boolean = vaultRepository.completeBiometricUnlock(result)
+
     open fun disableBiometricEnrollment(): Boolean = vaultRepository.disableBiometricEnrollment()
+
     open fun lockVaultSession() = vaultRepository.lockSession()
 
-    suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_READ) { fileRepository.getFilteredFilesPaged(category, query, limit, offset) } }
-    suspend fun renameFile(file: FileItemEntity, newName: String) = withContext(Dispatchers.IO) { withRetry(RetryOperation.FILE_STORAGE) { fileRepository.renameFile(file, newName) } }
-    suspend fun addTagToFile(file: FileItemEntity, tag: String) = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_WRITE) { fileRepository.addTagToFile(file, tag) } }
-    suspend fun togglePlugin(pluginId: String, currentEnabled: Boolean) = withContext(Dispatchers.IO) { withRetry(RetryOperation.DATABASE_WRITE) { pluginRepository.togglePlugin(pluginId, currentEnabled) } }
+    suspend fun getFilteredFilesPaged(
+        category: String?,
+        query: String,
+        limit: Int,
+        offset: Int,
+    ): List<FileItemEntity> =
+        withContext(Dispatchers.IO) {
+            withRetry(RetryOperation.DATABASE_READ) {
+                fileRepository.getFilteredFilesPaged(category, query, limit, offset)
+            }
+        }
+
+    suspend fun renameFile(file: FileItemEntity, newName: String) =
+        withContext(Dispatchers.IO) {
+            withRetry(RetryOperation.FILE_STORAGE) { fileRepository.renameFile(file, newName) }
+        }
+
+    suspend fun addTagToFile(file: FileItemEntity, tag: String) =
+        withContext(Dispatchers.IO) {
+            withRetry(RetryOperation.DATABASE_WRITE) { fileRepository.addTagToFile(file, tag) }
+        }
+
+    suspend fun togglePlugin(pluginId: String, currentEnabled: Boolean) =
+        withContext(Dispatchers.IO) {
+            withRetry(RetryOperation.DATABASE_WRITE) {
+                pluginRepository.togglePlugin(pluginId, currentEnabled)
+            }
+        }
+
     fun observeCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = dao.getCloudSyncItems()
 
     private suspend fun isProviderEnabled(provider: String): Boolean {
-        val pluginId = when (provider.uppercase()) {
-            "GOOGLE_DRIVE" -> "gdrive_sync"
-            "ONEDRIVE" -> "onedrive_sync"
-            "DROPBOX" -> "dropbox_sync"
-            else -> null
-        } ?: return false
+        val pluginId =
+            when (provider.uppercase()) {
+                "GOOGLE_DRIVE" -> "gdrive_sync"
+                "ONEDRIVE" -> "onedrive_sync"
+                "DROPBOX" -> "dropbox_sync"
+                else -> null
+            } ?: return false
         return dao.getAllPlugins().first().find { it.pluginId == pluginId }?.isEnabled == true
     }
 
-    suspend fun enqueueCloudSyncItem(provider: String, fileName: String, size: Long, filePath: String = "", isCore: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        if (!cloudTransferAllowed(context) || !isProviderEnabled(provider)) return@withContext false
-        val currentItems = dao.getCloudSyncItems().first()
-        val keyPath = if (filePath.isNotBlank()) filePath else fileName
-        val duplicate = currentItems.find { it.provider.equals(provider, true) && (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath && it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED") }
-        if (duplicate != null) return@withContext false
-        withRetry(RetryOperation.DATABASE_WRITE) {
-            dao.insertCloudSyncItem(
-                CloudSyncItemEntity(
-                    provider = provider,
-                    fileName = fileName,
-                    filePath = filePath,
-                    fileSize = size,
-                    status = "QUEUED",
-                    lastSyncedMs = System.currentTimeMillis(),
-                    isCore = isCore,
-                    operationId = UUID.randomUUID().toString()
+    suspend fun enqueueCloudSyncItem(
+        provider: String,
+        fileName: String,
+        size: Long,
+        filePath: String = "",
+        isCore: Boolean = false,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!cloudTransferAllowed(context) || !isProviderEnabled(provider))
+                return@withContext false
+            val currentItems = dao.getCloudSyncItems().first()
+            val keyPath = if (filePath.isNotBlank()) filePath else fileName
+            val duplicate =
+                currentItems.find {
+                    it.provider.equals(provider, true) &&
+                        (if (it.filePath.isNotBlank()) it.filePath else it.fileName) == keyPath &&
+                        it.status in listOf("PENDING", "QUEUED", "UPLOADING", "SYNCED")
+                }
+            if (duplicate != null) return@withContext false
+            withRetry(RetryOperation.DATABASE_WRITE) {
+                dao.insertCloudSyncItem(
+                    CloudSyncItemEntity(
+                        provider = provider,
+                        fileName = fileName,
+                        filePath = filePath,
+                        fileSize = size,
+                        status = "QUEUED",
+                        lastSyncedMs = System.currentTimeMillis(),
+                        isCore = isCore,
+                        operationId = UUID.randomUUID().toString(),
+                    )
                 )
-            )
+            }
+            workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
+            true
         }
-        workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
-        true
-    }
 
-    suspend fun retryCloudSyncItem(id: Long): Boolean = withContext(Dispatchers.IO) {
-        val item = dao.getCloudSyncItems().first().find { it.id == id } ?: return@withContext false
-        if (
-            item.status == "SYNCED" ||
-            !cloudTransferAllowed(context) ||
-            !isProviderEnabled(item.provider)
-        ) return@withContext false
-        withRetry(RetryOperation.DATABASE_WRITE) {
-            dao.insertCloudSyncItem(
-                item.copy(
-                    status = "QUEUED",
-                    lastSyncedMs = System.currentTimeMillis(),
-                    leaseOwner = null,
-                    leaseExpiresAtMs = 0L,
-                    heartbeatAtMs = 0L,
-                    completedAtMs = 0L,
-                    lastErrorCode = null
+    suspend fun retryCloudSyncItem(id: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            val item =
+                dao.getCloudSyncItems().first().find { it.id == id } ?: return@withContext false
+            if (
+                item.status == "SYNCED" ||
+                    !cloudTransferAllowed(context) ||
+                    !isProviderEnabled(item.provider)
+            )
+                return@withContext false
+            withRetry(RetryOperation.DATABASE_WRITE) {
+                dao.insertCloudSyncItem(
+                    item.copy(
+                        status = "QUEUED",
+                        lastSyncedMs = System.currentTimeMillis(),
+                        leaseOwner = null,
+                        leaseExpiresAtMs = 0L,
+                        heartbeatAtMs = 0L,
+                        completedAtMs = 0L,
+                        lastErrorCode = null,
+                    )
                 )
-            )
+            }
+            workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
+            true
         }
-        workCoordinator.enqueueCloudSyncWork(cloudTransferAllowed(context))
-        true
-    }
 
-    suspend fun cancelCloudSyncItem(id: Long): Boolean = withContext(Dispatchers.IO) {
-        val item = dao.getCloudSyncItems().first().find { it.id == id } ?: return@withContext false
-        if (item.status == "SYNCED") return@withContext false
-        withRetry(RetryOperation.DATABASE_WRITE) { dao.deleteCloudSyncItem(id) }
-        true
-    }
+    suspend fun cancelCloudSyncItem(id: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            val item =
+                dao.getCloudSyncItems().first().find { it.id == id } ?: return@withContext false
+            if (item.status == "SYNCED") return@withContext false
+            withRetry(RetryOperation.DATABASE_WRITE) { dao.deleteCloudSyncItem(id) }
+            true
+        }
 
-    suspend fun addSyncItem(provider: String, fileName: String, size: Long, filePath: String = "") = enqueueCloudSyncItem(provider, fileName, size, filePath)
+    suspend fun addSyncItem(provider: String, fileName: String, size: Long, filePath: String = "") =
+        enqueueCloudSyncItem(provider, fileName, size, filePath)
 
     fun trimMemory() {
         try {
             if (tfliteProvider is TFLiteSemanticEmbeddingProvider) {
                 (tfliteProvider as TFLiteSemanticEmbeddingProvider).close()
             }
-        } catch (e: Exception) { Log.e("SmartManagerRepository", "Failed to trim memory", e) }
+        } catch (e: Exception) {
+            Log.e("SmartManagerRepository", "Failed to trim memory", e)
+        }
     }
 
     /** @deprecated Use [workCoordinator] from the application/domain boundary. */

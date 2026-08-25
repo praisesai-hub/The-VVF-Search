@@ -29,6 +29,8 @@ class CloudSyncEngine(
      * Synchronizes a single [CloudSyncItemEntity].
      * Resolves the appropriate provider, performs the upload/sync, and returns the result.
      */
+    // Provider resolution, transfer, and result mapping remain one sync transaction boundary.
+    @Suppress("detekt.LongMethod", "detekt.ReturnCount")
     suspend fun syncItem(item: CloudSyncItemEntity): CloudSyncResult {
         val file = File(item.filePath)
         if (!file.exists() || !file.isFile) {

@@ -1,12 +1,13 @@
 package com.example.data
 
 import android.content.Context
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import com.example.domain.retry.RetryOperation
 import android.database.sqlite.SQLiteDatabaseLockedException
+import com.example.domain.retry.RetryOperation
+import java.io.File
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -14,7 +15,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
-import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -58,42 +58,79 @@ class OcrEngineTest {
 
         override suspend fun getFileById(id: Long): FileItemEntity? =
             activeFiles.firstOrNull { it.id == id } ?: unhashedFiles.firstOrNull { it.id == id }
+
         override suspend fun getFileByName(name: String): FileItemEntity? = null
+
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
-        override fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
+        override fun searchSemanticFiles(query: String): Flow<List<FileItemEntity>> =
+            flowOf(emptyList())
+
         override fun getAllActiveFiles(): Flow<List<FileItemEntity>> = flowOf(activeFiles)
+
         override fun getRecentFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
         override fun getCategoryStats(): Flow<List<CategoryStat>> = flowOf(emptyList())
-        override suspend fun getFilteredFilesPaged(category: String?, query: String, limit: Int, offset: Int): List<FileItemEntity> = emptyList()
-        override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
+        override suspend fun getFilteredFilesPaged(
+            category: String?,
+            query: String,
+            limit: Int,
+            offset: Int,
+        ): List<FileItemEntity> = emptyList()
+
+        override fun getFilesByCategory(category: String): Flow<List<FileItemEntity>> =
+            flowOf(emptyList())
+
         override fun getRecycleBinFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
         override fun getVaultFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
         override fun searchFiles(query: String): Flow<List<FileItemEntity>> = flowOf(emptyList())
+
         override fun getDuplicateFilesByHash(): Flow<List<FileItemEntity>> = flowOf(duplicateFiles)
+
         override suspend fun insertFile(file: FileItemEntity): Long = 0L
+
         override suspend fun insertFiles(files: List<FileItemEntity>) {}
+
         override suspend fun updateFile(file: FileItemEntity) {}
+
         override suspend fun getFileByPath(path: String): FileItemEntity? = null
+
         override suspend fun insertFileDirect(file: FileItemEntity): Long = 0L
+
         override suspend fun getAllOrdinaryFilesDirect(): List<FileItemEntity> = emptyList()
+
         override suspend fun deleteFilesByIds(ids: List<Long>) {}
+
         override suspend fun deleteFileById(id: Long) {}
+
         override suspend fun emptyRecycleBin() {}
+
         override suspend fun getVaultFileByName(name: String): FileItemEntity? = null
+
         override fun getAllVaultItems(): Flow<List<VaultItemEntity>> = flowOf(emptyList())
+
         override suspend fun insertVaultItem(item: VaultItemEntity): Long = 0L
+
         override suspend fun deleteVaultItemById(id: Long) {}
+
         override fun getCloudSyncItems(): Flow<List<CloudSyncItemEntity>> = flowOf(cloudItems)
+
         override suspend fun insertCloudSyncItem(item: CloudSyncItemEntity): Long {
             insertedCloudItems.add(item)
             cloudItems.add(item)
             return item.id
         }
+
         override suspend fun deleteCloudSyncItem(id: Long) {
             deletedCloudItemIds.add(id)
             cloudItems.removeAll { it.id == id }
         }
+
         override suspend fun setPluginEnabled(id: String, enabled: Boolean) {}
+
         override suspend fun insertPlugins(plugins: List<PluginEntity>) {}
     }
 
@@ -110,7 +147,9 @@ class OcrEngineTest {
             return resultText
         }
 
-        override suspend fun extractOcrBlocks(filePath: String): List<com.example.data.OcrTextBlock> {
+        override suspend fun extractOcrBlocks(
+            filePath: String
+        ): List<com.example.data.OcrTextBlock> {
             if (shouldThrowException) {
                 throw RuntimeException("ML Kit not initialized / GMS Core error")
             }
@@ -121,7 +160,7 @@ class OcrEngineTest {
                         text = resultText,
                         boundingBox = android.graphics.Rect(10, 10, 100, 50),
                         imageWidth = 500,
-                        imageHeight = 500
+                        imageHeight = 500,
                     )
                 )
             } else emptyList()
@@ -170,25 +209,31 @@ class OcrEngineTest {
     fun test_empty_or_null_ocr_result_does_not_generate_fabricated_data() = runBlocking {
         fakeOcrEngine.resultText = ""
 
-        val testFile = FileItemEntity(
-            id = 501L,
-            name = "receipt.jpg",
-            path = "/storage/emulated/0/DCIM/receipt.jpg",
-            category = FileCategory.IMAGES.name,
-            sizeBytes = 1200L,
-            md5Hash = "some_existing_hash",
-            ocrText = ""
-        )
+        val testFile =
+            FileItemEntity(
+                id = 501L,
+                name = "receipt.jpg",
+                path = "/storage/emulated/0/DCIM/receipt.jpg",
+                category = FileCategory.IMAGES.name,
+                sizeBytes = 1200L,
+                md5Hash = "some_existing_hash",
+                ocrText = "",
+            )
 
         fakeDao.unhashedFiles.add(testFile)
         fakeDao.plugins.add(
-            PluginEntity("ocr_engine", "ML Kit OCR Engine", "OCR", "Extract text", isEnabled = true, isCore = true)
+            PluginEntity(
+                "ocr_engine",
+                "ML Kit OCR Engine",
+                "OCR",
+                "Extract text",
+                isEnabled = true,
+                isCore = true,
+            )
         )
 
         val latch = java.util.concurrent.CountDownLatch(1)
-        fakeDao.onUpdateCallback = {
-            latch.countDown()
-        }
+        fakeDao.onUpdateCallback = { latch.countDown() }
 
         repository.startIncrementalDuplicateScan()
         latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
@@ -207,25 +252,31 @@ class OcrEngineTest {
     fun test_mocked_real_ocr_result_correctly_saved_to_entity() = runBlocking {
         fakeOcrEngine.resultText = "AUTHENTIC OCR CONTENT EXTRACTED FROM IMAGE"
 
-        val testFile = FileItemEntity(
-            id = 502L,
-            name = "invoice_real.jpg",
-            path = "/storage/emulated/0/DCIM/invoice_real.jpg",
-            category = FileCategory.IMAGES.name,
-            sizeBytes = 2200L,
-            md5Hash = "hash_502",
-            ocrText = ""
-        )
+        val testFile =
+            FileItemEntity(
+                id = 502L,
+                name = "invoice_real.jpg",
+                path = "/storage/emulated/0/DCIM/invoice_real.jpg",
+                category = FileCategory.IMAGES.name,
+                sizeBytes = 2200L,
+                md5Hash = "hash_502",
+                ocrText = "",
+            )
 
         fakeDao.unhashedFiles.add(testFile)
         fakeDao.plugins.add(
-            PluginEntity("ocr_engine", "ML Kit OCR Engine", "OCR", "Extract text", isEnabled = true, isCore = true)
+            PluginEntity(
+                "ocr_engine",
+                "ML Kit OCR Engine",
+                "OCR",
+                "Extract text",
+                isEnabled = true,
+                isCore = true,
+            )
         )
 
         val latch = java.util.concurrent.CountDownLatch(1)
-        fakeDao.onUpdateCallback = {
-            latch.countDown()
-        }
+        fakeDao.onUpdateCallback = { latch.countDown() }
 
         repository.startIncrementalDuplicateScan()
         latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
@@ -240,25 +291,31 @@ class OcrEngineTest {
     fun test_ocr_engine_unavailability_handled_gracefully_without_fabrication() = runBlocking {
         fakeOcrEngine.shouldThrowException = true
 
-        val testFile = FileItemEntity(
-            id = 503L,
-            name = "document_failed.jpg",
-            path = "/storage/emulated/0/DCIM/document_failed.jpg",
-            category = FileCategory.IMAGES.name,
-            sizeBytes = 3200L,
-            md5Hash = "hash_503",
-            ocrText = ""
-        )
+        val testFile =
+            FileItemEntity(
+                id = 503L,
+                name = "document_failed.jpg",
+                path = "/storage/emulated/0/DCIM/document_failed.jpg",
+                category = FileCategory.IMAGES.name,
+                sizeBytes = 3200L,
+                md5Hash = "hash_503",
+                ocrText = "",
+            )
 
         fakeDao.unhashedFiles.add(testFile)
         fakeDao.plugins.add(
-            PluginEntity("ocr_engine", "ML Kit OCR Engine", "OCR", "Extract text", isEnabled = true, isCore = true)
+            PluginEntity(
+                "ocr_engine",
+                "ML Kit OCR Engine",
+                "OCR",
+                "Extract text",
+                isEnabled = true,
+                isCore = true,
+            )
         )
 
         val latch = java.util.concurrent.CountDownLatch(1)
-        fakeDao.onUpdateCallback = {
-            latch.countDown()
-        }
+        fakeDao.onUpdateCallback = { latch.countDown() }
 
         repository.startIncrementalDuplicateScan()
         latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
@@ -281,14 +338,14 @@ class OcrEngineTest {
                     path = "/tmp/indexed.pdf",
                     category = FileCategory.DOCUMENTS.name,
                     sizeBytes = 1L,
-                    md5Hash = "hash"
+                    md5Hash = "hash",
                 ),
                 FileItemEntity(
                     id = 602L,
                     name = "pending.pdf",
                     path = "/tmp/pending.pdf",
                     category = FileCategory.DOCUMENTS.name,
-                    sizeBytes = 1L
+                    sizeBytes = 1L,
                 ),
                 FileItemEntity(
                     id = 603L,
@@ -297,7 +354,7 @@ class OcrEngineTest {
                     category = FileCategory.DOCUMENTS.name,
                     sizeBytes = 1L,
                     md5Hash = "vault",
-                    isVault = true
+                    isVault = true,
                 ),
                 FileItemEntity(
                     id = 604L,
@@ -306,7 +363,7 @@ class OcrEngineTest {
                     category = FileCategory.DOCUMENTS.name,
                     sizeBytes = 1L,
                     md5Hash = "deleted",
-                    isRecycleBin = true
+                    isRecycleBin = true,
                 ),
                 FileItemEntity(
                     id = 605L,
@@ -314,8 +371,8 @@ class OcrEngineTest {
                     path = "/tmp/photo.jpg",
                     category = FileCategory.IMAGES.name,
                     sizeBytes = 1L,
-                    md5Hash = "photo"
-                )
+                    md5Hash = "photo",
+                ),
             )
         )
 
@@ -328,21 +385,33 @@ class OcrEngineTest {
 
     @Test
     fun exactDuplicates_groupsOnlyRepeatedNonBlankHashes() = runBlocking {
-        val firstDuplicate = FileItemEntity(
-            id = 611L,
-            name = "one.txt",
-            path = "/tmp/one.txt",
-            category = FileCategory.DOCUMENTS.name,
-            sizeBytes = 1L,
-            md5Hash = "same"
-        )
-        val secondDuplicate = firstDuplicate.copy(id = 612L, name = "two.txt", path = "/tmp/two.txt")
+        val firstDuplicate =
+            FileItemEntity(
+                id = 611L,
+                name = "one.txt",
+                path = "/tmp/one.txt",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+                md5Hash = "same",
+            )
+        val secondDuplicate =
+            firstDuplicate.copy(id = 612L, name = "two.txt", path = "/tmp/two.txt")
         fakeDao.duplicateFiles.addAll(
             listOf(
                 firstDuplicate,
                 secondDuplicate,
-                firstDuplicate.copy(id = 613L, name = "blank-a.txt", path = "/tmp/blank-a.txt", md5Hash = ""),
-                firstDuplicate.copy(id = 614L, name = "blank-b.txt", path = "/tmp/blank-b.txt", md5Hash = "")
+                firstDuplicate.copy(
+                    id = 613L,
+                    name = "blank-a.txt",
+                    path = "/tmp/blank-a.txt",
+                    md5Hash = "",
+                ),
+                firstDuplicate.copy(
+                    id = 614L,
+                    name = "blank-b.txt",
+                    path = "/tmp/blank-b.txt",
+                    md5Hash = "",
+                ),
             )
         )
 
@@ -355,13 +424,14 @@ class OcrEngineTest {
 
     @Test
     fun searchSemanticFiles_usesLocalFallbackWhenModelAssetsAreUnavailable() = runBlocking {
-        fakeDao.activeFiles += FileItemEntity(
-            id = 621L,
-            name = "notes.txt",
-            path = "/tmp/notes.txt",
-            category = FileCategory.DOCUMENTS.name,
-            sizeBytes = 1L
-        )
+        fakeDao.activeFiles +=
+            FileItemEntity(
+                id = 621L,
+                name = "notes.txt",
+                path = "/tmp/notes.txt",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+            )
 
         assertTrue(repository.isSemanticSearchAvailable)
         assertFalse(repository.searchSemanticFiles("notes").first().isEmpty())
@@ -369,73 +439,79 @@ class OcrEngineTest {
 
     @Test
     fun enqueueCloudSyncItem_rejectsDisabledProviderAndDuplicate() = runBlocking {
-        fakeDao.plugins += PluginEntity(
-            "gdrive_sync",
-            "Drive",
-            "CLOUD_PROVIDER",
-            "Drive sync",
-            isEnabled = false,
-            isCore = false
-        )
+        fakeDao.plugins +=
+            PluginEntity(
+                "gdrive_sync",
+                "Drive",
+                "CLOUD_PROVIDER",
+                "Drive sync",
+                isEnabled = false,
+                isCore = false,
+            )
         assertFalse(repository.enqueueCloudSyncItem("GOOGLE_DRIVE", "report.pdf", 10L))
 
         fakeDao.plugins[0] = fakeDao.plugins[0].copy(isEnabled = true)
-        fakeDao.cloudItems += CloudSyncItemEntity(
-            id = 631L,
-            provider = "google_drive",
-            fileName = "report.pdf",
-            fileSize = 10L,
-            status = "PENDING"
-        )
+        fakeDao.cloudItems +=
+            CloudSyncItemEntity(
+                id = 631L,
+                provider = "google_drive",
+                fileName = "report.pdf",
+                fileSize = 10L,
+                status = "PENDING",
+            )
         assertFalse(repository.enqueueCloudSyncItem("GOOGLE_DRIVE", "report.pdf", 10L))
         assertTrue(fakeDao.insertedCloudItems.isEmpty())
     }
 
     @Test
     fun enqueueRetryAndCancelCloudSyncItem_preserveQueueStateContracts() = runBlocking {
-        fakeDao.plugins += PluginEntity(
-            "gdrive_sync",
-            "Drive",
-            "CLOUD_PROVIDER",
-            "Drive sync",
-            isEnabled = true,
-            isCore = false
-        )
+        fakeDao.plugins +=
+            PluginEntity(
+                "gdrive_sync",
+                "Drive",
+                "CLOUD_PROVIDER",
+                "Drive sync",
+                isEnabled = true,
+                isCore = false,
+            )
         assertFalse(
             repository.enqueueCloudSyncItem(
                 "GOOGLE_DRIVE",
                 "report.pdf",
                 10L,
                 filePath = "/tmp/report.pdf",
-                isCore = true
+                isCore = true,
             )
         )
         assertTrue(fakeDao.insertedCloudItems.isEmpty())
 
-        val failed = CloudSyncItemEntity(
-            id = 641L,
-            provider = "GOOGLE_DRIVE",
-            fileName = "failed.pdf",
-            fileSize = 20L,
-            status = "FAILED"
-        )
+        val failed =
+            CloudSyncItemEntity(
+                id = 641L,
+                provider = "GOOGLE_DRIVE",
+                fileName = "failed.pdf",
+                fileSize = 20L,
+                status = "FAILED",
+            )
         fakeDao.cloudItems += failed
-        val authorizedRepository = SmartManagerRepository(
-            context = context,
-            dao = fakeDao,
-            ocrEngine = fakeOcrEngine,
-            cloudTransferAllowed = { true },
-        )
+        val authorizedRepository =
+            SmartManagerRepository(
+                context = context,
+                dao = fakeDao,
+                ocrEngine = fakeOcrEngine,
+                cloudTransferAllowed = { true },
+            )
         assertTrue(authorizedRepository.retryCloudSyncItem(641L))
         assertEquals("QUEUED", fakeDao.insertedCloudItems.last().status)
 
-        val synced = CloudSyncItemEntity(
-            id = 642L,
-            provider = "GOOGLE_DRIVE",
-            fileName = "synced.pdf",
-            fileSize = 20L,
-            status = "SYNCED"
-        )
+        val synced =
+            CloudSyncItemEntity(
+                id = 642L,
+                provider = "GOOGLE_DRIVE",
+                fileName = "synced.pdf",
+                fileSize = 20L,
+                status = "SYNCED",
+            )
         fakeDao.cloudItems += synced
         assertFalse(repository.retryCloudSyncItem(642L))
         assertFalse(repository.cancelCloudSyncItem(642L))
@@ -447,11 +523,17 @@ class OcrEngineTest {
     fun withRetry_returnsOnFirstSuccessfulAttemptAfterTransientFailures() = runBlocking {
         var attempts = 0
 
-        val result = repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 3, initialDelayMs = 0, factor = 2.0) {
-            attempts++
-            if (attempts < 3) throw SQLiteDatabaseLockedException("database locked")
-            "persisted"
-        }
+        val result =
+            repository.withRetry(
+                RetryOperation.DATABASE_WRITE,
+                maxAttempts = 3,
+                initialDelayMs = 0,
+                factor = 2.0,
+            ) {
+                attempts++
+                if (attempts < 3) throw SQLiteDatabaseLockedException("database locked")
+                "persisted"
+            }
 
         assertEquals("persisted", result)
         assertEquals(3, attempts)
@@ -462,9 +544,13 @@ class OcrEngineTest {
         var attempts = 0
 
         try {
-            repository.withRetry(RetryOperation.DATABASE_WRITE, maxAttempts = 2, initialDelayMs = 0) {
+            repository.withRetry(
+                RetryOperation.DATABASE_WRITE,
+                maxAttempts = 2,
+                initialDelayMs = 0,
+            ) {
                 attempts++
-                throw IllegalStateException("permanent")
+                check(false) { "permanent" }
             }
             throw AssertionError("withRetry should rethrow the final failure")
         } catch (exception: IllegalStateException) {
