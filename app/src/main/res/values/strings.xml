@@ -151,7 +151,7 @@
     <string name="keep_local">Keep Local</string>
     <string name="keep_cloud">Keep Cloud</string>
     <string name="dashboard_title">%1$s v2.0</string>
-    <string name="system_health">System Health: 94%% Excellent</string>
+    <string name="system_health">System Health: 94% Excellent</string>
     <string name="start_benchmark">Start &lt;10s</string>
     <string name="storage_used">Storage Used: %1$s</string>
     <string name="free_storage">18.5 GB Free of 128 GB</string>
@@ -266,7 +266,7 @@
     <string name="tflite_semantic_engine">TFLite AI Semantic Search Engine</string>
     <string name="semantic_search_results">Semantic Search Results</string>
     <string name="no_semantic_search_results">No semantic search results found.</string>
-    <string name="score_96">Score 96%%</string>
+    <string name="score_96">Score 96%</string>
     <string name="pin_error_too_many_attempts">Too many incorrect attempts. Vault authentication is temporarily locked.</string>
     <string name="pin_error_reenter">Re-enter the new PIN to confirm.</string>
     <string name="pin_error_mismatch">PINs did not match. Try again.</string>
