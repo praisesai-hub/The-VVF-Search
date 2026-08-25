@@ -111,7 +111,9 @@ jobs:
     # execution agent. Running testDebugUnitTest separately first marks that dependency
     # up-to-date and can leave the report without the execution data it requires.
     - name: Run Unit Tests and Generate JVM Unit Test Coverage Report
-      run: ./gradlew :app:createDebugUnitTestCoverageReport
+      # Force fresh test execution and JaCoCo data; Gradle build-cache reuse can otherwise
+      # retain a report that was produced without the current test execution data.
+      run: ./gradlew :app:createDebugUnitTestCoverageReport --rerun-tasks --no-build-cache
     - name: Test JVM coverage policy checker
       run: python3 -m unittest scripts/test_check_coverage_floor.py
     - name: Upload JVM Unit Test Coverage Report
