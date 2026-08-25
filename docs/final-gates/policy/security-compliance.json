@@ -1,0 +1,102 @@
+{
+  "repository": "/home/ubuntu/The-VVF-Search",
+  "scope": "static source/configuration checks only",
+  "findings": [
+    {
+      "control": "MASVS-NETWORK-1",
+      "title": "Cleartext HTTP references",
+      "status": "PASS",
+      "severity": "INFO",
+      "evidence": "No http:// reference found in scanned app sources/resources.",
+      "remediation": "Remove cleartext endpoints or document an approved exception; enforce HTTPS and verify Network Security Config."
+    },
+    {
+      "control": "MASVS-STORAGE-1",
+      "title": "Hardcoded credential-like literals",
+      "status": "PASS",
+      "severity": "INFO",
+      "evidence": "No credential-like assignment literal found by this heuristic.",
+      "remediation": "Move credentials to a secret manager/CI secret store and rotate any exposed credential. Review heuristic results manually."
+    },
+    {
+      "control": "MASVS-STORAGE-1",
+      "title": "Sensitive token persistence review",
+      "status": "PARTIAL",
+      "severity": "HIGH",
+      "evidence": "app/src/main/java/com/example/data/CloudSyncPolicy.kt:18: .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE); app/src/main/java/com/example/data/CloudSyncPolicy.kt:26: .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE); app/src/main/java/com/example/data/GoogleAuthManager.kt:3: import android.content.SharedPreferences; app/src/main/java/com/example/data/GoogleAuthManager.kt:4: import com.example.security.SharedPreferencesKeyValueStore; app/src/main/java/com/example/data/GoogleAuthManager.kt:19: constructor(sharedPrefs: SharedPreferences) : this(SharedPreferencesKeyValueStore(sharedPrefs)); app/src/main/java/com/example/data/GoogleAuthManager.kt:27: val accessToken = secureStore.getString(KEY_ACCESS_TOKEN); app/src/main/java/com/example/data/GoogleAuthManager.kt:28: val refreshToken = secureStore.getString(KEY_REFRESH_TOKEN); app/src/main/java/com/example/data/GoogleAuthManager.kt:51: KEY_ACCESS_TOKEN to accessToken,",
+      "remediation": "Confirm that refresh tokens are encrypted with a Keystore-backed design, access tokens are short-lived, and backup exclusion is tested."
+    },
+    {
+      "control": "MASVS-CRYPTO-1",
+      "title": "Cryptographic key fallback review",
+      "status": "PASS",
+      "severity": "INFO",
+      "evidence": "No fallback key pattern found.",
+      "remediation": "Do not silently use an ephemeral key for durable vault data; fail closed or implement a documented, durable key-wrapping/recovery design."
+    },
+    {
+      "control": "MASVS-STORAGE-2",
+      "title": "Backup and restore rules",
+      "status": "PASS",
+      "severity": "HIGH",
+      "evidence": "Manifest allowBackup/dataExtractionRules present=True; explicit exclude rule=True.",
+      "remediation": "Define explicit per-domain backup/transfer policy for vault files, tokens, database, cache, and keys; test restore and device transfer."
+    },
+    {
+      "control": "MASVS-PLATFORM-1",
+      "title": "Exported component review",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "evidence": "Manifest exported declarations=['true', 'false']; launcher activity exported=True.",
+      "remediation": "Keep only intentionally public components exported and validate all incoming intents/URI data. Verify merged manifest and runtime behavior."
+    },
+    {
+      "control": "MASVS-PLATFORM-2",
+      "title": "Storage/media permission review",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "evidence": "app/src/main/AndroidManifest.xml:5: <uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\" android:maxSdkVersion=\"32\" />; app/src/main/AndroidManifest.xml:6: <uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\" android:maxSdkVersion=\"29\" tools:ignore=\"ScopedStorage\" />; app/src/main/AndroidManifest.xml:7: <uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\" />; app/src/main/AndroidManifest.xml:8: <uses-permission android:name=\"android.permission.READ_MEDIA_VIDEO\" />; app/src/main/AndroidManifest.xml:9: <uses-permission android:name=\"android.permission.READ_MEDIA_VISUAL_USER_SELECTED\" />; app/src/main/AndroidManifest.xml:10: <uses-permission android:name=\"android.permission.READ_MEDIA_AUDIO\" />",
+      "remediation": "Request the narrowest permission at runtime for each API level, support scoped/partial media access, and test denial/revocation paths."
+    },
+    {
+      "control": "MASVS-RESILIENCE-1",
+      "title": "Release shrinking/obfuscation configuration",
+      "status": "PASS",
+      "severity": "INFO",
+      "evidence": "isMinifyEnabled=true present=True; explicit false present=False.",
+      "remediation": "Verify release-only R8/shrinking configuration, keep rules, mapping retention, and a signed release artifact. Do not disable R8 to bypass failures."
+    },
+    {
+      "control": "MASVS-CODE-1",
+      "title": "Placeholder/unfinished implementation markers",
+      "status": "PARTIAL",
+      "severity": "MEDIUM",
+      "evidence": "app/src/main/java/com/example/ai/SemanticEmbeddingProvider.kt:41: return (dotProduct / (sqrt(normA.toDouble()) * sqrt(normB.toDouble()))).toFloat(); app/src/main/java/com/example/ai/SemanticEmbeddingProvider.kt:140: val norm = sqrt(sumSq.toDouble()).toFloat(); app/src/main/java/com/example/ai/SemanticEmbeddingProvider.kt:434: val norm = sqrt(sumSquares.toDouble()).toFloat(); app/src/main/java/com/example/storage/VideoDuplicateEvidence.kt:77: (HASH_BIT_LENGTH - averageDistance.coerceIn(0.0, HASH_BIT_LENGTH.toDouble())) *; app/src/main/java/com/example/storage/VideoDuplicateEvidence.kt:112: val firstRatio = first.videoWidth.toDouble() / first.videoHeight.toDouble(); app/src/main/java/com/example/storage/VideoDuplicateEvidence.kt:113: val secondRatio = second.videoWidth.toDouble() / second.videoHeight.toDouble(); app/src/main/java/com/example/storage/VideoDuplicateEvidence.kt:115: abs(first.videoWidth - second.videoWidth).toDouble() <=; app/src/main/java/com/example/storage/VideoDuplicateEvidence.kt:116: max(first.videoWidth, second.videoWidth).toDouble() * RESOLUTION_DIMENSION_TOLERANCE &&; app/src/main/java/com/example/storage/VideoDuplicateEvidence.kt:117: abs(first.videoHeight - second.videoHeight).toDouble() <=; app/src/main/java/com/example/storage/VideoDuplicateEvidence.kt:118: max(first.videoHeight, second.videoHeight).toDouble() * RESOLUTION_DIMENSION_TOLERANCE",
+      "remediation": "Review each marker and either implement, remove, or explicitly document it before release; never treat a mock as production behavior."
+    },
+    {
+      "control": "MASVS-CODE-2",
+      "title": "Local credentials/signing material in repository",
+      "status": "PASS",
+      "severity": "INFO",
+      "evidence": "No local.properties/keystore/JKS file found in extracted tree.",
+      "remediation": "Keep signing credentials and local SDK configuration outside source control; rotate anything ever committed and scan full Git history."
+    },
+    {
+      "control": "MASVS-CODE-3",
+      "title": "Automated test inventory",
+      "status": "PASS",
+      "severity": "INFO",
+      "evidence": "Detected 74 test source/resource files.",
+      "remediation": "Add tests for auth expiry, backup/restore, Keystore invalidation, permissions, worker idempotency, crash recovery, and destructive operations."
+    },
+    {
+      "control": "BUILD-1",
+      "title": "Reproducible Gradle wrapper",
+      "status": "PASS",
+      "severity": "INFO",
+      "evidence": "gradlew present=True.",
+      "remediation": "Use the repository wrapper in CI and document pinned JDK/SDK/build-tools versions."
+    }
+  ]
+}
