@@ -107,9 +107,10 @@ jobs:
           --report "$reports_dir/releaseRuntimeClasspath.txt" \
           --policy scripts/release-runtime-security-policy.txt
         PYTHONPATH=scripts python3 -m unittest scripts/test_verify_release_runtime_security.py
-    - name: Run Unit Tests
-      run: ./gradlew :app:testDebugUnitTest
-    - name: Generate JVM Unit Test Coverage Report
+    # The AGP coverage task depends on testDebugUnitTest and attaches the JaCoCo
+    # execution agent. Running testDebugUnitTest separately first marks that dependency
+    # up-to-date and can leave the report without the execution data it requires.
+    - name: Run Unit Tests and Generate JVM Unit Test Coverage Report
       run: ./gradlew :app:createDebugUnitTestCoverageReport
     - name: Test JVM coverage policy checker
       run: python3 -m unittest scripts/test_check_coverage_floor.py
