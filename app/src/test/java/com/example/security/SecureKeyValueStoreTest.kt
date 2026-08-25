@@ -1,7 +1,7 @@
 package com.example.security
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import io.mockk.mockk
 import java.io.File
 import java.nio.file.Files
 import org.junit.After
@@ -12,12 +12,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
 class SecureKeyValueStoreTest {
     private lateinit var directory: File
     private lateinit var crypto: SecureStoreCrypto
@@ -144,8 +139,7 @@ class SecureKeyValueStoreTest {
         crypto = crypto
     )
 
-    private val context: Context
-        get() = ApplicationProvider.getApplicationContext()
+    private val context: Context = mockk(relaxed = true)
 
     private class ReversibleCrypto : SecureStoreCrypto {
         override fun encrypt(plaintext: ByteArray): EncryptedPayload =
