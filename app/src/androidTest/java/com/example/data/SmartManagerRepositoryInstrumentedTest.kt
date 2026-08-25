@@ -271,7 +271,8 @@ class SmartManagerRepositoryInstrumentedTest {
         val source = File.createTempFile("vvf_repo_move_", ".txt", context.cacheDir)
         source.writeText("repository move payload")
         try {
-            val ordinary = document(30L, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
+            val itemId = System.nanoTime()
+            val ordinary = document(itemId, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
             fakeDao.activeFiles += ordinary
 
             repository.moveToRecycleBin(ordinary)
@@ -302,13 +303,14 @@ class SmartManagerRepositoryInstrumentedTest {
     fun deletePermanently_removesPhysicalFileAndDaoRecord(): Unit = runBlocking {
         val source = File.createTempFile("vvf_repo_delete_", ".txt", context.cacheDir)
         try {
-            val ordinary = document(31L, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
+            val itemId = System.nanoTime()
+            val ordinary = document(itemId, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
             fakeDao.activeFiles += ordinary
 
             repository.deletePermanently(ordinary)
 
             assertFalse(source.exists())
-            assertEquals(listOf(31L), fakeDao.deletedFileIds)
+            assertEquals(listOf(itemId), fakeDao.deletedFileIds)
         } finally {
             source.delete()
         }
@@ -319,7 +321,7 @@ class SmartManagerRepositoryInstrumentedTest {
         val trash = File.createTempFile("vvf_repo_trash_", ".txt", context.cacheDir)
         try {
             trash.writeText("trash payload")
-            fakeDao.recycleBinFiles += document(32L, trash.name, isRecycleBin = true).copy(
+            fakeDao.recycleBinFiles += document(System.nanoTime(), trash.name, isRecycleBin = true).copy(
                 path = trash.absolutePath,
                 sizeBytes = trash.length()
             )
