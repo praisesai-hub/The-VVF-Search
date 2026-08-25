@@ -41,6 +41,7 @@ open class SmartManagerRepository(
     // without changing build provisioning or device-owner consent.
     private val cloudTransferAllowed: (Context) -> Boolean = CloudSyncPolicy::canTransfer,
     private val fileOperationStoreOverride: FileOperationStore? = null,
+    private val workCoordinatorOverride: WorkCoordinator? = null,
 ) {
     private val fileOperationStore: FileOperationStore by
         lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -49,7 +50,9 @@ open class SmartManagerRepository(
     val keystoreVaultManager: KeystoreVaultManager by
         lazy(LazyThreadSafetyMode.SYNCHRONIZED) { KeystoreVaultManager() }
     val storageScanner = StorageScanner(context)
-    val workCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { WorkCoordinator(context) }
+    val workCoordinator by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        workCoordinatorOverride ?: WorkCoordinator(context)
+    }
     val fileRepository by lazy { FileRepository(context, dao) }
     private val vaultManagerEngine: VaultManagerEngine by
         lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
