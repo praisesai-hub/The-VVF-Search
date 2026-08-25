@@ -2,13 +2,13 @@ package com.example.data
 
 import com.example.ai.SemanticEmbeddingProvider
 import com.example.storage.HammingDistanceCalculator
-import kotlinx.coroutines.flow.flowOf
+import java.io.File
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
-import java.io.File
 
 class DuplicateDetectionEngineTest {
 
@@ -33,8 +33,11 @@ class DuplicateDetectionEngineTest {
     // Hand-crafted Fake implementing SemanticEmbeddingProvider to bypass native TF Lite libs
     class FakeSemanticEmbeddingProvider : SemanticEmbeddingProvider {
         override val embeddingVersion: Int = 1
+
         override fun isModelLoaded(): Boolean = true
+
         override suspend fun generateImageEmbedding(file: File): FloatArray? = null
+
         override suspend fun generateTextEmbedding(text: String): FloatArray? = null
     }
 
@@ -42,13 +45,15 @@ class DuplicateDetectionEngineTest {
     fun setUp() {
         fakeSemanticProvider = FakeSemanticEmbeddingProvider()
         fakeHammingCalculator = FakeHammingDistanceCalculator()
-        duplicateDetectionEngine = DuplicateDetectionEngine(fakeHammingCalculator, fakeSemanticProvider)
+        duplicateDetectionEngine =
+            DuplicateDetectionEngine(fakeHammingCalculator, fakeSemanticProvider)
     }
 
     // Baseline brute-force O(n²) visual duplicates implementation for correctness check
+    @Suppress("detekt.NestedBlockDepth")
     private fun bruteForceVisualDuplicates(
         validImages: List<FileItemEntity>,
-        threshold: Float
+        threshold: Float,
     ): List<DuplicateGroup> {
         val thresholdInt = threshold.toInt().coerceIn(50, 100)
         val maxDistance = ((100 - thresholdInt) * 64) / 100
@@ -64,7 +69,11 @@ class DuplicateDetectionEngineTest {
 
             for (file2 in validImages) {
                 if (file1.id == file2.id || visited.contains(file2.id)) continue
-                val distance = fakeHammingCalculator.calculateHammingDistance(file1.visualSimilarityHash, file2.visualSimilarityHash)
+                val distance =
+                    fakeHammingCalculator.calculateHammingDistance(
+                        file1.visualSimilarityHash,
+                        file2.visualSimilarityHash,
+                    )
                 if (distance in 0..maxDistance) {
                     cluster.add(file2)
                     if (distance < minDistanceInCluster) {
@@ -75,13 +84,15 @@ class DuplicateDetectionEngineTest {
 
             if (cluster.size > 1) {
                 cluster.forEach { visited.add(it.id) }
-                val avgScore = if (minDistanceInCluster < 64) ((64 - minDistanceInCluster) * 100) / 64 else 100
+                val avgScore =
+                    if (minDistanceInCluster < 64) ((64 - minDistanceInCluster) * 100) / 64 else 100
                 resultGroups.add(
                     DuplicateGroup(
-                        title = "Perceptual Image Match (${avgScore}% Visual Similarity): ${file1.name}",
+                        title =
+                            "Perceptual Image Match (${avgScore}% Visual Similarity): ${file1.name}",
                         level = 2,
                         similarityScore = avgScore,
-                        files = cluster
+                        files = cluster,
                     )
                 )
             }
@@ -96,7 +107,7 @@ class DuplicateDetectionEngineTest {
             path = "/storage/emulated/0/DCIM/$name",
             category = FileCategory.IMAGES.name,
             sizeBytes = 1024L,
-            visualSimilarityHash = hash
+            visualSimilarityHash = hash,
         )
     }
 
@@ -108,7 +119,8 @@ class DuplicateDetectionEngineTest {
 
     @Test
     fun test_visual_duplicates_correctness() = runBlocking {
-        // (a) Correctness test — Compare optimized bucketing algorithm with brute-force on small sample (20 files)
+        // (a) Correctness test — Compare optimized bucketing algorithm with brute-force on small
+        // sample (20 files)
         val files = mutableListOf<FileItemEntity>()
 
         // Group 1 (Base: 1111222233334444)
@@ -126,20 +138,21 @@ class DuplicateDetectionEngineTest {
         files.add(createImageFile(8, "img8.jpg", "BBBBCCCCDDDDEEEF")) // distance 3
 
         // Singletons (No duplicates, distinct bands)
-        val singletonHashes = listOf(
-            "0000000000000000",
-            "9999999999999999",
-            "0000999900009999",
-            "9999000099990000",
-            "0000000099999999",
-            "9999999900000000",
-            "0909090909090909",
-            "9090909090909090",
-            "0099009900990099",
-            "9900990099009900",
-            "0990099009900990",
-            "9009900990099009"
-        )
+        val singletonHashes =
+            listOf(
+                "0000000000000000",
+                "9999999999999999",
+                "0000999900009999",
+                "9999000099990000",
+                "0000000099999999",
+                "9999999900000000",
+                "0909090909090909",
+                "9090909090909090",
+                "0099009900990099",
+                "9900990099009900",
+                "0990099009900990",
+                "9009900990099009",
+            )
         for (i in 9..20) {
             val hash = singletonHashes[i - 9]
             files.add(createImageFile(i.toLong(), "img$i.jpg", hash))
@@ -151,22 +164,24 @@ class DuplicateDetectionEngineTest {
         val expectedGroups = bruteForceVisualDuplicates(files, threshold)
 
         // Run optimized LSH bucketing flow
-        val actualGroupsFlow = duplicateDetectionEngine.getVisualDuplicates(
-            activeFilesFlow = flowOf(files),
-            similarityThresholdFlow = flowOf(threshold)
-        )
+        val actualGroupsFlow =
+            duplicateDetectionEngine.getVisualDuplicates(
+                activeFilesFlow = flowOf(files),
+                similarityThresholdFlow = flowOf(threshold),
+            )
         val actualGroups = actualGroupsFlow.first()
 
         // Verify result matches exactly
         assertGroupsEqual(expectedGroups, actualGroups)
-        
+
         // Assert we have exactly 3 duplicate groups found
         assertEquals(3, actualGroups.size)
     }
 
     @Test
     fun test_visual_duplicates_performance_and_scale() = runBlocking {
-        // (b) Performance/scale test — On 5,000 synthetic hash entries, the optimized bucketing algorithm completed within 2 seconds
+        // (b) Performance/scale test — On 5,000 synthetic hash entries, the optimized bucketing
+        // algorithm completed within 2 seconds
         val count = 5000
         val files = ArrayList<FileItemEntity>(count)
 
@@ -182,16 +197,19 @@ class DuplicateDetectionEngineTest {
 
         val startTime = System.currentTimeMillis()
 
-        val groupsFlow = duplicateDetectionEngine.getVisualDuplicates(
-            activeFilesFlow = flowOf(files),
-            similarityThresholdFlow = flowOf(threshold)
-        )
+        val groupsFlow =
+            duplicateDetectionEngine.getVisualDuplicates(
+                activeFilesFlow = flowOf(files),
+                similarityThresholdFlow = flowOf(threshold),
+            )
         val groups = groupsFlow.first()
 
         val endTime = System.currentTimeMillis()
         val duration = endTime - startTime
 
-        println("Duplicate detection on $count files finished in $duration ms. Found ${groups.size} groups.")
+        println(
+            "Duplicate detection on $count files finished in $duration ms. Found ${groups.size} groups."
+        )
 
         // Verify it took less than 2000 ms (2.0 seconds) to complete
         assertTrue("Optimized LSH took too long: $duration ms", duration < 2000)
@@ -200,18 +218,20 @@ class DuplicateDetectionEngineTest {
     @Test
     fun test_visual_duplicates_edge_cases() = runBlocking {
         // (c) Edge Case: Empty list
-        val emptyFlow = duplicateDetectionEngine.getVisualDuplicates(
-            activeFilesFlow = flowOf(emptyList()),
-            similarityThresholdFlow = flowOf(90.0f)
-        )
+        val emptyFlow =
+            duplicateDetectionEngine.getVisualDuplicates(
+                activeFilesFlow = flowOf(emptyList()),
+                similarityThresholdFlow = flowOf(90.0f),
+            )
         assertTrue(emptyFlow.first().isEmpty())
 
         // (c) Edge Case: Single file
         val singleFile = createImageFile(1L, "one.jpg", "1111222233334444")
-        val singleFlow = duplicateDetectionEngine.getVisualDuplicates(
-            activeFilesFlow = flowOf(listOf(singleFile)),
-            similarityThresholdFlow = flowOf(90.0f)
-        )
+        val singleFlow =
+            duplicateDetectionEngine.getVisualDuplicates(
+                activeFilesFlow = flowOf(listOf(singleFile)),
+                similarityThresholdFlow = flowOf(90.0f),
+            )
         assertTrue(singleFlow.first().isEmpty())
 
         // (c) Edge Case: All files distinct (no duplicates)
@@ -220,10 +240,11 @@ class DuplicateDetectionEngineTest {
             val hexChar = i.toString(16).substring(0, 1)
             distinctFiles.add(createImageFile(i.toLong(), "distinct_$i.jpg", hexChar.repeat(16)))
         }
-        val distinctFlow = duplicateDetectionEngine.getVisualDuplicates(
-            activeFilesFlow = flowOf(distinctFiles),
-            similarityThresholdFlow = flowOf(95.0f)
-        )
+        val distinctFlow =
+            duplicateDetectionEngine.getVisualDuplicates(
+                activeFilesFlow = flowOf(distinctFiles),
+                similarityThresholdFlow = flowOf(95.0f),
+            )
         assertTrue(distinctFlow.first().isEmpty())
     }
 
@@ -236,75 +257,101 @@ class DuplicateDetectionEngineTest {
         val activeFiles = flowOf(listOf(img1, img2))
 
         // At 95% threshold, max distance is 3 bits -> Hamming distance 10 should NOT be duplicate
-        val highThresholdVisuals = duplicateDetectionEngine.getVisualDuplicates(activeFiles, flowOf(95.0f)).first()
-        assertTrue("At 95% threshold, 10-bit distance images must not be flagged as duplicates", highThresholdVisuals.isEmpty())
+        val highThresholdVisuals =
+            duplicateDetectionEngine.getVisualDuplicates(activeFiles, flowOf(95.0f)).first()
+        assertTrue(
+            "At 95% threshold, 10-bit distance images must not be flagged as duplicates",
+            highThresholdVisuals.isEmpty(),
+        )
 
         // At 70% threshold, max distance is 19 bits -> Hamming distance 10 SHOULD be duplicate
-        val lowThresholdVisuals = duplicateDetectionEngine.getVisualDuplicates(activeFiles, flowOf(70.0f)).first()
-        assertEquals("At 70% threshold, 10-bit distance images must be flagged as duplicates", 1, lowThresholdVisuals.size)
+        val lowThresholdVisuals =
+            duplicateDetectionEngine.getVisualDuplicates(activeFiles, flowOf(70.0f)).first()
+        assertEquals(
+            "At 70% threshold, 10-bit distance images must be flagged as duplicates",
+            1,
+            lowThresholdVisuals.size,
+        )
 
         // Semantic items with cosine similarity ~0.80
         // e.g. vec1 = [1, 0], vec2 = [0.8, 0.6] -> dot = 0.8 / (1 * 1) = 0.8
-        val doc1 = FileItemEntity(
-            id = 1003L,
-            name = "doc1.txt",
-            path = "/doc1.txt",
-            category = FileCategory.DOCUMENTS.name,
-            sizeBytes = 100L,
-            semanticEmbeddingString = "1.0,0.0",
-            semanticIndexed = true
-        )
-        val doc2 = FileItemEntity(
-            id = 1004L,
-            name = "doc2.txt",
-            path = "/doc2.txt",
-            category = FileCategory.DOCUMENTS.name,
-            sizeBytes = 100L,
-            semanticEmbeddingString = "0.8,0.6",
-            semanticIndexed = true
-        )
+        val doc1 =
+            FileItemEntity(
+                id = 1003L,
+                name = "doc1.txt",
+                path = "/doc1.txt",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 100L,
+                semanticEmbeddingString = "1.0,0.0",
+                semanticIndexed = true,
+            )
+        val doc2 =
+            FileItemEntity(
+                id = 1004L,
+                name = "doc2.txt",
+                path = "/doc2.txt",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 100L,
+                semanticEmbeddingString = "0.8,0.6",
+                semanticIndexed = true,
+            )
         val docFiles = flowOf(listOf(doc1, doc2))
 
         // At 95% threshold (0.95 required), 0.80 similarity should NOT be duplicate
-        val highThresholdSemantics = duplicateDetectionEngine.getSemanticDuplicates(docFiles, flowOf(95.0f)).first()
-        assertTrue("At 95% threshold, 0.80 similarity documents must not be flagged as duplicates", highThresholdSemantics.isEmpty())
+        val highThresholdSemantics =
+            duplicateDetectionEngine.getSemanticDuplicates(docFiles, flowOf(95.0f)).first()
+        assertTrue(
+            "At 95% threshold, 0.80 similarity documents must not be flagged as duplicates",
+            highThresholdSemantics.isEmpty(),
+        )
 
         // At 70% threshold (0.70 required), 0.80 similarity SHOULD be duplicate
-        val lowThresholdSemantics = duplicateDetectionEngine.getSemanticDuplicates(docFiles, flowOf(70.0f)).first()
-        assertEquals("At 70% threshold, 0.80 similarity documents must be flagged as duplicates", 1, lowThresholdSemantics.size)
+        val lowThresholdSemantics =
+            duplicateDetectionEngine.getSemanticDuplicates(docFiles, flowOf(70.0f)).first()
+        assertEquals(
+            "At 70% threshold, 0.80 similarity documents must be flagged as duplicates",
+            1,
+            lowThresholdSemantics.size,
+        )
     }
 
     @Test
     fun videoDuplicates_groupMatchingKeyframesAndExcludeVaultOrRecycledItems() = runBlocking {
-        val first = FileItemEntity(
-            id = 2001L,
-            name = "clip-one.mp4",
-            path = "/videos/clip-one.mp4",
-            category = FileCategory.VIDEO.name,
-            sizeBytes = 1L,
-            visualSimilarityHash = "0011223344556677",
-            videoFingerprintVersion = 2,
-            videoSampleHashes = "0011223344556677;0011223344556677;0011223344556677;0011223344556677",
-            videoDurationMs = 10_000L,
-            videoWidth = 1920,
-            videoHeight = 1080,
-            videoAudioSignature = "yes|video/mp4|1000000",
-            videoChunkHash = "chunk-hash-1"
-        )
+        val first =
+            FileItemEntity(
+                id = 2001L,
+                name = "clip-one.mp4",
+                path = "/videos/clip-one.mp4",
+                category = FileCategory.VIDEO.name,
+                sizeBytes = 1L,
+                visualSimilarityHash = "0011223344556677",
+                videoFingerprintVersion = 2,
+                videoSampleHashes =
+                    "0011223344556677;0011223344556677;0011223344556677;0011223344556677",
+                videoDurationMs = 10_000L,
+                videoWidth = 1920,
+                videoHeight = 1080,
+                videoAudioSignature = "yes|video/mp4|1000000",
+                videoChunkHash = "chunk-hash-1",
+            )
         val second = first.copy(id = 2002L, name = "clip-two.mp4", path = "/videos/clip-two.mp4")
         val vaultCopy = first.copy(id = 2003L, name = "vault.mp4", isVault = true)
         val recycledCopy = first.copy(id = 2004L, name = "recycled.mp4", isRecycleBin = true)
-        val malformed = first.copy(
-            id = 2005L,
-            name = "malformed.mp4",
-            visualSimilarityHash = "short",
-            videoSampleHashes = "short"
-        )
+        val malformed =
+            first.copy(
+                id = 2005L,
+                name = "malformed.mp4",
+                visualSimilarityHash = "short",
+                videoSampleHashes = "short",
+            )
 
-        val groups = duplicateDetectionEngine.getVideoDuplicates(
-            flowOf(listOf(first, second, vaultCopy, recycledCopy, malformed)),
-            flowOf(100f)
-        ).first()
+        val groups =
+            duplicateDetectionEngine
+                .getVideoDuplicates(
+                    flowOf(listOf(first, second, vaultCopy, recycledCopy, malformed)),
+                    flowOf(100f),
+                )
+                .first()
 
         assertEquals(1, groups.size)
         assertEquals(setOf(2001L, 2002L), groups.single().files.map { it.id }.toSet())
@@ -314,55 +361,69 @@ class DuplicateDetectionEngineTest {
 
     @Test
     fun videoDuplicates_requireMultipleTemporalSamplesAndMetadataCompatibility() = runBlocking {
-        val first = FileItemEntity(
-            id = 2101L,
-            name = "same-opening.mp4",
-            path = "/videos/same-opening.mp4",
-            category = FileCategory.VIDEO.name,
-            sizeBytes = 1L,
-            videoFingerprintVersion = 2,
-            videoSampleHashes = "0011223344556677;1111222233334444;2222333344445555;3333444455556666",
-            videoDurationMs = 10_000L,
-            videoWidth = 1920,
-            videoHeight = 1080,
-            videoAudioSignature = "yes|video/mp4|1000000",
-            videoChunkHash = "chunk-a"
-        )
-        val differentLaterSamples = first.copy(
-            id = 2102L,
-            name = "different-story.mp4",
-            path = "/videos/different-story.mp4",
-            videoSampleHashes = "0011223344556677;aaaaaaaabbbbbbbb;ccccccccdddddddd;eeeeeeeeffffffff",
-            videoChunkHash = "chunk-b"
-        )
+        val first =
+            FileItemEntity(
+                id = 2101L,
+                name = "same-opening.mp4",
+                path = "/videos/same-opening.mp4",
+                category = FileCategory.VIDEO.name,
+                sizeBytes = 1L,
+                videoFingerprintVersion = 2,
+                videoSampleHashes =
+                    "0011223344556677;1111222233334444;2222333344445555;3333444455556666",
+                videoDurationMs = 10_000L,
+                videoWidth = 1920,
+                videoHeight = 1080,
+                videoAudioSignature = "yes|video/mp4|1000000",
+                videoChunkHash = "chunk-a",
+            )
+        val differentLaterSamples =
+            first.copy(
+                id = 2102L,
+                name = "different-story.mp4",
+                path = "/videos/different-story.mp4",
+                videoSampleHashes =
+                    "0011223344556677;aaaaaaaabbbbbbbb;ccccccccdddddddd;eeeeeeeeffffffff",
+                videoChunkHash = "chunk-b",
+            )
 
-        val groups = duplicateDetectionEngine.getVideoDuplicates(
-            flowOf(listOf(first, differentLaterSamples)),
-            flowOf(100f)
-        ).first()
+        val groups =
+            duplicateDetectionEngine
+                .getVideoDuplicates(flowOf(listOf(first, differentLaterSamples)), flowOf(100f))
+                .first()
 
         assertTrue(groups.isEmpty())
     }
 
     @Test
     fun documentDuplicates_requireSameFingerprintAndExcludeUnsafeCategories() = runBlocking {
-        val first = FileItemEntity(
-            id = 3001L,
-            name = "report-one.pdf",
-            path = "/docs/report-one.pdf",
-            category = FileCategory.DOCUMENTS.name,
-            sizeBytes = 1L,
-            documentCandidateFingerprint = "same-fingerprint"
-        )
+        val first =
+            FileItemEntity(
+                id = 3001L,
+                name = "report-one.pdf",
+                path = "/docs/report-one.pdf",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+                documentCandidateFingerprint = "same-fingerprint",
+            )
         val second = first.copy(id = 3002L, name = "report-two.pdf", path = "/docs/report-two.pdf")
-        val different = first.copy(id = 3003L, name = "different.pdf", documentCandidateFingerprint = "different-fingerprint")
+        val different =
+            first.copy(
+                id = 3003L,
+                name = "different.pdf",
+                documentCandidateFingerprint = "different-fingerprint",
+            )
         val vaultCopy = first.copy(id = 3004L, name = "vault.pdf", isVault = true)
         val recycledCopy = first.copy(id = 3005L, name = "recycled.pdf", isRecycleBin = true)
-        val wrongCategory = first.copy(id = 3006L, name = "photo.jpg", category = FileCategory.IMAGES.name)
+        val wrongCategory =
+            first.copy(id = 3006L, name = "photo.jpg", category = FileCategory.IMAGES.name)
 
-        val groups = duplicateDetectionEngine.getDocumentDuplicates(
-            flowOf(listOf(first, second, different, vaultCopy, recycledCopy, wrongCategory))
-        ).first()
+        val groups =
+            duplicateDetectionEngine
+                .getDocumentDuplicates(
+                    flowOf(listOf(first, second, different, vaultCopy, recycledCopy, wrongCategory))
+                )
+                .first()
 
         assertEquals(1, groups.size)
         assertEquals(setOf(3001L, 3002L), groups.single().files.map { it.id }.toSet())
@@ -372,22 +433,24 @@ class DuplicateDetectionEngineTest {
 
     @Test
     fun semanticDuplicates_ignoreMalformedEmbeddingsAndReturnNoGroupForSingleton() = runBlocking {
-        val valid = FileItemEntity(
-            id = 4001L,
-            name = "valid.txt",
-            path = "/docs/valid.txt",
-            category = FileCategory.DOCUMENTS.name,
-            sizeBytes = 1L,
-            semanticIndexed = true,
-            semanticEmbeddingString = "1.0,0.0"
-        )
-        val malformed = valid.copy(id = 4002L, name = "malformed.txt", semanticEmbeddingString = "not,a,vector")
+        val valid =
+            FileItemEntity(
+                id = 4001L,
+                name = "valid.txt",
+                path = "/docs/valid.txt",
+                category = FileCategory.DOCUMENTS.name,
+                sizeBytes = 1L,
+                semanticIndexed = true,
+                semanticEmbeddingString = "1.0,0.0",
+            )
+        val malformed =
+            valid.copy(id = 4002L, name = "malformed.txt", semanticEmbeddingString = "not,a,vector")
         val excluded = valid.copy(id = 4003L, name = "vault.txt", isVault = true)
 
-        val groups = duplicateDetectionEngine.getSemanticDuplicates(
-            flowOf(listOf(valid, malformed, excluded)),
-            flowOf(50f)
-        ).first()
+        val groups =
+            duplicateDetectionEngine
+                .getSemanticDuplicates(flowOf(listOf(valid, malformed, excluded)), flowOf(50f))
+                .first()
 
         assertTrue(groups.isEmpty())
     }

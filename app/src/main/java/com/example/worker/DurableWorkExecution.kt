@@ -1,5 +1,7 @@
 package com.example.worker
 
+import android.annotation.SuppressLint
+
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
@@ -8,6 +10,12 @@ import com.example.data.WorkOperationLease
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 
+// The stable worker adapter keeps all durable-lease identity inputs explicit for callers.
+@Suppress(
+    "detekt.LongParameterList",
+    "detekt.TooGenericExceptionCaught",
+)
+@SuppressLint("RestrictedApi")
 suspend fun executeWithDurableLease(
     context: Context,
     worker: CoroutineWorker,

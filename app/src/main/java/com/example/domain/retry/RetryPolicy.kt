@@ -16,13 +16,13 @@ enum class RetryOperation {
     INDEXING,
     CLOUD_TRANSFER,
     DUPLICATE_CLEANUP,
-    CACHE_CLEANUP
+    CACHE_CLEANUP,
 }
 
 data class RetryDecision(
     val retryable: Boolean,
     val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
-    val reasonCode: String
+    val reasonCode: String,
 ) {
     companion object {
         const val DEFAULT_MAX_ATTEMPTS = 3
@@ -33,34 +33,37 @@ object RetryPolicy {
     const val INITIAL_DELAY_MS = 100L
     const val BACKOFF_FACTOR = 2.0
 
+    // Ordered cause precedence is the retry policy and must remain explicit for auditing.
+    @Suppress("detekt.CyclomaticComplexMethod")
     fun classify(operation: RetryOperation, cause: Throwable): RetryDecision {
         val rootCause = cause.rootCause()
-        val reasonCode = when {
-            rootCause is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
-            rootCause is SocketTimeoutException || rootCause is TimeoutException -> "TIMEOUT"
-            rootCause is UnknownHostException || rootCause is ConnectException ||
-                rootCause.message?.contains("unable to resolve host", ignoreCase = true) == true -> "NETWORK_UNAVAILABLE"
-            rootCause is FileNotFoundException -> "SOURCE_UNAVAILABLE"
-            rootCause is SecurityException -> "PERMISSION_DENIED"
-            rootCause is IllegalArgumentException -> "INVALID_INPUT"
-            rootCause is IOException && isTemporaryIo(rootCause) -> "TEMPORARY_IO"
-            rootCause is IOException -> "IO_FAILURE"
-            else -> "NON_TRANSIENT_FAILURE"
-        }
+        val reasonCode =
+            when {
+                rootCause is SQLiteDatabaseLockedException -> "DATABASE_LOCKED"
+                rootCause is SocketTimeoutException || rootCause is TimeoutException -> "TIMEOUT"
+                rootCause is UnknownHostException ||
+                    rootCause is ConnectException ||
+                    rootCause.message?.contains("unable to resolve host", ignoreCase = true) ==
+                        true -> "NETWORK_UNAVAILABLE"
+                rootCause is FileNotFoundException -> "SOURCE_UNAVAILABLE"
+                rootCause is SecurityException -> "PERMISSION_DENIED"
+                rootCause is IllegalArgumentException -> "INVALID_INPUT"
+                rootCause is IOException && isTemporaryIo(rootCause) -> "TEMPORARY_IO"
+                rootCause is IOException -> "IO_FAILURE"
+                else -> "NON_TRANSIENT_FAILURE"
+            }
 
-        val retryable = when (operation) {
-            RetryOperation.DATABASE_READ,
-            RetryOperation.DATABASE_WRITE -> reasonCode == "DATABASE_LOCKED"
-            RetryOperation.FILE_STORAGE,
-            RetryOperation.INDEXING,
-            RetryOperation.DUPLICATE_CLEANUP,
-            RetryOperation.CACHE_CLEANUP -> reasonCode == "TEMPORARY_IO"
-            RetryOperation.CLOUD_TRANSFER -> reasonCode in setOf(
-                "TIMEOUT",
-                "NETWORK_UNAVAILABLE",
-                "TEMPORARY_IO"
-            )
-        }
+        val retryable =
+            when (operation) {
+                RetryOperation.DATABASE_READ,
+                RetryOperation.DATABASE_WRITE -> reasonCode == "DATABASE_LOCKED"
+                RetryOperation.FILE_STORAGE,
+                RetryOperation.INDEXING,
+                RetryOperation.DUPLICATE_CLEANUP,
+                RetryOperation.CACHE_CLEANUP -> reasonCode == "TEMPORARY_IO"
+                RetryOperation.CLOUD_TRANSFER ->
+                    reasonCode in setOf("TIMEOUT", "NETWORK_UNAVAILABLE", "TEMPORARY_IO")
+            }
         return RetryDecision(retryable = retryable, reasonCode = reasonCode)
     }
 
@@ -74,7 +77,11 @@ object RetryPolicy {
 
     private fun isTemporaryIo(error: IOException): Boolean {
         val message = error.message.orEmpty().lowercase()
-        if (message.contains("enospc") || message.contains("no space") || message.contains("permission denied")) {
+        if (
+            message.contains("enospc") ||
+                message.contains("no space") ||
+                message.contains("permission denied")
+        ) {
             return false
         }
         return message.contains("temporar") ||

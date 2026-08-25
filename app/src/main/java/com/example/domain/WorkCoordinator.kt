@@ -50,7 +50,7 @@ class WorkCoordinator(private val context: Context) {
                 ExistingWorkPolicy.KEEP,
                 request
             )
-        } catch (error: Exception) {
+        } catch (error: IllegalStateException) {
             Log.e("WorkCoordinator", "Failed to enqueue DuplicateCleanupWorker", error)
         }
     }
@@ -75,7 +75,7 @@ class WorkCoordinator(private val context: Context) {
                 ExistingWorkPolicy.KEEP,
                 request
             )
-        } catch (error: Exception) {
+        } catch (error: IllegalStateException) {
             Log.e("WorkCoordinator", "Failed to enqueue CloudSyncWorker", error)
         }
     }
@@ -96,7 +96,7 @@ class WorkCoordinator(private val context: Context) {
                 ExistingWorkPolicy.KEEP,
                 request
             )
-        } catch (error: Exception) {
+        } catch (error: IllegalStateException) {
             Log.e("WorkCoordinator", "Failed to enqueue CacheCleanupWorker", error)
         }
     }
@@ -117,7 +117,7 @@ class WorkCoordinator(private val context: Context) {
                 ExistingWorkPolicy.KEEP,
                 request
             )
-        } catch (error: Exception) {
+        } catch (error: IllegalStateException) {
             Log.e("WorkCoordinator", "Failed to enqueue BackgroundIndexWorker", error)
         }
     }

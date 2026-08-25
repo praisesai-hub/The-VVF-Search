@@ -196,7 +196,11 @@ class TFLiteSemanticEmbeddingProvider(
                 loadModelFromBuffer(buffer)
             }
         } catch (e: LinkageError) {
-            Log.w("TFLiteSemantic", "TFLite native runtime is unavailable while loading an optional model.")
+            Log.w(
+                "TFLiteSemantic",
+                "TFLite native runtime is unavailable while loading an optional model.",
+                e
+            )
             interpreter = null
             vocabMap = null
             false
@@ -292,7 +296,11 @@ class TFLiteSemanticEmbeddingProvider(
             Log.i("TFLiteSemantic", "TFLite Model loaded successfully from buffer")
             true
         } catch (e: LinkageError) {
-            Log.w("TFLiteSemantic", "TFLite native runtime is unavailable while loading an optional model.")
+            Log.w(
+                "TFLiteSemantic",
+                "TFLite native runtime is unavailable while loading an optional model.",
+                e
+            )
             interpreter = null
             vocabMap = null
             false

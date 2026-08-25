@@ -125,11 +125,12 @@ class SecureKeyValueStore(
 
     private fun writeValues(values: Map<String, String>) {
         val plaintext = encodeValues(values)
-        val encrypted = crypto.encrypt(plaintext)
-        require(encrypted.iv.size in MIN_IV_BYTES..MAX_IV_BYTES) { "Invalid AES-GCM IV" }
-        require(encrypted.ciphertext.size in MIN_CIPHERTEXT_BYTES..MAX_CIPHERTEXT_BYTES) { "Invalid ciphertext" }
-
         try {
+            val encrypted = crypto.encrypt(plaintext)
+            require(encrypted.iv.size in MIN_IV_BYTES..MAX_IV_BYTES) { "Invalid AES-GCM IV" }
+            require(encrypted.ciphertext.size in MIN_CIPHERTEXT_BYTES..MAX_CIPHERTEXT_BYTES) {
+                "Invalid ciphertext"
+            }
             FileOutputStream(tempFile, false).use { output ->
                 DataOutputStream(output).use { envelope ->
                     envelope.writeInt(ENVELOPE_MAGIC)

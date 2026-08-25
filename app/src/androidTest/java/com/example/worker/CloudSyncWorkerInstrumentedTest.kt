@@ -290,7 +290,7 @@ class CloudSyncWorkerInstrumentedTest {
     fun retryableFailure_returnsRetryBeforeAttemptLimit(): Unit = runBlocking {
         val file = createFile("worker_retry")
         fakeDao.cloudSyncItems += item(306L, file)
-        fakeAdapter.exceptionToThrow = IOException("network unavailable")
+        fakeAdapter.exceptionToThrow = IOException("temporary transfer failure")
 
         assertEquals(ListenableWorker.Result.retry(), createWorker(runAttemptCount = 0).doWork())
         val retryItem = fakeDao.getCloudSyncItems().first().single()
@@ -304,19 +304,21 @@ class CloudSyncWorkerInstrumentedTest {
     fun retryableFailure_returnsFailureAtAttemptLimit(): Unit = runBlocking {
         val file = createFile("worker_retry_limit")
         fakeDao.cloudSyncItems += item(307L, file)
-        fakeAdapter.exceptionToThrow = IOException("network unavailable")
+        fakeAdapter.exceptionToThrow = IOException("temporary transfer failure")
 
         assertEquals(ListenableWorker.Result.failure(), createWorker(runAttemptCount = 3).doWork())
     }
 
     @Test
-    fun notSupportedResult_persistsNotSupportedAndFails(): Unit = runBlocking {
+    fun notSupportedResult_persistsTerminalFailureAndFails(): Unit = runBlocking {
         val file = createFile("worker_unsupported")
         fakeDao.cloudSyncItems += item(308L, file)
         fakeAdapter.returnNotSupported = true
 
         assertEquals(ListenableWorker.Result.failure(), createWorker().doWork())
-        assertEquals("NOT_SUPPORTED", fakeDao.getCloudSyncItems().first().single().status)
+        val item = fakeDao.getCloudSyncItems().first().single()
+        assertEquals("FAILED", item.status)
+        assertEquals("PROVIDER_NOT_SUPPORTED", item.lastErrorCode)
     }
 
     @Test

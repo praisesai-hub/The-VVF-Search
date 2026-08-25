@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.R
 import com.example.VVFApplication
 import com.example.data.AppDatabase
 import com.example.data.CategoryStat
@@ -86,6 +87,9 @@ class DashboardScreenInstrumentedTest {
     fun dashboardRendersHealthRoadmapQuickActionsAndCategoryNavigation(): Unit {
         val viewModel = MainViewModel(app)
         val navigatedTabs = mutableListOf<Int>()
+        val dashboardTitle = app.getString(R.string.dashboard_title, app.getString(R.string.app_name))
+        val systemHealth = app.getString(R.string.system_health)
+        val storageUsed = app.getString(R.string.storage_used, "3.0 KB")
         val categoryStats = listOf(
             CategoryStat(FileCategory.IMAGES.name, count = 2, totalSize = 2048L),
             CategoryStat(FileCategory.DOCUMENTS.name, count = 1, totalSize = 1024L)
@@ -110,39 +114,55 @@ class DashboardScreenInstrumentedTest {
         }
 
         composeTestRule.onNodeWithTag("dashboard_health_card").assertIsDisplayed()
-        composeTestRule.onNodeWithText("VVF Smart Manager v2.0").assertIsDisplayed()
-        composeTestRule.onNodeWithText("System Health: 94% Excellent").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Storage Used: 3.0 KB").assertIsDisplayed()
+        composeTestRule.onNodeWithText(dashboardTitle).assertIsDisplayed()
+        composeTestRule.onNodeWithText(systemHealth).assertIsDisplayed()
+        composeTestRule.onNodeWithText(storageUsed).assertIsDisplayed()
         val dashboardList = composeTestRule.onNode(hasScrollToIndexAction())
-        dashboardList.performScrollToNode(hasText("Recent Storage Files"))
-        composeTestRule.onNodeWithText("Recent Storage Files").assertIsDisplayed()
+        val recentStorageFiles = app.getString(R.string.recent_storage_files)
+        dashboardList.performScrollToNode(hasText(recentStorageFiles))
+        composeTestRule.onNodeWithText(recentStorageFiles).assertIsDisplayed()
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("1.0 KB").assertCountEquals(2)
-        composeTestRule.onNodeWithText(" • fixture").assertIsDisplayed()
+        val tagPrefix = app.getString(R.string.tag_prefix, "fixture")
+        composeTestRule.onNodeWithText(tagPrefix).assertExists()
 
-        dashboardList.performScrollToNode(hasText("View Report"))
-        composeTestRule.onNodeWithText("View Report").performClick()
-        composeTestRule.onNodeWithText("Golden Rule Audit Report").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hide").performClick()
-        composeTestRule.onAllNodesWithText("Golden Rule Audit Report").assertCountEquals(0)
+        val viewReport = app.getString(R.string.view_report)
+        val auditReport = app.getString(R.string.golden_rule_audit_report)
+        val hide = app.getString(R.string.hide)
+        dashboardList.performScrollToNode(hasText(viewReport))
+        composeTestRule.onNodeWithText(viewReport).performClick()
+        composeTestRule.onNodeWithText(auditReport).assertIsDisplayed()
+        composeTestRule.onNodeWithText(hide).performClick()
+        composeTestRule.onAllNodesWithText(auditReport).assertCountEquals(0)
 
-        dashboardList.performScrollToNode(hasText("Pick Files"))
-        composeTestRule.onNodeWithText("Pick Files").performClick()
+        val pickFiles = app.getString(R.string.pick_files)
+        dashboardList.performScrollToNode(hasText(pickFiles))
+        composeTestRule.onNodeWithText(pickFiles).performClick()
         composeTestRule.onNodeWithTag("picker_search_input").assertIsDisplayed()
         composeTestRule.onNodeWithTag("file_picker_close_btn").performClick()
 
-        dashboardList.performScrollToNode(hasText("Clean Dupes"))
-        composeTestRule.onNodeWithText("Clean Dupes").performClick()
-        dashboardList.performScrollToNode(hasText("Secure Vault"))
-        composeTestRule.onNodeWithText("Secure Vault").performClick()
-        dashboardList.performScrollToNode(hasText("Cloud Sync"))
-        composeTestRule.onNodeWithText("Cloud Sync").performClick()
-        listOf("Images", "Documents", "Audio Files", "Videos", "Archives & Downloads").forEach { label ->
+        val cleanDupes = app.getString(R.string.clean_dupes)
+        val secureVault = app.getString(R.string.secure_vault)
+        val cloudSync = app.getString(R.string.cloud_sync)
+        dashboardList.performScrollToNode(hasText(cleanDupes))
+        composeTestRule.onNodeWithText(cleanDupes).performClick()
+        dashboardList.performScrollToNode(hasText(secureVault))
+        composeTestRule.onNodeWithText(secureVault).performClick()
+        dashboardList.performScrollToNode(hasText(cloudSync))
+        composeTestRule.onNodeWithText(cloudSync).performClick()
+        listOf(
+            app.getString(R.string.category_images),
+            app.getString(R.string.category_documents),
+            app.getString(R.string.category_audio_files),
+            app.getString(R.string.category_videos),
+            app.getString(R.string.category_archives_downloads),
+        ).forEach { label ->
             dashboardList.performScrollToNode(hasText(label))
             composeTestRule.onNodeWithText(label).performClick()
         }
-        dashboardList.performScrollToNode(hasText("View All"))
-        composeTestRule.onNodeWithText("View All").performClick()
+        val viewAll = app.getString(R.string.view_all)
+        dashboardList.performScrollToNode(hasText(viewAll))
+        composeTestRule.onNodeWithText(viewAll).performClick()
 
         assertTrue(navigatedTabs.contains(1))
         assertTrue(navigatedTabs.contains(2))

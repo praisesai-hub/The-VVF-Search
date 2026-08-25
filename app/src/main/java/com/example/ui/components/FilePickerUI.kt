@@ -389,6 +389,8 @@ fun FilePickerSheet(
 }
 
 @Composable
+// Stable picker row keeps thumbnail, metadata, and selection affordance together.
+@Suppress("detekt.LongMethod")
 fun PickableFileRowItem(
     file: PickableLocalFile,
     isSelected: Boolean,
@@ -494,16 +496,25 @@ private fun localizedFileCategory(category: FileCategory): String = when (catego
     FileCategory.OTHER -> stringResource(R.string.category_label_other)
 }
 
-private fun formatFileSize(bytes: Long, unknownLabel: String): String {
-    if (bytes <= 0L) return unknownLabel
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format(Locale.getDefault(), "%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format(Locale.getDefault(), "%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format(Locale.getDefault(), "%.2f GB", gb)
-}
+private fun formatFileSize(bytes: Long, unknownLabel: String): String =
+    when {
+        bytes <= 0L -> unknownLabel
+        bytes < 1024 -> "$bytes B"
+        else -> {
+            val kb = bytes / 1024.0
+            if (kb < 1024) {
+                String.format(Locale.getDefault(), "%.1f KB", kb)
+            } else {
+                val mb = kb / 1024.0
+                if (mb < 1024) {
+                    String.format(Locale.getDefault(), "%.1f MB", mb)
+                } else {
+                    val gb = mb / 1024.0
+                    String.format(Locale.getDefault(), "%.2f GB", gb)
+                }
+            }
+        }
+    }
 
 private fun getAvailableDeviceLocalFiles(context: android.content.Context): List<PickableLocalFile> {
     val list = mutableListOf<PickableLocalFile>()

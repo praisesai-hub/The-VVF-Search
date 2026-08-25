@@ -13,6 +13,7 @@ import java.security.GeneralSecurityException
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
@@ -66,6 +67,50 @@ class VaultSecurityApiInstrumentedTest {
         assertThrows(IllegalStateException::class.java) { security.unlockWithPin("00000000") }
         assertThrows(SecurityException::class.java) { security.requireAuthenticatedSession() }
         assertFalse(security.hasBiometricEnrollment())
+    }
+
+    @Test
+    fun pinRotation_preservesSessionSecurityAndRejectsOldPin() {
+        assertTrue(engine.initializeVaultPin("24682468"))
+        assertFalse(engine.changeVaultPin("00000000", "13571357"))
+        assertTrue(engine.changeVaultPin("24682468", "13571357"))
+        assertFalse(engine.verifyVaultPin("24682468"))
+        assertTrue(engine.verifyVaultPin("13571357"))
+
+        assertThrows(IllegalStateException::class.java) { engine.unlockWithPin("24682468") }
+        val session = engine.unlockWithPin("13571357")
+        session.close()
+    }
+
+    @Test
+    fun repeatedFailures_persistLockoutAndBlockAuthentication() {
+        val clock = longArrayOf(1_000L)
+        val lockoutPreferences = context.getSharedPreferences("vault-lockout-test", Context.MODE_PRIVATE)
+        check(lockoutPreferences.edit().clear().commit())
+        val lockoutEngine = VaultManagerEngine(
+            context = context,
+            keystoreVaultManager = keystore,
+            injectedVaultPrefs = lockoutPreferences,
+            nowMs = { clock[0] },
+        )
+        assertTrue(lockoutEngine.initializeVaultPin("24682468"))
+
+        repeat(MAX_VAULT_FAILED_ATTEMPTS) {
+            assertThrows(IllegalStateException::class.java) {
+                lockoutEngine.unlockWithPin("00000000")
+            }
+        }
+        val state = lockoutEngine.getVaultLockoutState()
+        assertEquals(MAX_VAULT_FAILED_ATTEMPTS, state.failedAttempts)
+        assertTrue(state.lockedUntilMs > clock[0])
+        assertThrows(VaultAuthenticationLockedOutException::class.java) {
+            lockoutEngine.unlockWithPin("24682468")
+        }
+
+        clock[0] = state.lockedUntilMs + 1L
+        val session = lockoutEngine.unlockWithPin("24682468")
+        session.close()
+        check(lockoutPreferences.edit().clear().commit())
     }
 
     @Test

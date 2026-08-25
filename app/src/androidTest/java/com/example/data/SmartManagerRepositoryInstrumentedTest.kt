@@ -25,6 +25,7 @@ class SmartManagerRepositoryInstrumentedTest {
     private lateinit var context: Context
     private lateinit var fakeDao: TestFileDao
     private lateinit var fakeOcr: TestOcrEngine
+    private lateinit var fileOperationStore: TestFileOperationStore
     private lateinit var repository: SmartManagerRepository
 
     private class TestFileDao : FileDao {
@@ -50,7 +51,7 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun findInRecycleBinByHash(hash: String): FileItemEntity? = null
         override suspend fun moveFilesToRecycleBinAtomic(files: List<FileItemEntity>) = updateFiles(files)
         override suspend fun getFileById(id: Long): FileItemEntity? =
-            (activeFiles + unhashedFiles).firstOrNull { it.id == id }
+            (activeFiles + unhashedFiles + recycleBinFiles).firstOrNull { it.id == id }
         override suspend fun getFileByName(name: String): FileItemEntity? =
             (activeFiles + unhashedFiles).firstOrNull { it.name == name }
         override fun getOcrScannedFiles(): Flow<List<FileItemEntity>> = flowOf(emptyList())
@@ -75,6 +76,9 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun deleteFilesByIds(ids: List<Long>) = Unit
         override suspend fun deleteFileById(id: Long) {
             deletedFileIds += id
+            activeFiles.removeAll { it.id == id }
+            unhashedFiles.removeAll { it.id == id }
+            recycleBinFiles.removeAll { it.id == id }
         }
         override suspend fun emptyRecycleBin() {
             recycleBinFiles.clear()
@@ -97,6 +101,57 @@ class SmartManagerRepositoryInstrumentedTest {
         override suspend fun insertPlugins(plugins: List<PluginEntity>) = Unit
     }
 
+    private class TestFileOperationStore : FileOperationStore {
+        private val operations = mutableListOf<FileOperationEntity>()
+
+        override suspend fun getOpenOperations(): List<FileOperationEntity> =
+            operations.filter {
+                it.status == FileOperationStatus.PREPARED ||
+                    it.status == FileOperationStatus.PHYSICAL_COMPLETED
+            }.sortedBy { it.createdAtMs }
+
+        override suspend fun findOpenOperation(
+            fileId: Long,
+            operationType: String,
+        ): FileOperationEntity? =
+            operations
+                .filter {
+                    it.fileId == fileId &&
+                        it.operationType == operationType &&
+                        (it.status == FileOperationStatus.PREPARED ||
+                            it.status == FileOperationStatus.PHYSICAL_COMPLETED)
+                }
+                .maxByOrNull { it.createdAtMs }
+
+        override suspend fun insert(operation: FileOperationEntity) {
+            operations.removeAll { it.operationId == operation.operationId }
+            operations += operation
+        }
+
+        override suspend fun transition(
+            operationId: String,
+            status: String,
+            sourcePath: String,
+            targetPath: String,
+            nowMs: Long,
+            errorCode: String?,
+        ): Int {
+            val index = operations.indexOfFirst { it.operationId == operationId }
+            if (index < 0) return 0
+            operations[index] = operations[index].copy(
+                status = status,
+                sourcePath = sourcePath,
+                targetPath = targetPath,
+                updatedAtMs = nowMs,
+                lastErrorCode = errorCode,
+            )
+            return 1
+        }
+
+        override suspend fun delete(operationId: String): Int =
+            if (operations.removeAll { it.operationId == operationId }) 1 else 0
+    }
+
     private class TestOcrEngine : OcrEngine {
         var text: String = ""
 
@@ -110,7 +165,13 @@ class SmartManagerRepositoryInstrumentedTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
         fakeDao = TestFileDao()
         fakeOcr = TestOcrEngine()
-        repository = SmartManagerRepository(context, fakeDao, fakeOcr)
+        fileOperationStore = TestFileOperationStore()
+        repository = SmartManagerRepository(
+            context = context,
+            dao = fakeDao,
+            ocrEngine = fakeOcr,
+            fileOperationStoreOverride = fileOperationStore,
+        )
     }
 
     @Test
@@ -268,7 +329,8 @@ class SmartManagerRepositoryInstrumentedTest {
         val source = File.createTempFile("vvf_repo_move_", ".txt", context.cacheDir)
         source.writeText("repository move payload")
         try {
-            val ordinary = document(30L, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
+            val itemId = System.nanoTime()
+            val ordinary = document(itemId, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
             fakeDao.activeFiles += ordinary
 
             repository.moveToRecycleBin(ordinary)
@@ -299,13 +361,14 @@ class SmartManagerRepositoryInstrumentedTest {
     fun deletePermanently_removesPhysicalFileAndDaoRecord(): Unit = runBlocking {
         val source = File.createTempFile("vvf_repo_delete_", ".txt", context.cacheDir)
         try {
-            val ordinary = document(31L, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
+            val itemId = System.nanoTime()
+            val ordinary = document(itemId, source.name).copy(path = source.absolutePath, sizeBytes = source.length())
             fakeDao.activeFiles += ordinary
 
             repository.deletePermanently(ordinary)
 
             assertFalse(source.exists())
-            assertEquals(listOf(31L), fakeDao.deletedFileIds)
+            assertEquals(listOf(itemId), fakeDao.deletedFileIds)
         } finally {
             source.delete()
         }
@@ -316,7 +379,7 @@ class SmartManagerRepositoryInstrumentedTest {
         val trash = File.createTempFile("vvf_repo_trash_", ".txt", context.cacheDir)
         try {
             trash.writeText("trash payload")
-            fakeDao.recycleBinFiles += document(32L, trash.name, isRecycleBin = true).copy(
+            fakeDao.recycleBinFiles += document(System.nanoTime(), trash.name, isRecycleBin = true).copy(
                 path = trash.absolutePath,
                 sizeBytes = trash.length()
             )

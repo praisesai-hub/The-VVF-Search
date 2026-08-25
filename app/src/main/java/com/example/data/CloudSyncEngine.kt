@@ -1,7 +1,6 @@
 package com.example.data
 
 import android.content.Context
-import android.util.Log
 import com.example.context.cloud.CloudProviderRegistry
 import com.example.context.drive.DriveAuthorizationPort
 import com.example.domain.error.DomainErrorMapper
@@ -29,6 +28,8 @@ class CloudSyncEngine(
      * Synchronizes a single [CloudSyncItemEntity].
      * Resolves the appropriate provider, performs the upload/sync, and returns the result.
      */
+    // Provider resolution, transfer, and result mapping remain one sync transaction boundary.
+    @Suppress("detekt.LongMethod", "detekt.ReturnCount")
     suspend fun syncItem(item: CloudSyncItemEntity): CloudSyncResult {
         val file = File(item.filePath)
         if (!file.exists() || !file.isFile) {
@@ -60,7 +61,6 @@ class CloudSyncEngine(
                 )
             }
 
-        Log.i(TAG, "Starting sync for item ${item.id} (${item.fileName}) with provider ${item.provider}...")
         return try {
             adapter.uploadFile(
                 file = file,

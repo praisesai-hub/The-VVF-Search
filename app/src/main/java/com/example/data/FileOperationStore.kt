@@ -14,10 +14,7 @@ object FileOperationStatus {
     const val FAILED = "FAILED"
 }
 
-@Entity(
-    tableName = "file_operations",
-    indices = []
-)
+@Entity(tableName = "file_operations", indices = [])
 data class FileOperationEntity(
     @PrimaryKey val operationId: String,
     val operationType: String,
@@ -27,28 +24,39 @@ data class FileOperationEntity(
     val status: String,
     val createdAtMs: Long,
     val updatedAtMs: Long,
-    val lastErrorCode: String? = null
+    val lastErrorCode: String? = null,
 )
 
 @Dao
 interface FileOperationStore {
-    @Query("SELECT * FROM file_operations WHERE status IN ('PREPARED', 'PHYSICAL_COMPLETED') ORDER BY createdAtMs ASC")
+    @Query(
+        "SELECT * FROM file_operations WHERE status IN ('PREPARED', 'PHYSICAL_COMPLETED') ORDER BY createdAtMs ASC"
+    )
     suspend fun getOpenOperations(): List<FileOperationEntity>
 
-    @Query("SELECT * FROM file_operations WHERE fileId = :fileId AND operationType = :operationType AND status IN ('PREPARED', 'PHYSICAL_COMPLETED') ORDER BY createdAtMs DESC LIMIT 1")
+    @Query(
+        "SELECT * FROM file_operations WHERE fileId = :fileId AND operationType = :operationType " +
+            "AND status IN ('PREPARED', 'PHYSICAL_COMPLETED') ORDER BY createdAtMs DESC LIMIT 1"
+    )
     suspend fun findOpenOperation(fileId: Long, operationType: String): FileOperationEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(operation: FileOperationEntity)
 
-    @Query("UPDATE file_operations SET status = :status, sourcePath = :sourcePath, targetPath = :targetPath, updatedAtMs = :nowMs, lastErrorCode = :errorCode WHERE operationId = :operationId")
+    @Query(
+        "UPDATE file_operations SET status = :status, sourcePath = :sourcePath, " +
+            "targetPath = :targetPath, updatedAtMs = :nowMs, lastErrorCode = :errorCode " +
+            "WHERE operationId = :operationId"
+    )
+    // Explicit columns keep durable journal transitions auditable at the DAO boundary.
+    @Suppress("detekt.LongParameterList")
     suspend fun transition(
         operationId: String,
         status: String,
         sourcePath: String,
         targetPath: String,
         nowMs: Long,
-        errorCode: String?
+        errorCode: String?,
     ): Int
 
     @Query("DELETE FROM file_operations WHERE operationId = :operationId")

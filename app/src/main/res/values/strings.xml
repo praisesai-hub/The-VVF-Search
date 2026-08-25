@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">VVF Smart Manager</string>
+    <string name="default_web_client_id" translatable="false"></string>
     <string name="home">Home</string>
     <string name="files">Files</string>
     <string name="vault">Vault</string>
@@ -265,7 +266,7 @@
     <string name="tflite_semantic_engine">TFLite AI Semantic Search Engine</string>
     <string name="semantic_search_results">Semantic Search Results</string>
     <string name="no_semantic_search_results">No semantic search results found.</string>
-    <string name="score_96">Score 96%%</string>
+    <string name="score_96">Score 96%</string>
     <string name="pin_error_too_many_attempts">Too many incorrect attempts. Vault authentication is temporarily locked.</string>
     <string name="pin_error_reenter">Re-enter the new PIN to confirm.</string>
     <string name="pin_error_mismatch">PINs did not match. Try again.</string>

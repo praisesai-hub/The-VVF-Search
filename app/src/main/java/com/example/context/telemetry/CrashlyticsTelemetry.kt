@@ -15,11 +15,17 @@ object CrashlyticsTelemetry : TelemetryPort {
             crashlytics.setCrashlyticsCollectionEnabled(consented)
             if (consented) crashlytics.setCustomKey("app_version", BuildConfig.VERSION_NAME)
             Log.i("CrashlyticsTelemetry", "Initialized with explicit user consent=$consented.")
-        } catch (error: Exception) {
-            Log.w(
-                "CrashlyticsTelemetry",
-                "Initialization pending; Firebase configuration may be unavailable: ${error.message}"
-            )
+        } catch (error: IllegalStateException) {
+            logInitializationPending(error)
+        } catch (error: SecurityException) {
+            logInitializationPending(error)
         }
+    }
+
+    private fun logInitializationPending(error: Throwable) {
+        Log.w(
+            "CrashlyticsTelemetry",
+            "Initialization pending; Firebase configuration may be unavailable: ${error.message}"
+        )
     }
 }

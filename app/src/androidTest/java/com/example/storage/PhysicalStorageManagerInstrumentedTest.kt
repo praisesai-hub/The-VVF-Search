@@ -128,6 +128,28 @@ class PhysicalStorageManagerInstrumentedTest {
     }
 
     @Test
+    fun pathGuards_acceptApprovedRootsAndRejectTraversalOrContentUris() {
+        assertTrue(PhysicalStorageManager.validateSafeFileName("report.txt").isSuccess)
+        assertTrue(PhysicalStorageManager.validateSafeFileName(" report.txt").isFailure)
+        assertTrue(PhysicalStorageManager.validateSafeFileName("../escape.txt").isFailure)
+        assertTrue(PhysicalStorageManager.validateSafeFileName("report/escape.txt").isFailure)
+        assertTrue(
+            PhysicalStorageManager.resolveAllowedPhysicalPath(context, File(testRoot, "safe.txt").path)
+                .isSuccess
+        )
+        assertTrue(
+            PhysicalStorageManager.resolveAllowedPhysicalPath(context, "/tmp/vvf-outside.txt")
+                .isFailure
+        )
+        assertTrue(
+            PhysicalStorageManager.resolveAllowedPhysicalPath(
+                context,
+                "content://com.example.provider/document/1",
+            ).isFailure
+        )
+    }
+
+    @Test
     fun invalidNamesAndMissingEncryptionOperations_failClosed(): Unit {
         val missing = File(testRoot, "missing-encryption.txt").absolutePath
         assertTrue(PhysicalStorageManager.renameFile(context, missing, "../escape.txt").isFailure)
@@ -198,6 +220,13 @@ class PhysicalStorageManagerInstrumentedTest {
         } finally {
             context.contentResolver.delete(sourceUri, null, null)
         }
+    }
+
+    @Test
+    fun unavailableContentUriDeletion_failsClosedWithoutVerification() {
+        val unavailableUri = Uri.parse("content://vvf.test.provider/unavailable-delete-${System.nanoTime()}.txt")
+
+        assertFalse(PhysicalStorageManager.deleteFile(context, unavailableUri.toString()))
     }
 
     @Test

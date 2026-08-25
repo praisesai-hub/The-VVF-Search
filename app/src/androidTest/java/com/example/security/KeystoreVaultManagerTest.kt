@@ -132,6 +132,24 @@ class KeystoreVaultManagerTest {
     }
 
     @Test
+    fun testBiometricWrapLifecycleAndRandomDekRemainFailClosed() {
+        val manager = KeystoreVaultManager("VVF_TEST_BIOMETRIC_${System.nanoTime()}")
+        assertEquals(32, manager.randomVaultDek().size)
+        manager.deleteBiometricWrapKey()
+        assertFalse(manager.biometricWrapKeyExists())
+
+        val preparation = runCatching { manager.prepareBiometricEncryptionCipher() }
+        if (preparation.isSuccess) {
+            assertTrue(manager.biometricWrapKeyExists())
+            assertTrue(preparation.getOrThrow().iv.isNotEmpty())
+        } else {
+            assertTrue(preparation.exceptionOrNull()?.message.orEmpty().isNotBlank())
+        }
+        manager.deleteBiometricWrapKey()
+        assertFalse(manager.biometricWrapKeyExists())
+    }
+
+    @Test
     fun testEncryptedResultUsesContentEqualityAndHashing() {
         val first = KeystoreVaultManager.EncryptedResult(byteArrayOf(1, 2), byteArrayOf(3, 4))
         val equivalent = KeystoreVaultManager.EncryptedResult(byteArrayOf(1, 2), byteArrayOf(3, 4))

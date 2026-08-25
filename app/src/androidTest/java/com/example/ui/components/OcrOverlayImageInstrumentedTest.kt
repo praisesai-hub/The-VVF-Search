@@ -7,7 +7,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.R
 import com.example.data.OcrTextBlock
 import java.io.File
 import org.junit.Rule
@@ -30,7 +32,9 @@ class OcrOverlayImageInstrumentedTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Image Preview Unavailable").assertIsDisplayed()
+        val unavailable = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getString(R.string.image_preview_unavailable)
+        composeTestRule.onNodeWithText(unavailable).assertIsDisplayed()
     }
 
     @Test
@@ -65,7 +69,10 @@ class OcrOverlayImageInstrumentedTest {
                 }
             }
 
-            composeTestRule.onNodeWithContentDescription("OCR Image Preview").assertIsDisplayed()
+            val previewDescription = ApplicationProvider
+                .getApplicationContext<android.content.Context>()
+                .getString(R.string.ocr_image_preview)
+            composeTestRule.onNodeWithContentDescription(previewDescription).assertIsDisplayed()
         } finally {
             imageFile.delete()
         }

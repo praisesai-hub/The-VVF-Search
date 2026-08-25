@@ -1,20 +1,24 @@
 package com.example.data
 
 import android.content.Context
+import com.example.context.drive.DriveAuthorizationPort
+import com.example.domain.error.DiagnosticLogger
+import io.mockk.Runs
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import java.io.File
 import java.net.UnknownHostException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
-import org.robolectric.annotation.Config
 
 private class RecordingCloudProviderAdapter : CloudProviderAdapter {
     override val providerId: String = "TEST_PROVIDER"
@@ -40,23 +44,24 @@ private class RecordingCloudProviderAdapter : CloudProviderAdapter {
         CloudSyncResult.NotSupported
 }
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
 class CloudSyncEngineTest {
-    private lateinit var context: Context
-    private lateinit var authManager: GoogleAuthManager
+    private val context: Context = mockk(relaxed = true)
+    private val authManager: DriveAuthorizationPort = object : DriveAuthorizationPort {
+        override fun authorizationHeader(): String? = null
+
+        override fun isAuthorized(): Boolean = false
+    }
     private val temporaryFiles = mutableListOf<File>()
 
     @Before
     fun setUp(): Unit {
-        context = RuntimeEnvironment.getApplication()
-        authManager = GoogleAuthManager(
-            context.getSharedPreferences("cloud_sync_engine_test_auth", Context.MODE_PRIVATE)
-        )
+        mockkObject(DiagnosticLogger)
+        every { DiagnosticLogger.log(any(), any(), any()) } just Runs
     }
 
     @After
     fun tearDown(): Unit {
+        unmockkObject(DiagnosticLogger)
         temporaryFiles.forEach(File::delete)
     }
 
@@ -83,7 +88,10 @@ class CloudSyncEngineTest {
 
     @Test
     fun missingFile_returnsNonRetryableErrorWithoutAdapterCall(): Unit = runBlocking {
-        val missing = File(context.cacheDir, "missing-${System.nanoTime()}.txt")
+        val missing = File.createTempFile("missing-cloud-sync", ".txt").also {
+            it.delete()
+            temporaryFiles += it
+        }
         val adapter = RecordingCloudProviderAdapter()
         val engine = CloudSyncEngine(context, FakeFileDaoForCloudSyncEngine(), authManager, adapter)
 

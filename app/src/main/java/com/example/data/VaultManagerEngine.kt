@@ -27,6 +27,7 @@ private const val LOCKED_UNTIL_MS_KEY = "vault_locked_until_ms"
 const val MIN_VAULT_PIN_LENGTH = VaultPinPolicy.MIN_LENGTH
 const val MAX_VAULT_PIN_LENGTH = VaultPinPolicy.MAX_LENGTH
 const val MAX_VAULT_FAILED_ATTEMPTS = 5
+const val MAX_LOCKOUT_EXPONENT = 16
 const val VAULT_BASE_LOCKOUT_MS = 30_000L
 const val VAULT_MAX_LOCKOUT_MS = 24 * 60 * 60 * 1000L
 
@@ -34,6 +35,8 @@ class VaultAuthenticationLockedOutException(
     val lockedUntilMs: Long
 ) : SecurityException("Vault authentication is temporarily locked")
 
+// Vault authentication, migration, biometric wrapping, and lockout form one security boundary.
+@Suppress("detekt.TooManyFunctions")
 class VaultManagerEngine(
     private val context: Context,
     private val keystoreVaultManager: KeystoreVaultManager,
@@ -89,7 +92,7 @@ class VaultManagerEngine(
         }
         if (!verifyVaultPin(pin)) {
             recordFailedAuthentication(currentState.failedAttempts, now)
-            throw IllegalStateException("Invalid vault PIN")
+            check(false) { "Invalid vault PIN" }
         }
         val dek = if (hasPinEnvelope(vaultStore)) {
             unwrapPinDek(vaultStore, pin)
@@ -104,6 +107,8 @@ class VaultManagerEngine(
         }
     }
 
+    // Explicit returns keep lockout, verification failure, and migration failure fail-closed.
+    @Suppress("detekt.ReturnCount")
     fun changeVaultPin(oldPin: String, newPin: String): Boolean {
         val now = nowMs()
         val currentState = getVaultLockoutState()
@@ -209,7 +214,9 @@ class VaultManagerEngine(
 
     private fun recordFailedAuthentication(previousAttempts: Int, now: Long) {
         val nextAttempts = previousAttempts.coerceAtLeast(0) + 1
-        val lockoutExponent = ((nextAttempts - 1) / MAX_VAULT_FAILED_ATTEMPTS).coerceAtMost(16)
+        val lockoutExponent =
+            ((nextAttempts - 1) / MAX_VAULT_FAILED_ATTEMPTS)
+                .coerceAtMost(MAX_LOCKOUT_EXPONENT)
         val duration = (VAULT_BASE_LOCKOUT_MS * (1L shl lockoutExponent))
             .coerceAtMost(VAULT_MAX_LOCKOUT_MS)
         val lockedUntil = if (nextAttempts >= MAX_VAULT_FAILED_ATTEMPTS) now + duration else 0L

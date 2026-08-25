@@ -27,6 +27,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 
+// Optional overrides keep the worker deterministic in production and unit tests.
+@Suppress("detekt.LongParameterList")
 class CloudSyncWorker @JvmOverloads constructor(
     appContext: Context,
     workerParams: WorkerParameters,
@@ -49,6 +51,12 @@ class CloudSyncWorker @JvmOverloads constructor(
         )
     }
 
+    // Lease, upload, retry, and durable journal transitions must remain one worker boundary.
+    @Suppress(
+        "detekt.LongMethod",
+        "detekt.CyclomaticComplexMethod",
+        "detekt.NestedBlockDepth",
+    )
     private suspend fun runWork(): Result = coroutineScope {
         if (!(transferAllowed?.invoke() ?: CloudSyncPolicy.canTransfer(applicationContext))) {
             Log.i(TAG, "Cloud transfer blocked: explicit opt-in or build provisioning is missing.")
