@@ -223,6 +223,13 @@ class PhysicalStorageManagerInstrumentedTest {
     }
 
     @Test
+    fun unavailableContentUriDeletion_failsClosedWithoutVerification() {
+        val unavailableUri = Uri.parse("content://vvf.test.provider/unavailable-delete-${System.nanoTime()}.txt")
+
+        assertFalse(PhysicalStorageManager.deleteFile(context, unavailableUri.toString()))
+    }
+
+    @Test
     fun contentUriTrash_copiesDataAndDeletesOriginal() {
         val sourceBytes = "content provider trash".toByteArray()
         val sourceUri = insertMediaFile("vvf-trash-${System.nanoTime()}.txt")

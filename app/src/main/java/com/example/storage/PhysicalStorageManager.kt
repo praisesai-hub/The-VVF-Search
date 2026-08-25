@@ -347,16 +347,19 @@ object PhysicalStorageManager {
                         0
                     }
                 if (rows > 0) return true
-                val stillExists =
+                val deletionVerified =
                     try {
-                        if (doc != null) doc.exists()
-                        else
-                            context.contentResolver.openFileDescriptor(uri, "r")?.use { true }
-                                ?: false
+                        if (doc != null) {
+                            !doc.exists()
+                        } else {
+                            // A null descriptor is not proof of deletion: the provider may be
+                            // unavailable. Without a provider-backed existence answer, fail closed.
+                            context.contentResolver.openFileDescriptor(uri, "r")?.use { false } ?: false
+                        }
                     } catch (_: Exception) {
                         false
                     }
-                !stillExists
+                deletionVerified
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to delete content URI; error=${e::class.simpleName}")
                 false
