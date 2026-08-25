@@ -123,7 +123,8 @@ class DashboardScreenInstrumentedTest {
         composeTestRule.onNodeWithText(recentStorageFiles).assertIsDisplayed()
         composeTestRule.onNodeWithText(recentFile.name).assertIsDisplayed()
         composeTestRule.onAllNodesWithText("1.0 KB").assertCountEquals(2)
-        composeTestRule.onNodeWithText(" • fixture").assertIsDisplayed()
+        val tagPrefix = app.getString(R.string.tag_prefix, "fixture")
+        composeTestRule.onNodeWithText(tagPrefix).assertExists()
 
         val viewReport = app.getString(R.string.view_report)
         val auditReport = app.getString(R.string.golden_rule_audit_report)
