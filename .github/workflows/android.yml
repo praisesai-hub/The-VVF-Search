@@ -128,19 +128,6 @@ jobs:
         python3 scripts/check_coverage_floor.py \
           --report app/build/reports/coverage/test/debug/report.xml \
           --policy scripts/coverage-policy.json
-    - name: Run Lint
-      run: ./gradlew :app:lintDebug
-    - name: Run Detekt
-      run: ./gradlew :app:detekt
-    - name: Build Debug APK
-      run: ./gradlew :app:assembleDebug
-    - name: Build unsigned release AAB for validation
-      # Production signing credentials are deliberately unavailable to push and PR CI.
-      run: |
-        unset KEYSTORE_PATH STORE_PASSWORD KEY_ALIAS KEY_PASSWORD
-        ./gradlew :app:bundleRelease \
-          -PversionCode=${{ github.run_number }} \
-          -PversionName=1.0.${{ github.run_number }}
     - name: Upload Dependency Compatibility Reports
       if: always()
       uses: actions/upload-artifact@v7
@@ -148,11 +135,115 @@ jobs:
         name: dependency-compatibility-reports
         path: app/build/reports/dependency-compatibility
         if-no-files-found: error
-    - name: Upload Debug APK Artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+
+  static-quality:
+    name: Static Quality (Lint and Detekt)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: true
+      - name: Verify Gradle Wrapper
+        run: |
+          test -f gradle/wrapper/gradle-wrapper.jar
+          test -f gradle/wrapper/gradle-wrapper.properties
+          ./gradlew --version
+      - name: Enforce tracked-secret policy
+        run: python3 scripts/check_no_secrets.py
+      - name: Enforce architecture boundaries
+        run: python3 scripts/check_architecture_boundaries.py
+      - name: Test weekly security health policy
+        run: PYTHONPATH=scripts python3 -m unittest scripts/test_weekly_security_health.py
+      - name: Write google-services.json from secret (if set)
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            printf '%s' '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+          fi
+      - name: Create .env File
+        run: |
+          if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
+            printf '%s' "${{ secrets.ENV_FILE_CONTENT }}" > .env
+          else
+            : > .env
+            if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+              printf '%s\n' "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            fi
+          fi
+      - name: Run Lint
+        run: ./gradlew :app:lintDebug
+      - name: Run Detekt
+        if: always()
+        run: ./gradlew :app:detekt
+
+  package-artifacts:
+    name: Package Debug APK and Release AAB
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          validate-wrappers: true
+      - name: Verify Gradle Wrapper
+        run: |
+          test -f gradle/wrapper/gradle-wrapper.jar
+          test -f gradle/wrapper/gradle-wrapper.properties
+          ./gradlew --version
+      - name: Enforce tracked-secret policy
+        run: python3 scripts/check_no_secrets.py
+      - name: Write google-services.json from secret (if set)
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            printf '%s' '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+          fi
+      - name: Create .env File
+        run: |
+          if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
+            printf '%s' "${{ secrets.ENV_FILE_CONTENT }}" > .env
+          else
+            : > .env
+            if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+              printf '%s\n' "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+            fi
+          fi
+      - name: Build Debug APK
+        run: ./gradlew :app:assembleDebug
+      - name: Build unsigned release AAB for validation
+        if: always()
+        # Production signing credentials are deliberately unavailable to push and PR CI.
+        run: |
+          unset KEYSTORE_PATH STORE_PASSWORD KEY_ALIAS KEY_PASSWORD
+          ./gradlew :app:bundleRelease \
+            -PversionCode=${{ github.run_number }} \
+            -PversionName=1.0.${{ github.run_number }}
+      - name: Upload Debug APK Artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+      - name: Upload Release AAB Artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
 
   instrumented-tests:
     name: Run Instrumented Android Tests
@@ -236,3 +327,29 @@ jobs:
           python3 scripts/check_coverage_floor.py \
             --report app/build/reports/coverage/androidTest/debug/connected/report.xml \
             --policy scripts/instrumented-coverage-policy.json
+
+  release-gate:
+    name: Release Gate
+    if: always()
+    needs:
+      - build-and-test
+      - static-quality
+      - package-artifacts
+      - instrumented-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every quality job to pass
+        env:
+          BUILD_RESULT: ${{ needs.build-and-test.result }}
+          STATIC_RESULT: ${{ needs.static-quality.result }}
+          PACKAGE_RESULT: ${{ needs.package-artifacts.result }}
+          INSTRUMENTED_RESULT: ${{ needs.instrumented-tests.result }}
+        run: |
+          printf 'Build & Test Android App: %s\\n' "$BUILD_RESULT"
+          printf 'Static Quality (Lint and Detekt): %s\\n' "$STATIC_RESULT"
+          printf 'Package Debug APK and Release AAB: %s\\n' "$PACKAGE_RESULT"
+          printf 'Run Instrumented Android Tests: %s\\n' "$INSTRUMENTED_RESULT"
+          test "$BUILD_RESULT" = success
+          test "$STATIC_RESULT" = success
+          test "$PACKAGE_RESULT" = success
+          test "$INSTRUMENTED_RESULT" = success
