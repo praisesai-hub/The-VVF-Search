@@ -305,7 +305,11 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio
           script: |
-            ./gradlew :app:connectedDebugAndroidTest :app:createDebugAndroidTestCoverageReport
+            # Keep test execution and report generation in separate Gradle invocations.
+            # This prevents the coverage report from racing the device test task or reusing
+            # stale device execution data.
+            ./gradlew :app:connectedDebugAndroidTest --rerun-tasks --no-build-cache
+            ./gradlew :app:createDebugAndroidTestCoverageReport --rerun-tasks --no-build-cache
       - name: Upload Android Test Reports
         if: always()
         uses: actions/upload-artifact@v7
