@@ -28,8 +28,10 @@ class ContentIdentityInstrumentedTest {
     }
 
     @After
-    fun tearDown() = runBlocking {
-        dao.getFileByPath(fixture.path)?.let { dao.deleteFileById(it.id) }
+    fun tearDown() {
+        runBlocking {
+            dao.getFileByPath(fixture.path)?.let { dao.deleteFileById(it.id) }
+        }
     }
 
     @Test
