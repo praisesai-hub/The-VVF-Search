@@ -170,11 +170,11 @@ class CloudSyncWorker @JvmOverloads constructor(
                         }
                         is CloudSyncResult.NotSupported -> {
                             // Unsupported providers are terminal and remain explicitly
-                            // distinguishable from ordinary transfer failures.
+                            // distinguishable from ordinary transfer failures by code.
                             leaseStore.markFailed(
                                 operationId = operationId,
                                 leaseOwner = leaseOwner,
-                                status = "NOT_SUPPORTED",
+                                status = "FAILED",
                                 errorCode = "PROVIDER_NOT_SUPPORTED",
                                 nowMs = System.currentTimeMillis()
                             )
