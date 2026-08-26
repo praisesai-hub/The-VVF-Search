@@ -1,0 +1,31 @@
+name: OpenAI API Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openai-api-smoke
+  cancel-in-progress: true
+
+jobs:
+  connectivity:
+    name: Verify OpenAI API credential and model access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify OpenAI API access
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_SMOKE_MODEL: gpt-5.4-mini
+        run: node scripts/openai_api_smoke.mjs
