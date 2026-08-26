@@ -98,7 +98,7 @@ class GoogleDriveProviderAdapterTest {
         val result = kotlinx.coroutines.runBlocking { adapter.uploadFile(file, "remote.txt") }
         assertTrue(result is CloudSyncResult.Error)
         assertTrue((result as CloudSyncResult.Error).message.contains("HTTP 429"))
-        assertTrue((result as CloudSyncResult.Error).isRetryable)
+        assertTrue(result.isRetryable)
     }
 
     @Test fun testUploadFile_MalformedRemoteResponseIsNonRetryable() {
@@ -199,8 +199,11 @@ class GoogleDriveProviderAdapterTest {
         fakeInterceptor.responseProvider = { request ->
             val range = request.header("Content-Range").orEmpty()
             ranges += range
-            if (range.startsWith("bytes */")) Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(308).message("Resume Incomplete").header("Range", "bytes=0-2").build()
-            else Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK").body("{\"id\":\"remote-resumed\"}".toResponseBody("application/json".toMediaTypeOrNull())).build()
+            if (range.startsWith("bytes */")) {
+                Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(308).message("Resume Incomplete").header("Range", "bytes=0-2").body(ByteArray(0).toResponseBody(null)).build()
+            } else {
+                Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK").body("{\"id\":\"remote-resumed\"}".toResponseBody("application/json".toMediaTypeOrNull())).build()
+            }
         }
         val result = kotlinx.coroutines.runBlocking {
             adapter.uploadFile(file, "remote.txt", "", CloudTransferState("", "https://upload.googleapis.com/session-1", 0L)) { progress += it }
