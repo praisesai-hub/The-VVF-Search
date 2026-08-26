@@ -169,13 +169,12 @@ class CloudSyncWorker @JvmOverloads constructor(
                             if (canRetry) retryableFailedCount++
                         }
                         is CloudSyncResult.NotSupported -> {
-                            // Unsupported providers are terminal failures for this queued item.
-                            // Keep the persisted status vocabulary consistent with other terminal
-                            // failures while retaining a specific diagnostic error code.
+                            // Unsupported providers are terminal and remain explicitly
+                            // distinguishable from ordinary transfer failures.
                             leaseStore.markFailed(
                                 operationId = operationId,
                                 leaseOwner = leaseOwner,
-                                status = "FAILED",
+                                status = "NOT_SUPPORTED",
                                 errorCode = "PROVIDER_NOT_SUPPORTED",
                                 nowMs = System.currentTimeMillis()
                             )
