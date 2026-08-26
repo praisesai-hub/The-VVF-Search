@@ -8,7 +8,6 @@ import com.example.context.drive.DriveAuthorizationFactory
 import com.example.context.drive.DriveAuthorizationPort
 import com.example.data.AppDatabase
 import com.example.data.CloudProviderAdapter
-import com.example.data.CloudSyncItemEntity
 import com.example.data.CloudSyncOperationStore
 import com.example.data.CloudSyncPolicy
 import com.example.data.CloudSyncResult
@@ -169,12 +168,10 @@ class CloudSyncWorker @JvmOverloads constructor(
                             if (canRetry) retryableFailedCount++
                         }
                         is CloudSyncResult.NotSupported -> {
-                            // Unsupported providers are terminal and remain explicitly
-                            // distinguishable from ordinary transfer failures by code.
                             leaseStore.markFailed(
                                 operationId = operationId,
                                 leaseOwner = leaseOwner,
-                                status = "FAILED",
+                                status = "NOT_SUPPORTED",
                                 errorCode = "PROVIDER_NOT_SUPPORTED",
                                 nowMs = System.currentTimeMillis()
                             )
