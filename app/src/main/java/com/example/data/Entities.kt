@@ -21,7 +21,8 @@ enum class FileCategory {
         Index(value = ["isRecycleBin"]),
         Index(value = ["name"]),
         Index(value = ["tags"]),
-        Index(value = ["ocrText"])
+        Index(value = ["ocrText"]),
+        Index(value = ["contentIdentityVersion"])
     ]
 )
 data class FileItemEntity(
@@ -29,33 +30,34 @@ data class FileItemEntity(
     val name: String,
     val path: String,
     val originalPath: String = "",
-    val category: String, // IMAGES, DOCUMENTS, etc.
+    val category: String,
     val sizeBytes: Long,
     val dateModifiedMs: Long = System.currentTimeMillis(),
     val md5Hash: String = "",
     val ocrText: String = "",
-    val tags: String = "", // comma-separated tags
+    val tags: String = "",
     val isVault: Boolean = false,
     val isRecycleBin: Boolean = false,
     val deletedTimestampMs: Long = 0L,
-    val visualSimilarityHash: String = "", // for visual duplicate level 3-4
+    val visualSimilarityHash: String = "",
     val semanticEmbeddingVersion: Int = 0,
     val semanticIndexed: Boolean = false,
-    val semanticEmbeddingString: String = "", // comma-separated vector floats
+    val semanticEmbeddingString: String = "",
     val videoFingerprintVersion: Int = 0,
-    val videoSampleHashes: String = "", // semicolon-separated 64-bit dHashes
+    val videoSampleHashes: String = "",
     val videoDurationMs: Long = 0L,
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val videoAudioSignature: String = "",
     val videoChunkHash: String = "",
-    val documentCandidateFingerprint: String = "" // head/tail candidate evidence only; never exact identity
+    val documentCandidateFingerprint: String = "",
+    val contentIdentityVersion: Long = 1L
 )
 
 @JsonClass(generateAdapter = true)
 data class DuplicateGroup(
     val title: String,
-    val level: Int, // 1 for exact hash, 2 for metadata/visual
+    val level: Int,
     val similarityScore: Int,
     val files: List<FileItemEntity>
 )
@@ -82,11 +84,11 @@ data class VaultItemEntity(
 )
 data class CloudSyncItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val provider: String, // GOOGLE_DRIVE, ONEDRIVE, DROPBOX, NEXTCLOUD, S3, NAS
+    val provider: String,
     val fileName: String,
     val filePath: String = "",
     val fileSize: Long,
-    val status: String, // SYNCED, PENDING, QUEUED, UPLOADING, FAILED
+    val status: String,
     val lastSyncedMs: Long = System.currentTimeMillis(),
     val isCore: Boolean = false,
     val operationId: String = "op-${UUID.randomUUID()}",
@@ -107,7 +109,7 @@ data class CloudSyncItemEntity(
 data class PluginEntity(
     @PrimaryKey val pluginId: String,
     val name: String,
-    val category: String, // OCR, SEMANTIC_SEARCH, CLOUD_PROVIDER, ARCHIVER
+    val category: String,
     val description: String,
     val isEnabled: Boolean,
     val isCore: Boolean

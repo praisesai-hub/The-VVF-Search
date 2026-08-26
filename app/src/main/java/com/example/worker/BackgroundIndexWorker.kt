@@ -39,25 +39,25 @@ class BackgroundIndexWorker(
         return try {
             val scanner = StorageScanner(applicationContext)
             val db = AppDatabase.getDatabase(applicationContext)
-            val discoveredPaths = mutableSetOf<String>()
             var totalDiscovered = 0
             scanner.scanDeviceStorageFlow().collect { batch ->
                 if (batch.isNotEmpty()) {
                     db.fileDao().upsertFilesPreservingMetadata(batch)
                     totalDiscovered += batch.size
-                    batch.forEach { item -> discoveredPaths.add(item.path) }
                 }
             }
 
             if (!isStopped) {
-                db.fileDao().reconcileStaleRecords(discoveredPaths)
+                // This worker does not have an authoritative view of every indexed
+                // source, notably persisted SAF trees and partial MediaStore access.
+                // Never treat this partial view as proof that absent DB records are stale.
                 if (totalDiscovered > 0) {
-                    Log.i(TAG, "Successfully indexed and synced $totalDiscovered real storage files into database.")
+                    Log.i(TAG, "Successfully indexed $totalDiscovered discovered storage files into database.")
                 } else {
-                    Log.w(TAG, "Background scan finished with 0 files discovered.")
+                    Log.w(TAG, "Background scan completed with 0 files discovered; existing index was preserved.")
                 }
             } else {
-                Log.w(TAG, "Worker was stopped before stale record reconciliation could run.")
+                Log.w(TAG, "Worker was stopped before indexing completed.")
             }
 
             androidx.work.ListenableWorker.Result.success()

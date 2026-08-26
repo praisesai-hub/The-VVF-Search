@@ -1,88 +1,313 @@
-# The-VVF-Search: Consolidated Audit Summary
+# The-VVF-Search — Consolidated Master Audit & Remediation Ledger
 
-**Date:** 21 August 2026  
-**Repository:** [praisesai-hub/The-VVF-Search](https://github.com/praisesai-hub/The-VVF-Search)
+**Repository:** `praisesai-hub/The-VVF-Search`  
+**Audit scope:** Previous audit rounds 1–2 + current audit round 3  
+**Current remediation branch:** `audit/remediation-round-3`  
+**Current PR:** #50  
+**Current verdict:** **NO-GO — production qualification incomplete**
 
-## Final audit position
+> This file is the single cumulative audit record. Findings from earlier rounds are retained here; later rounds update their status rather than creating duplicate findings.
 
-> **The application must not be recorded as having all 19 phases complete or as production-ready based on the currently available evidence.**
+## 1. Executive position
 
-The repository contains substantial source-level remediation and several configured release controls. However, source inspection, configured workflows, and a limited security-test result are not equivalent to a successful production release qualification. The current assessment remains **Release Candidate: BLOCKED / production verification incomplete**.
+The repository has received substantial source-level remediation. The current codebase contains meaningful controls for file-operation safety, bounded scanning, backup exclusion, Keystore-backed vault encryption, dependency policy, static analysis, coverage enforcement, release evidence collection and CI automation.
 
-## Consolidated findings
+Production readiness is nevertheless **not established**. Source inspection and configured workflows are not equivalent to a successful clean Android release qualification.
 
-| No. | Finding | Current assessment | Priority |
-|---:|---|---|---|
-| 2 | Encrypted DB to in-memory fallback | Repository evidence not found | Not assigned |
-| 3 | Room encryption status | Serious verification gap. Current Room builder has no demonstrated SQLCipher/encrypted-Room integration. | HIGH |
-| 10 | Path traversal | Fix reported; broad operation coverage and filesystem-race behavior remain to be verified. | HIGH |
-| 11 | Rename traversal | Fix and regression tests reported. Device/filesystem race and complete matrix evidence remain release work. | HIGH |
-| 12 | Unlimited deep scan | Functional fix with cancellation, batching, symlink avoidance, and file-count ceiling; resource-exhaustion testing remains. | MEDIUM/HIGH |
-| 13 | `MANAGE_EXTERNAL_STORAGE` | Google Play policy risk remains. Code presence does not establish eligibility or compliance. | HIGH |
-| 14 | Backup protection | Manifest and backup-resource controls exist; complete merged-artifact and device backup/transfer verification remains. | HIGH |
-| 15 | R8 | Earlier Gradle evidence created a potential contradiction; current source now shows R8 and resource shrinking enabled, but a successful release build and mapping inspection are still required. | HIGH |
-| 16 | Gradle wrapper | Required files are present and wrapper validation exists; file-level provenance and clean-run evidence remain release checks. | MEDIUM |
-| 17 | CI gates | “Configured” is not equivalent to “enforced.” The workflows contain gates, but `main` is not protected by required status checks. | CRITICAL |
-| 18 | Android verification | Android SDK/device environment was unavailable in the review sandbox; production verification is incomplete. | CRITICAL |
-| 19 | Test coverage | The reported 12 tests, and even the broader test inventory, do not prove the complete application security model. | HIGH |
+Round 3 has started implementation work. In PR #50 the Room database is being moved from plaintext SQLite to SQLCipher-backed Room storage, with a Keystore-wrapped random database passphrase and a migration path for existing plaintext databases. The change is not yet considered verified until hosted Android build/instrumentation evidence passes.
 
-## Four decisive verification gates
+## 2. Consolidated finding ledger
 
-### 1. Establish the Room database encryption boundary
+| ID | Finding | Evidence / condition | Current status | Priority | Remediation |
+|---|---|---|---|---|---|
+| F-02 | Encrypted DB to in-memory fallback | Earlier audits found no acceptable production fallback evidence; fail-closed behavior is required. | **REMEDIATED IN CODE; VERIFY** | HIGH | Room key manager now fails closed if Keystore/key metadata is unavailable. Hosted tests must prove no fallback path exists. |
+| F-03 | Room database encryption | Earlier Room builder used normal `Room.databaseBuilder` without SQLCipher. | **FIX IMPLEMENTED; VERIFY** | CRITICAL | SQLCipher 4.18.0 + `SupportOpenHelperFactory`; random DB key wrapped by Android Keystore; plaintext-to-encrypted migration added. |
+| F-10 | Path traversal | Prior fix reported; complete filesystem race matrix was not demonstrated. | OPEN VERIFICATION | HIGH | Add/retain canonical-child validation and race/device tests; verify all file-operation entry points. |
+| F-11 | Rename traversal | Regression tests reported; filesystem race and full matrix remained open. | OPEN VERIFICATION | HIGH | Test rename/move/delete/recycle-bin operations against symlink/race/path escape cases. |
+| F-12 | Unlimited/deep scan exhaustion | Scanner now has cancellation, batching, symlink avoidance and output bounds. | OPEN STRESS VERIFICATION | MEDIUM/HIGH | Run large-tree, low-storage, low-memory and cancellation stress tests. |
+| F-13 | `MANAGE_EXTERNAL_STORAGE` | Manifest requests broad storage access; Play policy eligibility is separate from technical capability. | OPEN | HIGH | Prefer MediaStore/SAF where possible; document and verify policy eligibility before Play release. |
+| F-14 | Backup protection | `allowBackup=false` and backup/data-extraction exclusions exist. | OPEN ARTIFACT VERIFICATION | HIGH | Verify merged manifest and Android 12+ backup/device-transfer behavior on device. |
+| F-15 | R8/resource shrinking | Release source enables minification and resource shrinking. | OPEN ARTIFACT VERIFICATION | HIGH | Clean release build; inspect mapping and missing-class output; verify reflection/serialization/TFLite/Room keep rules. |
+| F-16 | Gradle wrapper | Wrapper files and validation exist. | OPEN REPRODUCIBILITY VERIFICATION | MEDIUM | Verify clean runner provenance and wrapper validation without regenerating checked-in wrapper artifacts. |
+| F-17 | CI gates | Workflow gates exist, but workflow configuration alone does not prove merge enforcement. | OPEN | CRITICAL | Verify GitHub ruleset/branch-protection required checks and bypass policy. |
+| F-18 | Android verification | Prior review environment lacked Android SDK/device evidence. | OPEN | CRITICAL | Hosted Android runner plus representative device matrix; retain artifacts and logs. |
+| F-19 | Test coverage | Coverage thresholds do not prove complete security-model coverage. | OPEN | HIGH | Expand security regression matrix; require migration, crash-window, reconciliation and platform tests. |
+| F-20 | CodeQL production/source mismatch | CodeQL workflow creates a compatibility workspace using Kotlin 2.3.21 while production uses Kotlin 2.4.20-RC. | OPEN | HIGH | Keep production dependency patched; remove compatibility rewrite once CodeQL supports the production compiler, or provide documented compensating validation. |
+| F-21 | Duplicate dependency-submission workflows | Android CI contained a dependency-submission job and a separate dependency-submission workflow also existed. | **REMEDIATED** | MEDIUM | Removed the duplicate `.github/workflows/dependency-submission.yml`; Android CI remains the authoritative submission path. |
+| F-22 | Secret materialization in CI | CI writes `google-services.json` and `.env` from secrets. | OPEN | HIGH | Use environment-safe materialization, ensure no shell interpolation/log exposure, and prove generated files cannot enter artifacts. |
+| F-23 | Optional Firebase configuration | CI intentionally allows missing Firebase configuration. | OPEN VERIFICATION | MEDIUM/HIGH | Prove cloud/auth boundary fails closed when configuration is absent and remains disabled unless explicitly provisioned. |
+| F-24 | Storage permission matrix | Legacy and modern media permissions coexist with broad storage permission. | OPEN | HIGH | Test Android 11–16 scoped-storage, MediaStore and SAF behavior and permission revocation/recovery. |
+| F-25 | Android support contract | Project declares `minSdk 24`; prior product requirement referenced Android 11+. | OPEN PRODUCT DECISION | MEDIUM/HIGH | Either support/test API 24–30 or raise the minimum to the actual supported product floor. |
+| F-26 | Semantic AI fallback semantics | README describes a fallback when TFLite/model is unavailable. | OPEN | MEDIUM | UI must distinguish semantic AI from conventional similarity fallback; tests must verify correct mode reporting. |
+| F-27 | Signed release is manual | Signed release is `workflow_dispatch` and restricted to `main`. | EXPECTED / OPEN GATE INTEGRATION | HIGH | Keep signing isolated; require all pre-release checks before manual signing is allowed. |
+| F-28 | API 35-only release emulator | Release workflow tests API 35 Pixel 2. | OPEN | HIGH | Add representative Android 11–16 profiles and relevant storage/Keystore/WorkManager scenarios. |
+| F-29 | Release evidence collection | Evidence collection runs after validation steps. | ACCEPTED DESIGN / VERIFY | MEDIUM | Preserve `if: always()` evidence capture but never treat evidence collection as a success override. |
+| F-30 | Dependency/security policy complexity | Multiple independent policy scripts validate dependency graphs and runtime policy. | OPEN MAINTENANCE RISK | MEDIUM | Add policy-contract tests and keep a single authoritative policy source where practical. |
+| F-31 | Detekt baseline debt | Large baseline exists. | OPEN | MEDIUM | Enforce no-growth and progressively shrink the baseline. |
+| F-32 | Cloud/local privacy boundary | README correctly avoids blanket local-only claims; cloud integrations exist. | OPEN | HIGH | Verify provider implementations, auth boundaries, explicit user action, upload paths and failure behavior. |
+| F-33 | Weekly Security Health write permission | Scheduled workflow has `issues: write` and consumes security-health data. | OPEN | MEDIUM | Review script for untrusted-content injection and restrict issue mutation to intended records. |
+| F-34 | Kotlin/CodeQL compatibility blocker | Production Kotlin 2.4.20-RC is newer than the currently supported CodeQL range used by the hosted extractor. | OPEN / UPSTREAM DEPENDENCY | HIGH | Do not downgrade below the security-fixed Kotlin line. Remove compatibility workaround when supported; keep security issue visible meanwhile. |
+| F-35 | Exact required-check list | Exact repository ruleset state is separate from YAML. | OPEN | CRITICAL | Obtain authoritative ruleset/branch-protection evidence before adding/removing required checks. |
+| F-36 | Documentation/security-language consistency | Earlier documentation referred to Room as secure/encrypted despite plaintext implementation. | **PARTIALLY REMEDIATED** | HIGH | Update all documentation to describe SQLCipher only after build/device evidence proves it. |
+| F-37 | Interrupted Room swap can create empty DB | Existing migration returned when the primary DB was absent, ignoring `.plaintext.backup`/`.encrypted.tmp`. | **FIX IMPLEMENTED; VERIFY** | CRITICAL | Recover a valid encrypted staging file first; otherwise restore the plaintext backup and retry migration before Room opens. Add crash-window tests. |
+| F-38 | Room DB key Base64 incompatible with minSdk 24 | `java.util.Base64` is API 26+, while the app declares minSdk 24 and has no desugaring. | **FIX IMPLEMENTED; VERIFY** | HIGH | Replaced with `android.util.Base64`; add API-24 runtime/build verification. |
+| F-39 | Room rollback could delete only surviving plaintext backup | Previous `finally` deleted the backup even if rollback failed. | **FIX IMPLEMENTED; VERIFY** | HIGH | Preserve backup when restoration cannot be confirmed; surface a fatal/recovery state instead of deleting the only copy. |
+| F-40 | CloudSync unsupported-provider status mismatch | Worker persisted `NOT_SUPPORTED`, while the established terminal failure contract/test expects `FAILED` plus a diagnostic code. | **FIX IMPLEMENTED; VERIFY** | MEDIUM | Persist `FAILED` with `PROVIDER_NOT_SUPPORTED`; retain terminal worker failure result. |
+| F-41 | Declared Gradle version drift | Workflow declares `GRADLE_VERSION=9.3.1`, while wrapper/runner evidence reports Gradle 9.7.0. | OPEN | LOW/MEDIUM | Remove unused misleading declaration or make it authoritative and test it against the wrapper. |
+| F-42 | Google OAuth generated-resource contract | `R.string.default_web_client_id` caused compile failure when the generated resource was absent even though Google Services processing itself succeeded. | **FIX IMPLEMENTED; VERIFY** | MEDIUM/HIGH | Resolve resource by name and fail closed at authentication time instead of failing compilation; verify configured and unconfigured Firebase builds. |
+| F-43 | P0 storage index corruption from content-identity changes | Existing DAO preserved hashes/OCR/embeddings even when file size or modification time changed, allowing derived metadata from an old physical file to remain attached to a replacement file. | **FIX IMPLEMENTED ON ROUND-3 BRANCH; VERIFY** | CRITICAL | `upsertFilesPreservingMetadata` and `insertFile` now detect size/mtime identity changes and invalidate content-derived metadata; regression tests added. |
+| F-44 | Partial background scan could delete valid index records | `BackgroundIndexWorker` previously collected a partial discovered-path set and reconciled all absent records, despite not having an authoritative view of SAF/MediaStore/app-private sources. | **FIX IMPLEMENTED ON ROUND-3 BRANCH; VERIFY** | CRITICAL | Removed stale-record reconciliation from the partial background scan; added explicit preservation behavior for incomplete/zero-result scans. |
+| F-45 | Content-URI deletion can fail closed incorrectly | Current `deleteFile()` returns success when deletion did not report success and the follow-up existence check itself failed, because `stillExists=false` is treated as proof of deletion. | **OPEN** | CRITICAL | Make post-delete verification tri-state: confirmed absent = success; confirmed present = failure; verification error = failure. Never interpret inability to verify as deletion success. Add targeted content-URI regression tests. |
+| F-46 | Stale P0 PR branch contained useful storage-integrity changes but diverged heavily | PR #46 was three commits ahead of the old audit base and 47 commits behind the current remediation base; its useful three-file changes overlap current files. | **PORTED / PR STILL OPEN** | HIGH | Port only validated logic into current remediation branch; do not merge the stale branch wholesale. Close #46 after confirming current branch contains the validated fixes and no unique unresolved requirement is lost. |
 
-The current repository shows standard Room construction through `AppDatabase.getDatabase()` and does not show SQLCipher, `SupportFactory`, an encrypted Room builder, or a database passphrase lifecycle. The project must classify which Room fields contain filenames, paths, OCR text, embeddings, cloud identifiers, and vault metadata, then make an explicit decision whether those records require database-at-rest encryption.
+## 3. Round-3 changes already implemented
 
-Until that decision is implemented and tested, documentation must not describe the Room database as encrypted. Vault-file AES-GCM protection and Android Keystore key protection do not automatically encrypt Room’s separate SQLite database.
+### 3.1 Duplicate dependency submission removed
 
-### 2. Verify the release build and R8 outputs
+The standalone `.github/workflows/dependency-submission.yml` duplicated the dependency-submission behavior already present in Android CI. It also used a different Gradle dependency-submission action version.
 
-The current release block contains `isMinifyEnabled = true` and `isShrinkResources = true`. This resolves the source-level contradiction, but the decisive evidence must come from a clean Android SDK-enabled build:
+**Change:** standalone duplicate workflow removed.  
+**Validation required:** confirm exactly one expected dependency-graph submission occurs on `main`.
 
-```bash
-./gradlew :app:assembleRelease
-```
+### 3.2 Room database encryption implemented
 
-The release artifact review must confirm successful R8 execution, a generated mapping file, no unexplained missing-class warnings, and valid keep rules for reflection, serialization, plugin SPI classes, TFLite/ML classes, and Room generated code.
+The previous Room builder opened a normal SQLite database. Round 3 replaces that boundary with SQLCipher.
 
-### 3. Prove CI gates block merges
+Implementation components:
 
-The workflows include lint, Detekt, unit tests, instrumentation tests, coverage thresholds, dependency/runtime security checks, secret scanning, release build validation, wrapper validation, and signed-release evidence steps. Nevertheless, the current GitHub API reports that the `main` branch is not protected.
+- `net.zetetic:sqlcipher-android:4.18.0`
+- `androidx.sqlite:sqlite:2.7.0`
+- `SupportOpenHelperFactory`
+- random 256-bit database passphrase
+- Android Keystore AES-256-GCM wrapping key
+- wrapped passphrase persisted only in private application storage
+- no hard-coded database key
+- no plaintext/in-memory database fallback
+- fail-closed behavior when Keystore/key metadata cannot be recovered
 
-A production-grade gate requires branch protection or repository rulesets that require the relevant successful status checks before merge and prevent bypass through direct pushes. Workflow YAML alone cannot prove this repository-level enforcement.
+The SQLCipher project documents Room integration through `SupportOpenHelperFactory`, and the modern SQLCipher Android package is the maintained replacement for the deprecated legacy package.
 
-### 4. Run release validation in a clean Android environment
+### 3.3 Existing plaintext database migration
 
-The sandbox cannot provide the final evidence because Android SDK and representative devices are unavailable. The decisive run must execute on a clean Android runner and should include:
+The application cannot simply switch Room to SQLCipher and abandon an existing plaintext database. Round 3 therefore adds a pre-Room migration:
 
-| Validation area | Required evidence |
+1. load SQLCipher native library;
+2. obtain Keystore-wrapped database key;
+3. recover any interrupted swap state before checking the primary path;
+4. detect whether the existing database already opens with the key;
+5. if not, verify that it is valid plaintext SQLite;
+6. create a temporary encrypted SQLCipher database;
+7. attach the plaintext database;
+8. execute `sqlcipher_export` into the encrypted database;
+9. preserve the Room schema version;
+10. stage the plaintext database as a backup during replacement;
+11. install the encrypted database;
+12. remove the plaintext staged copy only after successful installation;
+13. restore the original if replacement fails;
+14. retain the backup if rollback itself cannot be confirmed.
+
+This migration remains **unverified** until it is exercised on a real Android runner with representative existing database states and crash-window tests.
+
+### 3.4 API-24 compatibility correction
+
+The Room key manager previously used `java.util.Base64`. Android's platform Base64 implementation is used instead so the declared `minSdk 24` contract does not fail at runtime on Android 7.x.
+
+### 3.5 CloudSync terminal-state correction
+
+`CloudSyncResult.NotSupported` is now persisted as the normal terminal `FAILED` state with `PROVIDER_NOT_SUPPORTED` as the diagnostic error code. This aligns persisted state with the worker's existing terminal failure contract and test expectations.
+
+### 3.6 Firebase OAuth compile-time dependency reduction
+
+The authentication manager no longer directly references generated `R.string.default_web_client_id`. It resolves the resource by name and fails closed if it is absent or blank. This keeps secret-free validation builds compilable while preserving explicit runtime failure when Google OAuth is not configured.
+
+### 3.7 P0 storage-index integrity port
+
+PR #46 was inspected rather than merged wholesale because its branch was materially stale and diverged from the current remediation branch. Its three-file change was isolated:
+
+- `FileDao.kt`
+- `BackgroundIndexWorker.kt`
+- `FileDaoMetadataInvalidationTest.kt`
+
+The validated portions were ported to `audit/remediation-round-3` while preserving the current branch's newer semantic-search DAO surface and durable WorkManager lease implementation.
+
+The DAO now invalidates derived content metadata when the file's size or modification time changes. The background worker no longer treats a partial scan as an authoritative inventory capable of deleting unrelated indexed records.
+
+## 4. CodeQL finding — current external evidence
+
+The repository uses Kotlin `2.4.20-RC` because that line contains the security fix tracked by the repository's open security issue. The CodeQL workflow therefore creates a workspace-only compatibility copy using an older supported Kotlin version.
+
+Current upstream CodeQL support has progressed to Kotlin `2.4.10`, but that does not establish support for the repository's `2.4.20-RC` compiler. Downgrading the application below the security-fixed Kotlin line is therefore not an acceptable remediation merely to make CodeQL green.
+
+Required end state:
+
+- production dependency remains on the security-fixed Kotlin line;
+- CodeQL directly analyzes the production compiler graph once upstream support exists;
+- compatibility rewriting is removed;
+- a fresh CodeQL run passes against the actual production build graph.
+
+Until then this is a documented verification limitation, not a reason to disable CodeQL.
+
+## 5. CI and required status checks
+
+The Android CI workflow contains substantial gates:
+
+- wrapper validation
+- tracked-secret policy
+- architecture boundaries
+- dependency compatibility
+- runtime dependency security
+- JVM tests
+- JVM coverage
+- lint
+- Detekt
+- debug build
+- release AAB validation
+- Android instrumentation
+- Android coverage.
+
+CodeQL, dependency submission, weekly security health and signed release are separate workflows.
+
+However:
+
+> **A workflow check is not automatically a required merge check.**
+
+The exact repository Ruleset/Branch Protection configuration must be inspected before deciding that any status check is inappropriate or should be removed.
+
+No required check should be invented. No existing required check should be removed without evidence that it is obsolete, duplicated or harmful to the release contract.
+
+## 6. Release gates
+
+The following remain hard release gates:
+
+### Gate A — Room encryption
+
+**Implementation:** present in PR #50.  
+**Verification:** pending hosted build, migration test and device evidence.
+
+### Gate B — Merge enforcement
+
+**Implementation:** workflow gates present.  
+**Verification:** repository-level ruleset evidence pending.
+
+### Gate C — Release/R8
+
+**Implementation:** source configuration present.  
+**Verification:** clean release artifact, R8 mapping and warning inspection pending.
+
+### Gate D — Android/device validation
+
+**Implementation:** API 35 emulator workflow exists.  
+**Verification:** complete platform/security matrix pending.
+
+### Gate E — CodeQL fidelity
+
+**Implementation:** compatibility workaround exists.  
+**Verification:** direct production-compiler analysis pending upstream support.
+
+## 7. Security test matrix still required
+
+| Area | Required tests |
 |---|---|
-| Build | Debug and release APK/AAB build, R8 mapping, resource shrinking, and dependency resolution. |
-| Static analysis | Lint, Detekt, SAST, secret scanning, dependency vulnerability and license scans, and SBOM. |
-| Tests | JVM unit tests, Android instrumentation tests, coverage policy, migration tests, vault crash-window tests, and reconciliation tests. |
-| Platform matrix | Android 12–16 representative emulator/device profiles, scoped storage, MediaStore, Keystore, biometric, WorkManager, large files, and low-memory behavior. |
-| Artifact validation | Merged manifest, backup rules, exported components, network security, signed AAB, checksum, provenance, and Play App Signing configuration. |
+| Room | fresh install, encrypted reopen, wrong/missing key, Keystore failure, plaintext-to-encrypted upgrade, interrupted migration, corrupted temp file, rollback failure with backup retention |
+| File operations | traversal, symlink, canonical path, rename race, delete race, recycle-bin consistency, content-URI delete verification failure |
+| Scanner | cancellation, huge tree, low memory, inaccessible directories, symlink loops, file-count limits |
+| Vault | crash window, authentication failure, key invalidation, partial write, restore/export |
+| Cloud | disabled-by-default, auth failure, resumable upload, redirect handling, remote-ID reconciliation, unsupported-provider terminal state |
+| AI | model present, model missing, TFLite unavailable, fallback mode, malformed embedding, resource exhaustion |
+| Backup | merged manifest, Android backup, device transfer, vault exclusion, database exclusion |
+| Release | R8, mapping, missing classes, AAB signature, checksum, provenance, SBOM |
+| Platform | Android 11, 12, 13, 14, 15, 16; storage permissions; Keystore; WorkManager; large files |
+| Compatibility | Android API 24–25 database-key initialization and reopen if minSdk 24 remains supported |
 
-## Current repository controls already present
+## 8. UI/UX target
 
-The audit also verified that the repository now contains several important source-level controls: fail-closed Keystore key creation, explicit Room migrations without destructive fallback, no production in-memory Room fallback, no production demo-file seeding, R8/resource shrinking, checked-in Gradle wrapper files, backup exclusions, HTTPS-only network policy, centralized permission lifecycle with SAF fallback, filename/canonical child validation, symlink avoidance in recursive scanning, bounded scan output, and explicit coverage policies.
+The final UI should use the VVF identity through the logo/launch-icon visual language without turning security states into marketing claims.
 
-These controls improve the security posture but do not replace the four decisive gates above.
+Recommended primary navigation:
 
-## Required audit wording
+`Home · Files · Duplicates · Search · Vault · Activity · Settings`
 
-The correct current audit wording is:
+Security-sensitive state should always be explicit:
 
-> **Source-level remediation completed for the reviewed findings. Production readiness is not established. Room database encryption status, merge-blocking CI enforcement, clean Android release verification, and full application security test evidence remain pending.**
+- `AI — On-device`
+- `AI — Fallback matching`
+- `Vault — Protected`
+- `Cloud — Disabled`
+- `Cloud — Connected`
+- `Storage — Scoped access`
+- `Scan — Running / Paused / Cancelled / Incomplete`
 
-The following claims should not be made until those gates are evidenced:
+Duplicate results should distinguish:
 
-| Unsupported claim | Required evidence before use |
-|---|---|
-| “All 19 phases complete” | Complete phase-by-phase evidence package with successful CI and release artifacts. |
-| “Production-ready” | Signed AAB, protected-branch CI, Android/device matrix, security test matrix, and release review approval. |
-| “Encrypted Room database” | Implemented and tested SQLCipher/encrypted-Room design, or explicit documentation that Room is not encrypted. |
-| “CI enforces security” | Required branch checks and branch protection/ruleset evidence. |
+- Exact duplicate
+- High semantic similarity
+- Possible match
 
-## Conclusion
+The UI must never silently represent conventional similarity matching as active semantic AI.
 
-The consolidated assessment is accepted as the final release posture for this review: the repository has meaningful remediation, but it is not yet a verified production release candidate. The next work should focus on the four decisive gates rather than adding unsupported completion claims.
+## 9. Claims prohibited until evidence exists
+
+Do not claim:
+
+- “All audit phases complete”
+- “Production-ready”
+- “Encrypted Room database” as a verified release property before hosted/device evidence
+- “CI enforces security” without repository ruleset evidence
+- “100% local-only” while cloud integrations remain available
+- full Android-version support without the corresponding device matrix
+- semantic AI operation when the application is actually in fallback mode
+- Play Store compliance solely because the manifest contains the required permissions
+
+## 10. Current release verdict
+
+**NO-GO.**
+
+The repository is in a materially stronger state than the initial audit, and Round 3 remediation is actively addressing the most important unresolved storage-security issue. The remaining work is primarily verification, release hardening, repository governance and completion of the security test matrix.
+
+The correct current statement is:
+
+> **Source-level remediation is substantial and Round-3 remediation is in progress. Production readiness is not established until Room encryption/migration, repository merge enforcement, clean Android release/R8 evidence, complete device validation and CodeQL production-compiler analysis are verified.**
+
+## 11. Evidence policy
+
+Every future audit finding or remediation must be added to this file rather than creating a competing summary. Each entry must contain:
+
+**Finding → Evidence → Root cause → Remediation → Regression test → CI/device evidence → Remaining risk → Final status.**
+
+No completion claim is accepted from source inspection alone when the finding requires runtime, artifact, device or repository-governance evidence.
+
+## 12. Round-3 live validation record
+
+### 12.1 Previous failed run
+
+The earlier failed Android CI run was blocked first by the generated Firebase `default_web_client_id` resource being referenced directly by production code. `google-services.json` itself was present and `processDebugGoogleServices` succeeded. The compile-time resource dependency was therefore the application/code contract failure, not a missing secret.
+
+### 12.2 Current remediation commits
+
+- `d474690fb64cdfe547742a49130ef156bc9bcdc6` — API-24-compatible Room key Base64.
+- `5970b42fe904130d8696dd0d415691b2a01bc89a` — interrupted Room encryption swap recovery and rollback preservation.
+- `8edff7be9bbfde1d7ae25cbf8dea1767e6b3abd2` — unsupported CloudSync provider terminal-state correction.
+- `e44cd4996fb7ed31837cff2cbed2f3dde3ce7c2d` — content-identity-aware metadata invalidation in `FileDao`.
+- `74edacc1ced815a77463634397ddc8c20051ade2` — partial background scan no longer reconciles/deletes the global index.
+- `f87ce024fc1388bb5d55fbce7331764269de1966` — regression tests for replacement-file metadata invalidation and unchanged-file metadata preservation.
+
+A fresh Android CI run must be evaluated after these latest commits. Their source changes are not evidence of runtime success until hosted checks complete.
+
+## 13. External reference policy used for remediation
+
+For current implementation decisions, use authoritative upstream documentation rather than stale snippets. Google documents that `default_web_client_id` is generated from an OAuth client with `client_type == 3`, and GitHub documents that Actions secrets are scope-dependent and unavailable to fork-triggered `pull_request` workflows. These references support the Firebase/secret-boundary diagnosis but do not substitute for repository runtime evidence.
+
+## 14. Next evidence-gated actions
+
+1. Complete the current Android CI and CodeQL runs.
+2. If Unit tests fail, fix the production/test contract rather than weakening assertions.
+3. If instrumentation fails, inspect the actual test failure before changing artifact-upload behavior.
+4. Run Room migration/recovery tests covering all crash windows, including retained plaintext backup after rollback failure.
+5. Verify API-24 behavior if minSdk 24 remains declared; otherwise make an explicit product decision to raise minSdk.
+6. Audit Dependabot configuration and update state, including GitHub Actions dependencies and blocked/stale security updates.
+7. Audit secret names, scopes, permissions and workflow exposure without retrieving or exposing secret values.
+8. Verify repository Ruleset/Branch Protection required checks and remove only checks proven obsolete/duplicate/harmful; do not add arbitrary checks.
+9. Fix F-45: make content-URI deletion fail closed when post-delete verification is unavailable.
+10. Run clean release AAB/R8 validation and inspect mapping/missing-class output.
+11. After F-45 and CI verification, close stale PR #46 if no unique unresolved requirement remains; do not merge its divergent branch wholesale.
+12. Update this file with every resulting finding and evidence. Do not create a second consolidated audit summary.

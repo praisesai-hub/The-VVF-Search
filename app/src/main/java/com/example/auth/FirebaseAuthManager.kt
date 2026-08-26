@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.NoCredentialException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -47,9 +46,18 @@ class FirebaseAuthManager(
      */
     @Suppress("TooGenericExceptionCaught")
     suspend fun signInWithGoogle(): Result<FirebaseUser> = try {
-        val webClientId = context.getString(R.string.default_web_client_id)
-            .trim()
-            .takeIf(String::isNotBlank)
+        // Google Services normally generates this resource. Resolve it by name instead of
+        // referencing R.string directly so secret-free validation builds can compile even when
+        // the optional OAuth client resource is absent. An absent/blank ID still fails closed.
+        val resourceId = context.resources.getIdentifier(
+            "default_web_client_id",
+            "string",
+            context.packageName
+        )
+        val webClientId = resourceId.takeIf { it != 0 }
+            ?.let(context::getString)
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
             ?: error("Google OAuth is not configured: missing default_web_client_id")
 
         val googleIdOption = GetGoogleIdOption.Builder()
@@ -82,7 +90,6 @@ class FirebaseAuthManager(
     } catch (exception: CancellationException) {
         throw exception
     } catch (exception: NoCredentialException) {
-        // This is an expected user/device state, not an unclassified authentication failure.
         Result.failure(exception)
     } catch (exception: Exception) {
         Result.failure(exception)
