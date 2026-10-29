@@ -36,7 +36,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       - name: Submit resolved Gradle dependency graph
-        uses: gradle/actions/dependency-submission@v6
+        uses: gradle/actions/dependency-submission@v5
         with:
           dependency-graph: generate-and-submit
           dependency-graph-continue-on-failure: false
@@ -53,7 +53,7 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v6
+      uses: gradle/actions/setup-gradle@v5
       with:
         validate-wrappers: true
     - name: Verify Gradle Wrapper
@@ -162,7 +162,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v5
         with:
           validate-wrappers: true
       - name: Verify Gradle Wrapper
